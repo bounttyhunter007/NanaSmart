@@ -44,7 +44,9 @@ INSTALLED_APPS = [
     'ativos',
     'corsheaders', 
     'manutencao',
-    'drf_spectacular', 
+    'drf_spectacular',
+    'telemetria',
+    'alertas',
 ]
 
 MIDDLEWARE = [

@@ -42,3 +42,17 @@ class OrdemServico(models.Model):
 
     def __str__(self):
         return f"OS #{self.id} - {self.titulo} ({self.equipamento.nome})"
+
+class HistoricoManutencao(models.Model):
+    ordem_servico = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='historico')
+    descricao_servico = models.TextField()
+    data_execucao = models.DateField()
+    custo_pecas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    custo_maao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    @property
+    def custo_total(self):
+        return self.custo_pecas + self.custo_maao_de_obra
+
+    def __str__(self):
+        return f"Histórico OS #{self.ordem_servico.id} - {self.data_execucao}"

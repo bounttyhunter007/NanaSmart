@@ -23,6 +23,8 @@ urlpatterns = [
     path('api/', include('accounts.urls')),
     path('api/', include('ativos.urls')),
     path('api/', include('manutencao.urls')),
+    path('api/telemetria/', include('telemetria.urls')),
+    path('api/', include('alertas.urls')),
 
     # 2. Rotas da Documentação Automática
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
