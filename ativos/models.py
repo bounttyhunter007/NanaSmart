@@ -25,8 +25,6 @@ class Equipamento(models.Model):
 class EquipamentoLocalizacao(models.Model):
     equipamento = models.OneToOneField(Equipamento, on_delete=models.CASCADE, related_name='localizacao')
     setor = models.CharField(max_length=100)
-    planta = models.CharField(max_length=100)
-    coordenada = models.CharField(max_length=100, blank=True, null=True, help_text="Ex: Lat/Long ou Grid ID")
 
     def __str__(self):
-        return f"Localização: {self.setor} - {self.planta} ({self.equipamento.nome})"
+        return f"Localização: {self.setor} ({self.equipamento.nome})"

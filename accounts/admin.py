@@ -11,7 +11,7 @@ class CustomUserAdmin(UserAdmin):
     # Pegamos o layout padrão do Django e adicionamos uma nova seção 
     # com os nossos campos customizados para aparecerem na tela.
     fieldsets = UserAdmin.fieldsets + (
-        ('Informações da Empresa e Cargo', {'fields': ('empresa', 'tipo_usuario', 'cargo', 'especialidade', 'telefone')}),
+        ('Informações da Empresa e Cargo', {'fields': ('empresa', 'tipo_usuario', 'cargo', 'telefone')}),
     )
 
 admin.site.register(Usuario, CustomUserAdmin)

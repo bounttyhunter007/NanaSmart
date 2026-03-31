@@ -37,7 +37,6 @@ class Usuario(AbstractUser):
     cargo = models.CharField(max_length=100, blank=True, null=True) # Ex: Eletricista Sênior, Mecânico [cite: 110]
     
     # --- Campos trazidos da tabela TECNICO para unificação ---
-    especialidade = models.CharField(max_length=100, blank=True, null=True) # [cite: 162]
     telefone = models.CharField(max_length=20, blank=True, null=True) # [cite: 163]
 
     def __str__(self):

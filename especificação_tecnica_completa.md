@@ -38,11 +38,11 @@ Sem Ativos, o sistema é vazio. Ativos são a âncora de todo o histórico da pl
 
 - **Fluxo de Dados**:
   1. Criação de `Equipamento` (Máquina).
-  2. Definição de `Localizacao` (Setor e Planta física).
+  2. Definição de `Localizacao` (Setor industrial).
 - **Lógica Profunda**: O modelo `Equipamento` possui um `status`. Esse status é um **Enumarado (`ChoiceField`)**. Isso impede que o front-end envie status que não existem, garantindo integridade total dos dados.
 - **Regras do Banco (Constraints)**:
   - `numero_serie` é o identificador único físico (Indexado no banco para buscas rápidas).
-  - `OneToOneField` em localização garante que um GPS ou Setor industrial seja exclusivo de uma única máquina.
+  - `OneToOneField` em localização garante que um Setor industrial seja exclusivo de uma única máquina.
 
 ### 🛠️ Manual de API `ativos`:
 | Funcionalidade | Método | URL | Body (Exemplo) | Dica de Uso |
