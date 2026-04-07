@@ -9,10 +9,14 @@ django.setup()
 
 from accounts.models import Usuario as User
 from scripts.seed_db import seed_data, clear_database
+from django.core.management import call_command
 
 def automate():
     print("🚀 Iniciando automação de população...")
     
+    print("📦 Aplicando migrações (se houver)...")
+    call_command('migrate', verbosity=0)
+
     # 1. Limpar banco
     clear_database()
     

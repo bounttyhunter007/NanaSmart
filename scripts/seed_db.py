@@ -135,38 +135,30 @@ def seed_data(apps_to_seed=None):
     # 3. Telemetria
     if 'telemetria' in apps_to_seed:
         print("📡 Populando Sensores e Telemetria (isso pode demorar)...")
-        unidades = {
-            'temperatura': '°C',
-            'vibracao': 'mm/s',
-            'pressao': 'bar',
-            'corrente': 'A',
-            'umidade': '%'
+        config_sensores = { # (Unidade, Min Normal, Max Normal)
+            'temperatura': ('°C', 40.0, 75.0),
+            'vibracao': ('mm/s', 0.5, 4.5),
+            'pressao': ('bar', 2.0, 8.0),
+            'corrente': ('A', 10.0, 35.0),
+            'umidade': ('%', 30.0, 60.0)
         }
         
         for eq, sensores_alvo in equipamentos:
             for s_tipo in sensores_alvo:
+                unidade, min_val, max_val = config_sensores.get(s_tipo, ('un', 10.0, 50.0))
                 sensor = Sensor.objects.create(
-                    equipamento=eq,
-                    tipo_sensor=s_tipo,
-                    unidade_medida=unidades.get(s_tipo, 'un'),
-                    descricao=f"Sensor de {s_tipo} do {eq.nome}",
-                    ativo=True
+                    equipamento=eq, tipo_sensor=s_tipo, unidade_medida=unidade,
+                    descricao=f"Sensor de {s_tipo} do {eq.nome}", ativo=True
                 )
-                # Criar histórico de telemetria dos últimos 7 dias
+                
                 start_date = timezone.now() - timedelta(days=7)
                 leituras = []
-                for i in range(24 * 7): # Uma leitura por hora
-                    leitura_time = start_date + timedelta(hours=i)
-                    valor_base = random.uniform(20.0, 80.0)
-                    # Simular falha ocasional para gerar alertas depois
-                    if random.random() > 0.98:
-                        valor_base += 50.0 
+                for i in range(24 * 7): # 1 leitura/hora
+                    valor = random.uniform(min_val, max_val)
+                    if random.random() > 0.97: # 3% chance de anomalia
+                        valor *= random.uniform(1.2, 1.6)
                     
-                    leituras.append(Telemetria(
-                        sensor=sensor,
-                        valor=round(valor_base, 2),
-                        data_hora=leitura_time
-                    ))
+                    leituras.append(Telemetria(sensor=sensor, valor=round(valor, 2), data_hora=start_date + timedelta(hours=i)))
                 Telemetria.objects.bulk_create(leituras)
 
     # 4. Manutenção
@@ -177,35 +169,32 @@ def seed_data(apps_to_seed=None):
             for eq, _ in random.sample(equipamentos, min(len(equipamentos), 30)):
                 status = random.choice(['pendente', 'andamento', 'concluida'])
                 os = OrdemServico.objects.create(
-                    equipamento=eq,
-                    responsavel=random.choice(usuarios_tecnicos),
+                    equipamento=eq, responsavel=random.choice(usuarios_tecnicos),
                     titulo=f"Manutenção Corretiva: {fake.catch_phrase()}",
-                    descricao=fake.text(),
-                    status=status,
-                    prioridade=random.choice(['baixa', 'media', 'alta', 'urgente']),
+                    descricao=f"Verificação de falha: {fake.text(max_nb_chars=100)}",
+                    status=status, prioridade=random.choice(['baixa', 'media', 'alta', 'urgente']),
                     data_abertura=fake.date_time_between(start_date='-30d', end_date='-5d', tzinfo=timezone.get_current_timezone())
                 )
                 if status == 'concluida':
-                    # data_conclusao é gerada no save() se vazia, mas vamos fixar uma data passada
-                    os.data_conclusao = os.data_abertura + timedelta(hours=random.randint(1, 48))
+                    os.data_conclusao = os.data_abertura + timedelta(hours=random.randint(2, 72))
                     os.save()
                     HistoricoManutencao.objects.create(
-                        ordem_servico=os,
-                        descricao_servico=fake.sentence(),
+                        ordem_servico=os, descricao_servico=f"Reparo realizado: {fake.sentence()}",
                         data_execucao=os.data_conclusao.date(),
-                        custo_pecas=random.uniform(100, 2000),
-                        custo_maao_de_obra=random.uniform(500, 3000)
+                        custo_pecas=round(random.uniform(50, 1500), 2),
+                        custo_maao_de_obra=round(random.uniform(200, 2000), 2)
                     )
 
     # 5. Alertas
     if 'alertas' in apps_to_seed:
-        print("🚨 Populando Alertas...")
-        for eq, _ in random.sample(equipamentos, min(len(equipamentos), 20)):
+        print("🚨 Populando Alertas Inteligentes...")
+        for eq, sensores_alvo in random.sample(equipamentos, min(len(equipamentos), 20)):
+            s_tipo = random.choice(sensores_alvo) if sensores_alvo else 'Geral'
             Alerta.objects.create(
                 equipamento=eq,
-                tipo_alerta=random.choice(['Alta Temperatura', 'Vibração Excessiva', 'Baixa Pressão']),
-                nivel=random.choice(['baixo', 'medio', 'critico']),
-                descricao=fake.sentence(),
+                tipo_alerta=f"Anomalia: {s_tipo.capitalize()}",
+                nivel=random.choice(['medio', 'critico']),
+                descricao=f"Desvio nos padrões normais de {s_tipo}. Verifique os gráficos de telemetria.",
                 status=random.choice(['ativo', 'resolvido', 'ignorado'])
             )
 
