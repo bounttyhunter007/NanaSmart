@@ -4,8 +4,8 @@ from .views import OrdemServicoViewSet, HistoricoManutencaoViewSet
 
 router = DefaultRouter()
 # A rota vai se chamar 'ordens-servico'
-router.register(r'ordens-servico', OrdemServicoViewSet)
-router.register(r'historico', HistoricoManutencaoViewSet)
+router.register(r'ordens-servico', OrdemServicoViewSet, basename='ordens-servico')
+router.register(r'historico', HistoricoManutencaoViewSet, basename='historico')
 
 urlpatterns = [
     path('', include(router.urls)),

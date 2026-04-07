@@ -8,7 +8,7 @@ router = DefaultRouter()
 # 2. Registra o ViewSet no roteador
 # ativos/urls.py
 router.register(r'equipamentos', EquipamentoViewSet, basename='equipamentos')
-router.register(r'localizacao', EquipamentoLocalizacaoViewSet)
+router.register(r'localizacao', EquipamentoLocalizacaoViewSet, basename='localizacao')
 
 # 3. Disponibiliza a rota
 urlpatterns = [
