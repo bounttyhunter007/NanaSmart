@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// Interceptor for attaching tokens later
+// Interceptor for attaching tokens
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
@@ -19,6 +19,20 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor for handling global authentication errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Clear credentials and redirect to login
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );

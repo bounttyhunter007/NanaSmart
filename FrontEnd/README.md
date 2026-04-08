@@ -50,30 +50,35 @@ Para otimizar nossa interação e focar em entregas modulares, organizamos o des
 - [x] Conexão da tela à API Django para negociar o e receber o Token JWT de acesso.
 - [x] Criação de "Guardas de Rota": Impedir acesso ou visualizar o portal sem ter se logado corretamente.
 
-### 🚀 Task 3: Gestão de Ativos (Equipamentos)
-- [ ] Criação da página de `Ativos`.
-- [ ] Listagem de equipamentos, permitindo visualizar os detalhes técnicos (ex: motor, esteira).
-- [ ] Interface para cadastrar novos equipamentos monitorados.
+### ✅ Task 3: Gestão de Ativos (Equipamentos) (Concluída)
+- [x] Criação da página de `Ativos`.
+- [x] Listagem de equipamentos, permitindo visualizar os detalhes técnicos (ex: motor, esteira).
+- [x] Interface para cadastrar novos equipamentos monitorados.
+- <small>*(Melhoria Mapeada: Ações de Criação protegidas apenas para cargo de Admin na interface e API).*</small>
 
-### 🚀 Task 4: Monitoramento e Telemetria
-- [ ] Criação do painel de `Telemetria em Tempo Real`.
-- [ ] Integração com os sensores virtuais dos ativos (temperatura, vibração, rotação).
-- [ ] Indicadores visuais: Cores para leitura normal e estilos de advertência caso os índices subam muito.
+### ✅ Task 4: Monitoramento e Telemetria (Concluída)
+- [x] Criação do painel de `Telemetria em Tempo Real`.
+- [x] Integração com os sensores virtuais dos ativos (temperatura, vibração, rotação).
+- [x] Indicadores visuais: Cores para leitura normal e estilos de advertência caso os índices subam muito.
+- <small>*(Melhoria UX Efetuada: Consolidação Inteligente -> Os sensores foram agrupados dentro de Cards de Equipamentos, centralizando toda informação do ativo no mesmo espaço em vez de espalhar).*</small>
 
-### 🚀 Task 5: Central de Alertas
-- [ ] Página de visualização de `Alertas`.
-- [ ] Tabela interativa para listar todos os gatilhos gerados quando a telemetria sai do padrão.
-- [ ] Mecanismo de resolução rápida (ex: um botão para reconhecer o alerta).
+### ✅ Task 5: Central de Alertas (Concluída)
+- [x] Página de visualização de `Alertas`.
+- [x] Tabela interativa para listar todos os gatilhos gerados quando a telemetria sai do padrão.
+- [x] Mecanismo de resolução rápida (botão para marcar como resolvido via API).
+- <small>*(Nota Técnica: Os botões de "Abrir Painel Completo" nas outras telas serão funcionais nas Tasks 7 e 8).*</small>
 
-### 🚀 Task 6: Ordens de Manutenção (O.S)
-- [ ] Interface focada no painel de `Manutenções / O.S`.
-- [ ] Fluxo para que os operadores possam converter um alerta severo em uma Ordem de Manutenção.
-- [ ] Acompanhar status da O.S (Pendente, Em Execução, Concluída).
+### ✅ Task 6: Ordens de Manutenção (O.S) (Concluída)
+- [x] Interface focada no painel de `Manutenções / O.S`.
+- [x] Fluxo para que os operadores possam converter um alerta severo em uma Ordem de Manutenção.
+- [x] Acompanhar status da O.S (Pendente, Em Execução, Concluída).
+- <small>*(Integração: Alertas críticos agora possuem atalho direto para abertura de O.S com preenchimento automático).*</small>
 
-### 🚀 Task 7: Visão Executiva (Dashboard Principal)
-- [ ] Construção da `Tela Home` compilando o resumo completo da operação da empresa.
-- [ ] Captura das métricas gerenciais em um só local (Ativos ativos vs Parados, Alertas das últimas 24h).
-- [ ] Implementação de Gráficos ricos mostrando o histórico de saúde do pátio industrial.
+### ✅ Task 7: Visão Executiva (Dashboard Principal) (Concluída)
+- [x] Construção da `Tela Home` compilando o resumo completo da operação da empresa.
+- [x] Captura das métricas gerenciais em um só local (Ativos ativos vs Parados, Alertas das últimas 24h).
+- [x] Implementação de Gráficos ricos (Chart.js) mostrando a disponibilidade e status da frota.
+- <small>*(KPIs: MTTR, MTBF e Disponibilidade calculados automaticamente por equipamento).*</small>
 
 ### 🚀 Task 8: Acabamento Premium e "Efeito UAU" (Polish Final)
 - [ ] Revisão geral do Design: aplicar sombras densas, cores vibrantes, bordas modernas e "Glassmorphism".

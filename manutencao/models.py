@@ -30,7 +30,7 @@ class OrdemServico(models.Model):
     prioridade = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default='media')
     
     # Datas
-    data_abertura = models.DateTimeField(auto_now_add=True) # Preenche sozinho na hora que cria
+    data_abertura = models.DateTimeField(default=timezone.now) # Preenche com a hora atual, mas aceita valores manuais
     data_conclusao = models.DateTimeField(null=True, blank=True) # Só preenche quando o técnico terminar
 
     def save(self, *args, **kwargs):

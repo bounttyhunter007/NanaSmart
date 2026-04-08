@@ -1,28 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap');
 
 :root {
-  --color-bg: #0f172a; /* depth dark blue */
-  --color-surface: #1e293b;
-  --color-surface-hover: #334155;
+  --color-bg: #020617; /* Slate 950 - deeper */
+  --color-surface: #0f172a;
+  --color-surface-hover: #1e293b;
   --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
+  --color-primary-glow: rgba(59, 130, 246, 0.4);
   --color-text: #f8fafc;
-  --color-text-muted: #94a3b8;
-  --color-border: #334155;
+  --color-text-muted: #64748b;
+  --color-border: rgba(255, 255, 255, 0.08);
   --color-danger: #ef4444;
   --color-success: #10b981;
   --color-warning: #f59e0b;
 
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
   --radius-full: 9999px;
   
-  --transition-fast: 150ms ease;
-  --transition-normal: 300ms ease;
+  --transition-uau: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -36,68 +34,73 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-x: hidden;
 }
 
-a {
-  text-decoration: none;
-  color: inherit;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
 }
 
-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-/* Glassmorphism utilities */
+/* Glassmorphism Refined */
 .glass-panel {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-premium);
+  transition: var(--transition-uau);
 }
 
-.premium-btn {
-  background-color: var(--color-primary);
-  color: #fff;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  transition: all var(--transition-fast);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+/* Segurança Global de Ícones */
+.glass-panel svg:not(.ignore-size) {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
-.premium-btn:hover {
-  background-color: var(--color-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+/* Tilt Effect Helper */
+.tilt {
+  perspective: 1000px;
+}
+.tilt:hover {
+  transform: translateY(-5px) rotateX(2deg) rotateY(2deg);
 }
 
-.premium-btn:active {
-  transform: translateY(0);
-}
-
-/* Scrollbar styling */
+/* Scrollbar Premium */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: #020617;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--radius-full);
+  background: #1e293b;
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: #334155;
+}
+
+/* Utils */
+.badge-blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+/* Animations Global */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out;
 }
