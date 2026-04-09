@@ -1,282 +1,258 @@
-# 📡 Documentação da API
+# 🏭 Plataforma de Manutenção Industrial Preditiva
 
-## 📌 Visão Geral
-
-Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operações CRUD completas, telemetria IoT e dashboards. A estrutura segue boas práticas de organização por apps (`accounts`, `ativos`, etc.).
-
-**Base da API:** Todos os endpoints estão sob o prefixo `/api/`.
+> API REST completa e profissional para gestão inteligente de ativos industriais, manutenção preditiva, ordens de serviço, telemetria IoT em tempo real, alertas automáticos e dashboards executivos.
 
 ---
 
-## 🔐 Autenticação (AUTH)
+## 📌 Sobre o Projeto
 
-| Método | Endpoint                        | Descrição                                      |
-|--------|----------------------------------|------------------------------------------------|
-| POST   | `/api/auth/token/`              | Gerar token JWT (login)                        |
-| POST   | `/api/auth/token/refresh/`      | Renovar token JWT                              |
-| GET    | `/api/auth/me/`                 | Retornar dados do usuário autenticado          |
+Esta é uma API REST desenvolvida em Django que tem como objetivo centralizar e digitalizar toda a gestão de manutenção industrial de uma empresa. 
 
-**Observações:**
-- Autenticação principal via **Bearer Token (JWT)**
-- Header obrigatório nos endpoints protegidos:  
-  `Authorization: Bearer SEU_TOKEN`
+O sistema permite que indústrias gerenciem de forma eficiente seus equipamentos, monitorem parâmetros em tempo real através de sensores IoT, recebam alertas automáticos quando algum parâmetro sai do normal, controlem todas as ordens de serviço desde a abertura até o fechamento, e tenham visibilidade gerencial através de dashboards com indicadores importantes como MTBF, MTTR e Disponibilidade dos ativos.
+
+O projeto foi construído com foco em modularidade, segurança, escalabilidade, isolamento de dados por empresa (multi-tenant) e fácil integração com o Front-end em Vue.js.
 
 ---
 
-## 🏢 Empresas (CRUD)
+## 🛠 Tecnologias Utilizadas
 
-**Endpoints:**
-- `GET /api/empresas/`
-- `POST /api/empresas/`
-- `GET /api/empresas/{id}/`
-- `PUT /api/empresas/{id}/`
-- `PATCH /api/empresas/{id}/`
-- `DELETE /api/empresas/{id}/`
-
-**Model:** `Empresa`
-
-### Campos do modelo
-
-| Campo           | Tipo              | PK / FK | Descrição                              | Observação                     |
-|-----------------|-------------------|---------|----------------------------------------|--------------------------------|
-| id              | Integer           | **PK**  | Identificador único                    | Auto-incrementado              |
-| nome            | String(255)       | -       | Nome da empresa                        | Obrigatório                    |
-| cnpj            | String(18)        | Unique  | CNPJ da empresa                        | Obrigatório e único            |
-| email           | Email             | -       | E-mail institucional                   | Obrigatório                    |
-| telefone        | String(20)        | -       | Telefone de contato                    | Opcional                       |
-| endereco        | Text              | -       | Endereço completo                      | Opcional                       |
-| data_cadastro   | DateTime          | -       | Data de cadastro                       | Auto (auto_now_add)            |
+- Python 3.11 ou superior
+- Django 5.2
+- Django REST Framework
+- djangorestframework-simplejwt para autenticação com tokens JWT
+- drf-spectacular para geração automática de documentação Swagger e ReDoc
+- django-cors-headers para permitir requisições do front-end
+- django-filter para filtros avançados nas listagens
+- Faker para geração de dados realistas durante o seed
+- SQLite como banco de dados para desenvolvimento
+- PostgreSQL como banco recomendado para produção
 
 ---
 
-## 👤 Usuários (CRUD)
+## 🚀 Como Rodar Localmente
 
-**Endpoints:**
-- `GET /api/usuarios/`
-- `POST /api/usuarios/`
-- `GET /api/usuarios/{id}/`
-- `PUT /api/usuarios/{id}/`
-- `PATCH /api/usuarios/{id}/`
-- `DELETE /api/usuarios/{id}/`
+Siga os passos abaixo na ordem exata:
 
-**Model:** `Usuario` (herda de `AbstractUser`)
+1. Abra o terminal na pasta raiz do projeto e ative o ambiente virtual com o comando:
+   .\.venv\Scripts\activate   (no Windows PowerShell)
 
-### Campos do modelo
+2. Instale todas as dependências do projeto com o comando:
+   pip install -r requirements.txt
 
-| Campo          | Tipo           | PK / FK             | Descrição                                      | Observação                     |
-|----------------|----------------|---------------------|------------------------------------------------|--------------------------------|
-| id             | Integer        | **PK**              | Identificador único                            | Auto-incrementado              |
-| username       | String         | Unique              | Nome de usuário                                | Obrigatório                    |
-| email          | Email          | -                   | E-mail do usuário                              | Obrigatório                    |
-| first_name     | String         | -                   | Primeiro nome                                  | Opcional                       |
-| last_name      | String         | -                   | Sobrenome                                      | Opcional                       |
-| empresa        | Integer        | **FK** → Empresa.id | Empresa vinculada                              | Obrigatório                    |
-| tipo_usuario   | String         | -                   | Tipo (admin, gestor, tecnico)                  | Obrigatório (default: tecnico) |
-| cargo          | String(100)    | -                   | Cargo/função                                   | Opcional                       |
-| telefone       | String(20)     | -                   | Telefone                                       | Opcional                       |
+3. Execute as migrações para criar as tabelas no banco de dados:
+   python manage.py migrate
+
+4. Popule o banco de dados com dados realistas executando o script de seed:
+   python scripts/automate_seed.py
+   Este script limpa completamente o banco e cria empresas, usuários de diferentes perfis, equipamentos variados, sensores, leituras históricas de telemetria, alertas e ordens de serviço.
+
+5. Inicie o servidor de desenvolvimento com o comando:
+   python manage.py runserver
+   Caso a porta 8000 esteja ocupada, utilize:
+   python manage.py runserver 9000
+
+Após iniciar, a API estará acessível em: http://localhost:8000
 
 ---
 
-## ⚙️ Equipamentos (CRUD)
+## 🔑 Credenciais Padrão
 
-**Endpoints:**
-- `GET /api/equipamentos/`
-- `POST /api/equipamentos/`
-- `GET /api/equipamentos/{id}/`
-- `PUT /api/equipamentos/{id}/`
-- `PATCH /api/equipamentos/{id}/`
-- `DELETE /api/equipamentos/{id}/`
+Após executar o script de seed:
 
-**Model:** `Equipamento`
+- Django Admin:
+  Usuário: admin
+  Senha: admin123
 
-### Campos do modelo
-
-| Campo            | Tipo           | PK / FK             | Descrição                                      | Observação                     |
-|------------------|----------------|---------------------|------------------------------------------------|--------------------------------|
-| id               | Integer        | **PK**              | Identificador único                            | Auto-incrementado              |
-| empresa          | Integer        | **FK** → Empresa.id | Empresa proprietária                           | Obrigatório                    |
-| nome             | String(255)    | -                   | Nome do equipamento                            | Obrigatório                    |
-| tipo             | String(100)    | -                   | Tipo (Motor, Bomba, etc.)                      | Obrigatório                    |
-| fabricante       | String(100)    | -                   | Fabricante                                     | Opcional                       |
-| modelo           | String(100)    | -                   | Modelo                                         | Opcional                       |
-| numero_serie     | String(100)    | Unique              | Número de série                                | Obrigatório e único            |
-| data_instalacao  | Date           | -                   | Data de instalação                             | Opcional                       |
-| status           | String         | -                   | Status (ativo, manutencao, inativo)            | Obrigatório (default: ativo)   |
+- Usuários normais do sistema (Gestores e Técnicos):
+  Senha padrão para todos: 123
 
 ---
 
-## 📍 Localização dos Equipamentos
+## 📁 Estrutura do Projeto
 
-**Endpoints:**
-- `GET /api/localizacao/`
-- `POST /api/localizacao/`
-- `GET /api/localizacao/{id}/`
-- `PUT /api/localizacao/{id}/`
-- `PATCH /api/localizacao/{id}/`
-- `DELETE /api/localizacao/{id}/`
-
-**Model:** `EquipamentoLocalizacao` (relação **OneToOne** com Equipamento)
-
-### Campos do modelo
-
-| Campo       | Tipo     | PK / FK                    | Descrição                        | Observação                     |
-|-------------|----------|----------------------------|----------------------------------|--------------------------------|
-| id          | Integer  | **PK**                     | Identificador único              | Auto-incrementado              |
-| equipamento | Integer  | **FK** → Equipamento.id (OneToOne) | Equipamento                  | Obrigatório                    |
-| setor       | String(100) | -                       | Setor / localização física       | Obrigatório                    |
+P.I-PlataformaManuntencaoWeb/
+├── app/                  # Configurações principais do Django (settings, urls, etc.)
+├── accounts/             # Empresas, Usuários e Autenticação
+├── ativos/               # Equipamentos e Localização
+├── manutencao/           # Ordens de Serviço e Histórico
+├── telemetria/           # Sensores e Leituras IoT
+├── alertas/              # Sistema de Alertas automáticos
+├── dashboards/           # KPIs e Dashboards executivos
+├── scripts/              # Scripts de automação (seed)
+└── manage.py
 
 ---
 
-## 🚨 Alertas (CRUD)
+## 🔗 Principais Vinculações e Regras de Cascade
 
-**Endpoints:**
-- `GET /api/alertas/`
-- `POST /api/alertas/`
-- `GET /api/alertas/{id}/`
-- `PUT /api/alertas/{id}/`
-- `PATCH /api/alertas/{id}/`
-- `DELETE /api/alertas/{id}/`
-
-**Model:** `Alerta`
-
-### Campos do modelo
-
-| Campo        | Tipo        | PK / FK               | Descrição                                      | Observação                     |
-|--------------|-------------|-----------------------|------------------------------------------------|--------------------------------|
-| id           | Integer     | **PK**                | Identificador único                            | Auto-incrementado              |
-| equipamento  | Integer     | **FK** → Equipamento.id | Equipamento relacionado                      | Obrigatório                    |
-| tipo_alerta  | String(100) | -                     | Tipo do alerta                                 | Obrigatório                    |
-| nivel        | String      | -                     | Nível (baixo, medio, critico)                  | Obrigatório (default: baixo)   |
-| descricao    | Text        | -                     | Descrição do alerta                            | Obrigatório                    |
-| data_alerta  | DateTime    | -                     | Data e hora do alerta                          | Auto (auto_now_add)            |
-| status       | String      | -                     | Status (ativo, resolvido, ignorado)            | Obrigatório (default: ativo)   |
+| Modelo                    | Relacionado com               | Tipo de Relacionamento     | Cascade / Comportamento                              | Observação |
+|---------------------------|-------------------------------|----------------------------|-----------------------------------------------------|----------|
+| **Usuario**               | Empresa                       | ForeignKey                 | PROTECT (não permite excluir empresa com usuários) | Cada usuário pertence a uma empresa |
+| **Equipamento**           | Empresa                       | ForeignKey                 | CASCADE (excluir empresa exclui equipamentos)      | Ativo pertence a uma empresa |
+| **Equipamento**           | EquipamentoLocalizacao        | OneToOneField              | CASCADE                                             | Localização é única por equipamento |
+| **Sensor**                | Equipamento                   | ForeignKey                 | CASCADE                                             | Sensor pertence a um equipamento |
+| **Telemetria**            | Sensor                        | ForeignKey                 | CASCADE                                             | Leituras pertencem a um sensor |
+| **Alerta**                | Equipamento                   | ForeignKey                 | CASCADE                                             | Alertas são gerados por equipamento |
+| **OrdemServico**          | Equipamento                   | ForeignKey                 | PROTECT                                             | Não permite excluir equipamento com OS aberta |
+| **OrdemServico**          | Usuario (responsavel)         | ForeignKey                 | SET_NULL                                            | Se o responsável for excluído, fica nulo |
+| **HistoricoManutencao**   | OrdemServico                  | OneToOneField              | CASCADE                                             | Histórico é excluído junto com a OS |
 
 ---
 
-## 🛠️ Ordens de Serviço (CRUD)
+## 🛡 Segurança e Controle de Acesso
 
-**Endpoints:**
-- `GET /api/ordens-servico/`
-- `POST /api/ordens-servico/`
-- `GET /api/ordens-servico/{id}/`
-- `PUT /api/ordens-servico/{id}/`
-- `PATCH /api/ordens-servico/{id}/`
-- `DELETE /api/ordens-servico/{id}/`
+A API utiliza autenticação JWT através do header:
+Authorization: Bearer SEU_TOKEN_AQUI
 
-**Model:** `OrdemServico`
+O sistema possui isolamento completo por empresa (multi-tenant). Um usuário só consegue ver e alterar dados da empresa à qual está vinculado.
 
-### Campos do modelo
-
-| Campo           | Tipo     | PK / FK                  | Descrição                                      | Observação                          |
-|-----------------|----------|--------------------------|------------------------------------------------|-------------------------------------|
-| id              | Integer  | **PK**                   | Identificador único                            | Auto-incrementado                   |
-| equipamento     | Integer  | **FK** → Equipamento.id  | Equipamento                                    | Obrigatório                         |
-| responsavel     | Integer  | **FK** → Usuario.id      | Responsável técnico/gestor                     | Opcional (SET_NULL)                 |
-| titulo          | String(200) | -                     | Título da OS                                   | Obrigatório                         |
-| descricao       | Text     | -                        | Descrição do problema/serviço                  | Obrigatório                         |
-| status          | String   | -                        | Status (pendente, andamento, concluida, cancelada) | Obrigatório (default: pendente) |
-| prioridade      | String   | -                        | Prioridade (baixa, media, alta, urgente)       | Obrigatório (default: media)        |
-| data_abertura   | DateTime | -                        | Data de abertura                               | Auto (timezone.now)                 |
-| data_conclusao  | DateTime | -                        | Data de conclusão                              | Preenchido automaticamente         |
+Perfis disponíveis:
+- admin → Tem acesso total ao sistema
+- gestor → Pode gerenciar usuários, equipamentos e ordens da própria empresa
+- tecnico → Pode visualizar dados e registrar manutenções
 
 ---
 
-## 📜 Histórico de Manutenção (CRUD)
+## 📖 Documentação Interativa
 
-**Endpoints:**
-- `GET /api/historico/`
-- `POST /api/historico/`
-- `GET /api/historico/{id}/`
-- `PUT /api/historico/{id}/`
-- `PATCH /api/historico/{id}/`
-- `DELETE /api/historico/{id}/`
+Com o servidor rodando, acesse:
 
-**Model:** `HistoricoManutencao` (relação **OneToOne** com OrdemServico)
-
-### Campos do modelo
-
-| Campo               | Tipo            | PK / FK                     | Descrição                            | Observação                     |
-|---------------------|-----------------|-----------------------------|--------------------------------------|--------------------------------|
-| id                  | Integer         | **PK**                      | Identificador único                  | Auto-incrementado              |
-| ordem_servico       | Integer         | **FK** → OrdemServico.id (OneToOne) | OS relacionada               | Obrigatório                    |
-| descricao_servico   | Text            | -                           | Serviços realizados                  | Obrigatório                    |
-| data_execucao       | Date            | -                           | Data da execução                     | Obrigatório                    |
-| custo_pecas         | Decimal(10,2)   | -                           | Custo das peças                      | Default 0.00                   |
-| custo_maao_de_obra  | Decimal(10,2)   | -                           | Custo da mão de obra                 | Default 0.00                   |
-| custo_total         | Decimal         | -                           | Soma dos custos (property)           | Calculado automaticamente      |
+- Swagger UI (interface visual interativa): http://localhost:8000/api/schema/swagger-ui/
+- ReDoc (documentação mais limpa): http://localhost:8000/api/schema/redoc/
+- Painel Administrativo Django: http://localhost:8000/admin/
 
 ---
 
-## 📡 Telemetria (IoT)
+## 🐛 Problemas Comuns e Soluções
 
-### Sensores (CRUD)
-
-**Endpoints:**
-- `GET /api/telemetria/sensores/`
-- `POST /api/telemetria/sensores/`
-- `GET /api/telemetria/sensores/{id}/`
-- `PUT /api/telemetria/sensores/{id}/`
-- `PATCH /api/telemetria/sensores/{id}/`
-- `DELETE /api/telemetria/sensores/{id}/`
-
-**Model:** `Sensor`
-
-### Campos do modelo
-
-| Campo          | Tipo        | PK / FK               | Descrição                                      | Observação                     |
-|----------------|-------------|-----------------------|------------------------------------------------|--------------------------------|
-| id             | Integer     | **PK**                | Identificador único                            | Auto-incrementado              |
-| equipamento    | Integer     | **FK** → Equipamento.id | Equipamento vinculado                        | Obrigatório                    |
-| tipo_sensor    | String      | -                     | Tipo de sensor                                 | Obrigatório (choices)          |
-| unidade_medida | String(20)  | -                     | Unidade (°C, mm/s, bar, A, etc.)               | Obrigatório                    |
-| descricao      | Text        | -                     | Descrição adicional                            | Opcional                       |
-| ativo          | Boolean     | -                     | Sensor está ativo?                             | Default: True                  |
-
-### Leituras / Telemetria (CRUD)
-
-**Endpoints:**
-- `GET /api/telemetria/leituras/`
-- `POST /api/telemetria/leituras/`
-- `GET /api/telemetria/leituras/{id}/`
-- `PUT /api/telemetria/leituras/{id}/`
-- `PATCH /api/telemetria/leituras/{id}/`
-- `DELETE /api/telemetria/leituras/{id}/`
-
-**Model:** `Telemetria`
-
-### Campos do modelo
-
-| Campo     | Tipo      | PK / FK           | Descrição                        | Observação                     |
-|-----------|-----------|-------------------|----------------------------------|--------------------------------|
-| id        | Integer   | **PK**            | Identificador único              | Auto-incrementado              |
-| sensor    | Integer   | **FK** → Sensor.id| Sensor que gerou a leitura       | Obrigatório                    |
-| valor     | Float     | -                 | Valor medido                     | Obrigatório                    |
-| data_hora | DateTime  | -                 | Data e hora da leitura           | Auto (auto_now_add)            |
+- O comando python não é reconhecido → Use py no lugar de python no Windows
+- Ambiente virtual não ativado → Rode novamente o comando de ativação
+- Porta 8000 já está em uso → Use python manage.py runserver 9000
+- Erro 403 Forbidden → O usuário logado não tem permissão para realizar a ação
+- Listagens retornando vazias → Verifique se o usuário está vinculado a uma empresa no painel admin
 
 ---
 
-## 📊 Dashboards (Somente leitura)
+## 🗺 Roadmap do Projeto
 
-**Endpoints:**
-- `GET /api/dashboards/kpis/`
-- `GET /api/dashboards/resumo/`
+### ✅ Concluído
+- Criação da estrutura completa de aplicativos Django
+- Implementação de todos os CRUDs necessários
+- Sistema completo de autenticação JWT
+- Sistema de permissões RBAC por perfil
+- Isolamento completo de dados por empresa
+- Geração automática de alertas através de Signals
+- Cálculo automático de KPIs no dashboard
+- Script de seed completo e realista
+- Documentação automática com Swagger e ReDoc
 
-**Função:** Retornar indicadores consolidados (KPIs, quantidade de alertas, equipamentos por status, etc.).
+### 🔄 Em Desenvolvimento
+- Implementação de testes automatizados completos
+- Paginação e filtros avançados em todas as listagens
+- Configuração oficial para PostgreSQL em produção
+- Suporte a WebSockets para telemetria em tempo real
+- Preparação e deploy em ambiente de produção
 
 ---
 
-## 🔗 Principais Relacionamentos
+## 🔗 Endpoints da API - Lista Completa
 
-- **Empresa** → **Equipamento** → **Sensor** → **Telemetria**
-- **Equipamento** → **Alerta**
-- **Equipamento** → **OrdemServico** → **HistoricoManutencao** (OneToOne)
-- **Equipamento** → **EquipamentoLocalizacao** (OneToOne)
-- **Usuario** → **OrdemServico** (responsavel)
+**Base URL:** http://localhost:8000/api/
 
----
+### 🔐 Autenticação
 
-## 🎯 Resumo
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| POST   | /api/auth/token/                  | Realizar login e obter tokens JWT (access e refresh) |
+| POST   | /api/auth/token/refresh/          | Renovar o token de acesso quando expirado |
+| GET    | /api/auth/me/                     | Retornar todos os dados do usuário atualmente logado |
 
-A API possui uma estrutura completa e bem normalizada para **gestão de ativos industriais**, com forte foco em manutenção preditiva e corretiva, monitoramento IoT em tempo real e controle de custos. Todos os relacionamentos importantes estão mapeados via ForeignKey e OneToOneField, com regras claras de cascade e campos calculados.
+### 🏢 Empresas
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/empresas/                    | Listar todas as empresas |
+| POST   | /api/empresas/                    | Criar nova empresa |
+| GET    | /api/empresas/{id}/               | Retornar detalhes de uma empresa específica |
+| PUT    | /api/empresas/{id}/               | Atualizar completamente uma empresa |
+| PATCH  | /api/empresas/{id}/               | Atualizar parcialmente uma empresa |
+| DELETE | /api/empresas/{id}/               | Excluir uma empresa |
+
+### 👤 Usuários
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/usuarios/                    | Listar todos os usuários |
+| POST   | /api/usuarios/                    | Criar novo usuário |
+| GET    | /api/usuarios/{id}/               | Detalhes de um usuário específico |
+| PUT    | /api/usuarios/{id}/               | Atualizar completamente um usuário |
+| PATCH  | /api/usuarios/{id}/               | Atualizar parcialmente um usuário |
+| DELETE | /api/usuarios/{id}/               | Excluir um usuário |
+
+### ⚙️ Equipamentos
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/equipamentos/                | Listar todos os equipamentos |
+| POST   | /api/equipamentos/                | Cadastrar novo equipamento |
+| GET    | /api/equipamentos/{id}/           | Detalhes de um equipamento específico |
+| PUT    | /api/equipamentos/{id}/           | Atualizar completamente um equipamento |
+| PATCH  | /api/equipamentos/{id}/           | Atualizar parcialmente um equipamento |
+| DELETE | /api/equipamentos/{id}/           | Excluir um equipamento |
+
+### 📍 Localização
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/localizacao/                 | Listar localizações dos equipamentos |
+| POST   | /api/localizacao/                 | Cadastrar localização de um equipamento |
+| GET    | /api/localizacao/{id}/            | Detalhes de uma localização |
+| PUT    | /api/localizacao/{id}/            | Atualizar completamente uma localização |
+| PATCH  | /api/localizacao/{id}/            | Atualizar parcialmente uma localização |
+| DELETE | /api/localizacao/{id}/            | Excluir uma localização |
+
+### 🚨 Alertas
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/alertas/                     | Listar todos os alertas |
+| GET    | /api/alertas/{id}/                | Detalhes de um alerta específico |
+| PATCH  | /api/alertas/{id}/                | Atualizar status do alerta (ex: marcar como resolvido) |
+
+### 🛠️ Ordens de Serviço
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/ordens-servico/              | Listar todas as ordens de serviço |
+| POST   | /api/ordens-servico/              | Criar nova ordem de serviço |
+| GET    | /api/ordens-servico/{id}/         | Detalhes de uma ordem específica |
+| PUT    | /api/ordens-servico/{id}/         | Atualizar completamente uma ordem |
+| PATCH  | /api/ordens-servico/{id}/         | Atualizar parcialmente ou status da ordem |
+| DELETE | /api/ordens-servico/{id}/         | Excluir uma ordem de serviço |
+
+### 📡 Telemetria - Sensores
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/telemetria/sensores/         | Listar todos os sensores |
+| POST   | /api/telemetria/sensores/         | Cadastrar novo sensor |
+| GET    | /api/telemetria/sensores/{id}/    | Detalhes de um sensor |
+| PUT    | /api/telemetria/sensores/{id}/    | Atualizar completamente um sensor |
+| PATCH  | /api/telemetria/sensores/{id}/    | Atualizar parcialmente um sensor |
+| DELETE | /api/telemetria/sensores/{id}/    | Excluir um sensor |
+
+### 📡 Telemetria - Leituras
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/telemetria/leituras/         | Listar todas as leituras de telemetria |
+| POST   | /api/telemetria/leituras/         | Enviar nova leitura de sensor |
+| GET    | /api/telemetria/leituras/{id}/    | Detalhes de uma leitura específica |
+
+### 📊 Dashboards
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/dashboards/resumo/           | Retornar resumo geral e KPIs da empresa |
 
 ---
