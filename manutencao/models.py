@@ -48,11 +48,11 @@ class HistoricoManutencao(models.Model):
     descricao_servico = models.TextField()
     data_execucao = models.DateField()
     custo_pecas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    custo_maao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    custo_mao_de_obra = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
     @property
     def custo_total(self):
-        return self.custo_pecas + self.custo_maao_de_obra
+        return self.custo_pecas + self.custo_mao_de_obra
 
     def __str__(self):
         return f"Histórico OS #{self.ordem_servico.id} - {self.data_execucao}"

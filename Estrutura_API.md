@@ -202,7 +202,7 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | descricao_servico   | Text            | -                           | Serviços realizados                  | Obrigatório                    |
 | data_execucao       | Date            | -                           | Data da execução                     | Obrigatório                    |
 | custo_pecas         | Decimal(10,2)   | -                           | Custo das peças                      | Default 0.00                   |
-| custo_maao_de_obra  | Decimal(10,2)   | -                           | Custo da mão de obra                 | Default 0.00                   |
+| custo_mao_de_obra  | Decimal(10,2)   | -                           | Custo da mão de obra                 | Default 0.00                   |
 | custo_total         | Decimal         | -                           | Soma dos custos (property)           | Calculado automaticamente      |
 
 ---

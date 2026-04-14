@@ -178,7 +178,7 @@ def seed_premium():
                     descricao_servico=f"Procedimento de {tipo_nome} executado sem intercorrências. Verificado conforme padrões ISO 9001.",
                     data_execucao=conclusao.date(), 
                     custo_pecas=random.uniform(20, 800), 
-                    custo_maao_de_obra=duration_h * 120
+                    custo_mao_de_obra=duration_h * 120
                 )
                 last_date = conclusao
             else:

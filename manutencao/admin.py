@@ -9,6 +9,6 @@ class OrdemServicoAdmin(admin.ModelAdmin):
 
 @admin.register(HistoricoManutencao)
 class HistoricoManutencaoAdmin(admin.ModelAdmin):
-    list_display = ('ordem_servico', 'data_execucao', 'custo_pecas', 'custo_maao_de_obra', 'custo_total')
+    list_display = ('ordem_servico', 'data_execucao', 'custo_pecas', 'custo_mao_de_obra', 'custo_total')
     list_filter = ('data_execucao',)
     search_fields = ('ordem_servico__titulo', 'ordem_servico__equipamento__nome')
