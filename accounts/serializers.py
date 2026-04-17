@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
 from .models import Empresa, Usuario
 
 class EmpresaSerializer(serializers.ModelSerializer):
@@ -25,3 +26,20 @@ class MeSerializer(serializers.ModelSerializer):
             'is_staff', 'is_superuser',
         ]
         read_only_fields = fields
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+  
+    senha_atual = serializers.CharField(required=True, write_only=True)
+    nova_senha = serializers.CharField(required=True, write_only=True, min_length=6)
+    confirmar_nova_senha = serializers.CharField(required=True, write_only=True)
+
+    def validate_nova_senha(self, value):
+        # Roda as validações de senha do Django (tamanho mínimo, senha numérica etc.)
+        validate_password(value)
+        return value
+
+    def validate(self, data):
+        if data['nova_senha'] != data['confirmar_nova_senha']:
+            raise serializers.ValidationError({'confirmar_nova_senha': 'As senhas não coincidem.'})
+        return data

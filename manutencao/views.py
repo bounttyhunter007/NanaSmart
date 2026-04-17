@@ -1,9 +1,9 @@
 from rest_framework import viewsets, filters
-from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as df_filters
 from .models import OrdemServico, HistoricoManutencao
 from .serializers import OrdemServicoSerializer, HistoricoManutencaoSerializer
+from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 
 
 class HistoricoManutencaoFilter(df_filters.FilterSet):
@@ -21,7 +21,7 @@ class HistoricoManutencaoFilter(df_filters.FilterSet):
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
     serializer_class = OrdemServicoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'prioridade', 'equipamento', 'responsavel']
     search_fields = ['titulo', 'descricao']
@@ -40,7 +40,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
 class HistoricoManutencaoViewSet(viewsets.ModelViewSet):
     serializer_class = HistoricoManutencaoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = HistoricoManutencaoFilter
     search_fields = ['descricao_servico']

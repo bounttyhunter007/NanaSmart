@@ -1,13 +1,13 @@
 from rest_framework import viewsets, filters
-from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Sensor, Telemetria
 from .serializers import SensorSerializer, TelemetriaSerializer
+from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 
 
 class SensorViewSet(viewsets.ModelViewSet):
     serializer_class = SensorSerializer
-    permission_classes = [IsAuthenticated]   # antes estava sem permissão (público)
+    permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['equipamento', 'tipo_sensor', 'ativo']
     search_fields = ['descricao']
@@ -24,7 +24,7 @@ class SensorViewSet(viewsets.ModelViewSet):
 
 class TelemetriaViewSet(viewsets.ModelViewSet):
     serializer_class = TelemetriaSerializer
-    permission_classes = [IsAuthenticated]   # antes estava sem permissão (público)
+    permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['sensor', 'sensor__equipamento']
 
