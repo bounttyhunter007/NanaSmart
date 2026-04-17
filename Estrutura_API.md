@@ -15,6 +15,7 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | POST   | `/api/auth/token/`              | Gerar token JWT (login)                        |
 | POST   | `/api/auth/token/refresh/`      | Renovar token JWT                              |
 | GET    | `/api/auth/me/`                 | Retornar dados do usuário autenticado          |
+| POST   | `/api/auth/change-password/`    | Trocar a senha do próprio usuário               |
 
 **Observações:**
 - Autenticação principal via **Bearer Token (JWT)**
@@ -151,6 +152,13 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | data_alerta  | DateTime    | -                     | Data e hora do alerta                          | Auto (auto_now_add)            |
 | status       | String      | -                     | Status (ativo, resolvido, ignorado)            | Obrigatório (default: ativo)   |
 
+### Regras de Geração Automática (Preditivo)
+
+Alertas são gerados via signal ao registrar novas telemetrias, baseados em % do limite configurado:
+- **CRÍTICO**: Valor >= 100% do limite.
+- **MÉDIO**: Valor >= 85% do limite.
+- **BAIXO**: Valor >= 70% do limite (Próximo à falha).
+
 ---
 
 ## 🛠️ Ordens de Serviço (CRUD)
@@ -262,6 +270,42 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 - `GET /api/dashboards/resumo/`
 
 **Função:** Retornar indicadores consolidados (KPIs, quantidade de alertas, equipamentos por status, etc.).
+
+### Endpoints Detalhados
+
+#### 1. Resumo Completo (`/api/dashboards/resumo/`)
+Retorna uma visão geral da empresa:
+- **resumo_status**: Total de equipamentos por status (ativo, manutencao, inativo).
+- **kpis_globais**: 
+    - `mttr_medio`: Tempo Médio de Reparo (horas).
+    - `mtbf_medio`: Tempo Médio Entre Falhas (horas).
+    - `disponibilidade_media`: Percentual de uptime (calculado apenas sobre ativos com histórico).
+    - `custo_total_manutencao`: Soma de todos os custos de peças e mão de obra.
+- **alertas_ativos**: Contagem de alertas por nível (critico, medio, baixo).
+- **os_abertas**: Quantidade de OS pendentes ou em andamento.
+- **detalhes_equipamentos**: Lista de todos os equipamentos com seus KPIs individuais.
+
+**Filtros:**
+- `?dias=X`: Limita os cálculos de KPIs e custos aos últimos X dias.
+- `?empresa_id=X`: (Admin apenas) Filtra por empresa específica.
+
+#### 2. KPIs Individuais (`/api/dashboards/kpis/`)
+Retorna uma lista de KPIs focada em cada equipamento.
+- **Filtros:** `?equipamento_id=X`, `?dias=X`.
+
+---
+
+## 🛡️ Permissões e Segurança (RBAC)
+
+O sistema utiliza **Role-Based Access Control** para garantir a segurança dos dados:
+
+| Papel | Permissões |
+|-------|------------|
+| **Admin** | Acesso total a todas as empresas, usuários e ativos. |
+| **Gestor** | Acesso total, mas restrito aos dados da **própria empresa** (Multi-tenant). |
+| **Técnico**| Pode visualizar e criar ativos/OS, mas é **bloqueado para DELETE** em registros críticos (Alertas, Telemetria, OS). |
+
+**Regra Restritiva:** Técnicos recebem `403 Forbidden` ao tentar deletar qualquer registro de manutenção ou sensor.
 
 ---
 

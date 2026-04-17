@@ -79,7 +79,7 @@ class BaseAPITestCase(TestCase):
         # --- Equipamentos ---
         self.equip1 = Equipamento.objects.create(
             empresa=self.empresa1, nome='Motor Elétrico ME-01',
-            tipo='Motor elétrico', fabricante='WEG', modelo='W22',
+            tipo='Motor Elétrico', fabricante='WEG', modelo='W22',
             numero_serie='SN-ALPHA-001', data_instalacao=date(2024, 1, 15),
             status='ativo'
         )
@@ -113,9 +113,9 @@ class BaseAPITestCase(TestCase):
             ativo=True
         )
 
-        # --- Telemetria ---
-        self.leitura1 = Telemetria.objects.create(sensor=self.sensor1, valor=72.5)
-        self.leitura2 = Telemetria.objects.create(sensor=self.sensor2, valor=3.2)
+        # --- Telemetria (valores base baixos) ---
+        self.leitura1 = Telemetria.objects.create(sensor=self.sensor1, valor=40.0)
+        self.leitura2 = Telemetria.objects.create(sensor=self.sensor2, valor=1.0)
 
         # --- Alertas ---
         self.alerta1 = Alerta.objects.create(
@@ -238,7 +238,7 @@ class ModelTests(BaseAPITestCase):
 
     # --- Telemetria ---
     def test_telemetria_criacao(self):
-        self.assertEqual(self.leitura1.valor, 72.5)
+        self.assertEqual(self.leitura1.valor, 40.0)
         self.assertEqual(self.leitura1.sensor, self.sensor1)
         self.assertIsNotNone(self.leitura1.data_hora)
 
@@ -247,6 +247,30 @@ class ModelTests(BaseAPITestCase):
         leituras = list(Telemetria.objects.filter(sensor=self.sensor1))
         if len(leituras) > 1:
             self.assertGreaterEqual(leituras[0].data_hora, leituras[1].data_hora)
+
+    # --- Alerta Gradual ---
+    def test_alertas_graduais_niveis(self):
+        """Testa se o signal gera alertas nos níveis corretos conforme o percentual do limite."""
+        from telemetria.config_alertas import obter_limite
+        limite = obter_limite(self.equip1.tipo, self.sensor1.tipo_sensor) # ex: 85.0
+        
+        # 1. Nível BAIXO (>= 70%)
+        val_baixo = limite * 0.75
+        Telemetria.objects.create(sensor=self.sensor1, valor=val_baixo)
+        alerta = Alerta.objects.filter(equipamento=self.equip1, nivel='baixo').order_by('-id').first()
+        self.assertIsNotNone(alerta)
+        
+        # 2. Nível MÉDIO (>= 85%) - Deve atualizar o existente ou criar um que sobreponha
+        val_medio = limite * 0.90
+        Telemetria.objects.create(sensor=self.sensor1, valor=val_medio)
+        alerta = Alerta.objects.filter(equipamento=self.equip1, status='ativo').order_by('-id').first()
+        self.assertEqual(alerta.nivel, 'medio')
+        
+        # 3. Nível CRÍTICO (>= 100%)
+        val_critico = limite * 1.10
+        Telemetria.objects.create(sensor=self.sensor1, valor=val_critico)
+        alerta = Alerta.objects.filter(equipamento=self.equip1, status='ativo').order_by('-id').first()
+        self.assertEqual(alerta.nivel, 'critico')
 
     # --- Alerta ---
     def test_alerta_criacao(self):
@@ -355,6 +379,35 @@ class AuthTests(BaseAPITestCase):
         for url in endpoints:
             resp = self.client.get(url)
             self.assertIn(resp.status_code, [401, 403], f"{url} deveria ser protegido, retornou {resp.status_code}")
+
+    def test_troca_senha_sucesso(self):
+        self.login_as(self.tecnico)
+        resp = self.client.post('/api/auth/change-password/', {
+            'senha_atual': 'testpass123',
+            'nova_senha': 'newsecurepassword123',
+            'confirmar_nova_senha': 'newsecurepassword123'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self.tecnico.check_password('newsecurepassword123'))
+
+    def test_troca_senha_falha_atual_incorreta(self):
+        self.login_as(self.tecnico)
+        resp = self.client.post('/api/auth/change-password/', {
+            'senha_atual': 'senhaerrada',
+            'nova_senha': 'newpassword123',
+            'confirmar_nova_senha': 'newpassword123'
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('senha_atual', resp.data)
+
+    def test_troca_senha_falha_confirmacao(self):
+        self.login_as(self.tecnico)
+        resp = self.client.post('/api/auth/change-password/', {
+            'senha_atual': 'testpass123',
+            'nova_senha': 'newpassword123',
+            'confirmar_nova_senha': 'diferente'
+        })
+        self.assertEqual(resp.status_code, 400)
 
 
 # ============================================================
@@ -791,6 +844,29 @@ class DashboardAPITests(BaseAPITestCase):
             equip_db = Equipamento.objects.get(pk=eq['equipamento_id'])
             self.assertEqual(equip_db.empresa, self.empresa1)
 
+    def test_dashboard_campos_novos(self):
+        """Valida a presença de custo_total_manutencao, alertas_ativos e os_abertas."""
+        self.login_as(self.gestor)
+        resp = self.client.get('/api/dashboards/resumo/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('alertas_ativos', resp.data)
+        self.assertIn('os_abertas', resp.data)
+        self.assertIn('custo_total_manutencao', resp.data['kpis_globais'])
+        self.assertTrue(resp.data['kpis_globais']['custo_total_manutencao'] > 0)
+
+    def test_dashboard_filtro_periodo(self):
+        """Valida que o filtro ?dias= limita os resultados."""
+        self.login_as(self.gestor)
+        # Sem filtro
+        resp1 = self.client.get('/api/dashboards/resumo/')
+        # Com filtro de 1 dia (não deve ter OS concluída hoje nos mocks)
+        resp2 = self.client.get('/api/dashboards/resumo/?dias=1')
+        self.assertEqual(resp2.status_code, 200)
+        # O custo total e manutenções devem ser diferentes (ou zero no resp2)
+        custo1 = resp1.data['kpis_globais']['custo_total_manutencao']
+        custo2 = resp2.data['kpis_globais']['custo_total_manutencao']
+        self.assertNotEqual(custo1, custo2)
+
 
 # ============================================================
 #  13. TESTES DE PERMISSÕES (RBAC)
@@ -836,6 +912,26 @@ class PermissaoTests(BaseAPITestCase):
             'descricao': 'Teste', 'status': 'pendente', 'prioridade': 'baixa'
         })
         self.assertEqual(resp.status_code, 201)
+
+    def test_tecnico_nao_deleta_alerta(self):
+        self.login_as(self.tecnico)
+        resp = self.client.delete(f'/api/alertas/{self.alerta1.id}/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_tecnico_nao_deleta_telemetria(self):
+        self.login_as(self.tecnico)
+        resp = self.client.delete(f'/api/telemetria/leituras/{self.leitura1.id}/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_tecnico_nao_deleta_os(self):
+        self.login_as(self.tecnico)
+        resp = self.client.delete(f'/api/ordens-servico/{self.os1.id}/')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_gestor_deleta_alerta_sucesso(self):
+        self.login_as(self.gestor)
+        resp = self.client.delete(f'/api/alertas/{self.alerta1.id}/')
+        self.assertEqual(resp.status_code, 204)
 
 
 # ============================================================
