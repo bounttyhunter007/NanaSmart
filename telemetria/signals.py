@@ -62,24 +62,63 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
         ordem_nivel = {'baixo': 1, 'medio': 2, 'critico': 3}
         if ordem_nivel[nivel] > ordem_nivel[alerta_existente.nivel]:
             alerta_existente.nivel = nivel
-            alerta_existente.descricao = (
+            alerta_descricao_escalada = (
                 f"Situação agravada em {equipamento.nome} ({equipamento.tipo}). "
                 f"Sensor de {sensor.get_tipo_sensor_display()} registrou "
                 f"{valor}{sensor.unidade_medida} "
                 f"({round(percentual * 100, 1)}% do limite de {limite}{sensor.unidade_medida})."
             )
+            alerta_existente.descricao = alerta_descricao_escalada
             alerta_existente.save()
+
+            # Se a escalada chegou a CRÍTICO, verifica criação de O.S.
+            if nivel == 'critico':
+                from manutencao.models import OrdemServico
+                os_ativa = OrdemServico.objects.filter(
+                    equipamento=equipamento,
+                    status__in=['pendente', 'andamento']
+                ).exists()
+
+                if not os_ativa:
+                    OrdemServico.objects.create(
+                        equipamento=equipamento,
+                        titulo=f"MANUTENÇÃO URGENTE: {tipo_alerta}",
+                        descricao=f"O.S. gerada automaticamente por AGRAVAMENTO para nível CRÍTICO.\n{alerta_descricao_escalada}",
+                        prioridade='urgente',
+                        status='pendente'
+                    )
         return
 
     # Cria novo alerta
+    alerta_descricao = (
+        f"Anomalia detectada em {equipamento.nome} ({equipamento.tipo}). "
+        f"Sensor de {sensor.get_tipo_sensor_display()} registrou "
+        f"{valor}{sensor.unidade_medida} "
+        f"({round(percentual * 100, 1)}% do limite de {limite}{sensor.unidade_medida})."
+    )
+
     Alerta.objects.create(
         equipamento=equipamento,
         tipo_alerta=tipo_alerta,
         nivel=nivel,
-        descricao=(
-            f"Anomalia detectada em {equipamento.nome} ({equipamento.tipo}). "
-            f"Sensor de {sensor.get_tipo_sensor_display()} registrou "
-            f"{valor}{sensor.unidade_medida} "
-            f"({round(percentual * 100, 1)}% do limite de {limite}{sensor.unidade_medida})."
-        )
+        descricao=alerta_descricao
     )
+
+    # Lógica de Automação: Se for CRÍTICO, gera O.S. automática
+    if nivel == 'critico':
+        from manutencao.models import OrdemServico
+        
+        # Verifica se já existe uma O.S. ativa para este equipamento
+        os_ativa = OrdemServico.objects.filter(
+            equipamento=equipamento,
+            status__in=['pendente', 'andamento']
+        ).exists()
+
+        if not os_ativa:
+            OrdemServico.objects.create(
+                equipamento=equipamento,
+                titulo=f"MANUTENÇÃO URGENTE: {tipo_alerta}",
+                descricao=f"O.S. gerada automaticamente pelo sistema preditivo.\n{alerta_descricao}",
+                prioridade='urgente',
+                status='pendente'
+            )
