@@ -2,7 +2,7 @@
 
 ## 📌 Visão Geral
 
-Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operações CRUD completas, telemetria IoT e dashboards. A estrutura segue boas práticas de organização por apps (`accounts`, `ativos`, etc.).
+Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operações CRUD completas, telemetria IoT e dashboards. A estrutura segue boas práticas de organização por apps (`authentication`, `accounts`, `ativos`, etc.).
 
 **Base da API:** Todos os endpoints estão sob o prefixo `/api/`.
 

@@ -22,7 +22,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # --- Apps ---
-    path('api/', include('accounts.urls')),   # inclui /api/auth/* automaticamente
+    path('api/auth/', include('authentication.urls')),
+    path('api/', include('accounts.urls')),
     path('api/', include('ativos.urls')),
     path('api/', include('manutencao.urls')),
     path('api/telemetria/', include('telemetria.urls')),
