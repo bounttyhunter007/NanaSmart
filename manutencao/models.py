@@ -8,6 +8,14 @@ class OrdemServico(models.Model):
     equipamento = models.ForeignKey(Equipamento, on_delete=models.CASCADE, related_name='ordens_servico')
     responsavel = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='minhas_os')
     
+    # Tipo da OS
+    TIPO_OS_CHOICES = (
+        ('corretiva',  'Corretiva'),   # Gerada por alerta de sensor
+        ('preditiva',  'Preditiva'),   # Gerada por horímetro (plano de manutenção)
+        ('preventiva', 'Preventiva'),  # Criada manualmente pelo gestor
+    )
+    tipo_os = models.CharField(max_length=20, choices=TIPO_OS_CHOICES, default='preventiva')
+
     # Dados da OS
     titulo = models.CharField(max_length=200)
     descricao = models.TextField(help_text="Descreva o problema ou o serviço a ser realizado")

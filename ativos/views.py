@@ -1,7 +1,7 @@
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Equipamento, EquipamentoLocalizacao
-from .serializers import EquipamentoSerializer, EquipamentoLocalizacaoSerializer
+from .models import Equipamento, EquipamentoLocalizacao, PlanoManutencao
+from .serializers import EquipamentoSerializer, EquipamentoLocalizacaoSerializer, PlanoManutencaoSerializer
 from accounts.permissions import IsGestorOrReadOnly
 
 
@@ -36,3 +36,25 @@ class EquipamentoLocalizacaoViewSet(viewsets.ModelViewSet):
         if user.empresa:
             return qs.filter(equipamento__empresa=user.empresa)
         return qs.none()
+
+
+class PlanoManutencaoViewSet(viewsets.ModelViewSet):
+    """
+    Gerencia os planos de manutenção preditiva por horímetro.
+    Apenas Gestores e Admins podem criar/editar planos.
+    Técnicos podem visualizar.
+    """
+    serializer_class = PlanoManutencaoSerializer
+    permission_classes = [IsGestorOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['equipamento', 'ativo', 'prioridade']
+    search_fields = ['nome_servico', 'descricao']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = PlanoManutencao.objects.select_related('equipamento')
+        if user.tipo_usuario == 'admin':
+            return qs.all()
+        if user.empresa:
+            return qs.filter(equipamento__empresa=user.empresa)
+        return qs.none()

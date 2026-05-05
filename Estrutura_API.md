@@ -102,7 +102,36 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | modelo           | String(100)    | -                   | Modelo                                         | Opcional                       |
 | numero_serie     | String(100)    | Unique              | Número de série                                | Obrigatório e único            |
 | data_instalacao  | Date           | -                   | Data de instalação                             | Opcional                       |
+| horimetro        | Float          | -                   | Horas de operação do equipamento               | Opcional (default: 0.0)        |
 | status           | String         | -                   | Status (ativo, manutencao, inativo)            | Obrigatório (default: ativo)   |
+
+---
+
+## 📅 Planos de Manutenção (CRUD)
+
+**Endpoints:**
+- `GET /api/planos-manutencao/`
+- `POST /api/planos-manutencao/`
+- `GET /api/planos-manutencao/{id}/`
+- `PUT /api/planos-manutencao/{id}/`
+- `PATCH /api/planos-manutencao/{id}/`
+- `DELETE /api/planos-manutencao/{id}/`
+
+**Model:** `PlanoManutencao`
+
+### Campos do modelo
+
+| Campo                 | Tipo           | PK / FK                 | Descrição                                      | Observação                     |
+|-----------------------|----------------|-------------------------|------------------------------------------------|--------------------------------|
+| id                    | Integer        | **PK**                  | Identificador único                            | Auto-incrementado              |
+| equipamento           | Integer        | **FK** → Equipamento.id | Equipamento vinculado                          | Obrigatório                    |
+| nome_servico          | String(200)    | -                       | Nome do serviço (ex: Troca de Óleo)            | Obrigatório                    |
+| descricao             | Text           | -                       | Descrição detalhada do serviço                 | Obrigatório                    |
+| intervalo_horas       | Float          | -                       | A cada quantas horas a O.S. será gerada        | Obrigatório                    |
+| prioridade            | String         | -                       | Prioridade (baixo, medio, critico)             | Obrigatório (default: medio)   |
+| ativo                 | Boolean        | -                       | Se o plano está rodando                        | Obrigatório (default: True)    |
+| horimetro_ultima_os   | Float          | -                       | Horímetro do equipamento no último disparo     | Read-only (preenchido auto)    |
+| proximo_disparo_horas | Float          | -                       | Quando a próxima O.S. será gerada (calculado)  | Read-only (Serializer Method)  |
 
 ---
 
@@ -182,6 +211,7 @@ Alertas são gerados via signal ao registrar novas telemetrias, baseados em % do
 | responsavel     | Integer  | **FK** → Usuario.id      | Responsável técnico/gestor                     | Opcional (SET_NULL)                 |
 | titulo          | String(200) | -                     | Título da OS                                   | Obrigatório                         |
 | descricao       | Text     | -                        | Descrição do problema/serviço                  | Obrigatório                         |
+| tipo_os         | String   | -                        | Tipo (corretiva, preditiva, preventiva)        | Obrigatório (default: preventiva)   |
 | status          | String   | -                        | Status (pendente, andamento, concluida, cancelada) | Obrigatório (default: pendente) |
 | prioridade      | String   | -                        | Prioridade (baixa, media, alta, urgente)       | Obrigatório (default: media)        |
 | data_abertura   | DateTime | -                        | Data de abertura                               | Auto (timezone.now)                 |
@@ -313,6 +343,7 @@ O sistema utiliza **Role-Based Access Control** para garantir a segurança dos d
 
 - **Empresa** → **Equipamento** → **Sensor** → **Telemetria**
 - **Equipamento** → **Alerta**
+- **Equipamento** → **PlanoManutencao**
 - **Equipamento** → **OrdemServico** → **HistoricoManutencao** (OneToOne)
 - **Equipamento** → **EquipamentoLocalizacao** (OneToOne)
 - **Usuario** → **OrdemServico** (responsavel)

@@ -269,6 +269,11 @@ Para não precisar colar o token em cada requisição:
 | status           | texto  | ❌ Não       | `ativo`, `manutencao` ou `inativo`   |
 | empresa          | número | ✅ Sim       | ID da empresa                        |
 
+**Nota de Ouro sobre o Horímetro**:
+- **Cenário de Máquina Nova**: Se você não enviar o campo `horimetro`, o equipamento será criado com **0.0 horas**.
+- **Cenário de Máquina Usada (Retroativo)**: Se a máquina já está em uso na fábrica, você **deve** enviar o valor atual (ex: `150.5`). 
+- **Por que isso importa?** O horímetro é o "coração" da Manutenção Preditiva (veja a Parte 12). Os planos de manutenção usarão esse valor exato como ponto de partida para não disparar ordens atrasadas incorretamente.
+
 ### ❌ 5.3 Teste de ERRO: Número de série duplicado
 - Tente criar outro equipamento com o mesmo `numero_serie`.
 - **Resultado esperado**: Status **400**.
@@ -438,18 +443,20 @@ Os alertas são gerados **automaticamente** pelo sistema. Você não precisa cri
       "descricao": "Rolamento do eixo principal com desgaste visível.",
       "prioridade": "medio",
       "status": "pendente",
+      "tipo_os": "preventiva",
       "responsavel": null
   }
   ```
 
-| Campo        | Tipo   | Obrigatório? | Valores aceitos                       |
-|--------------|--------|--------------|---------------------------------------|
-| equipamento  | número | ✅ Sim       | ID do equipamento                     |
-| titulo       | texto  | ✅ Sim       |                                       |
-| descricao    | texto  | ✅ Sim       |                                       |
-| prioridade   | texto  | ❌ Não       | `baixo`, `medio` ou `critico`         |
-| status       | texto  | ❌ Não       | `pendente`, `andamento`, `concluida`, `cancelada` |
-| responsavel  | número | ❌ Não       | ID de um usuário (ou `null`)          |
+| Campo        | Tipo   | Obrigatório? | Valores aceitos                                     |
+|--------------|--------|--------------|-----------------------------------------------------|
+| equipamento  | número | ✅ Sim       | ID do equipamento                                   |
+| titulo       | texto  | ✅ Sim       |                                                     |
+| descricao    | texto  | ✅ Sim       |                                                     |
+| prioridade   | texto  | ❌ Não       | `baixo`, `medio` ou `critico`                       |
+| status       | texto  | ❌ Não       | `pendente`, `andamento`, `concluida`, `cancelada`   |
+| tipo_os      | texto  | ❌ Não       | `corretiva`, `preditiva`, `preventiva` (padrão)     |
+| responsavel  | número | ❌ Não       | ID de um usuário (ou `null`)                        |
 
 **Campos automáticos** (você NÃO envia, o servidor preenche):
 - `data_abertura` → Preenchido com a data/hora atual.
@@ -508,6 +515,65 @@ Quando o técnico quer assumir uma tarefa:
 | custo_mao_de_obra  | decimal | ❌ Não       | Padrão: 0.00                        |
 
 **Campo calculado**: O retorno incluirá `custo_total` (soma automática de peças + mão de obra).
+
+---
+
+## 📅 PARTE 12: Planos de Manutenção (Horímetro)
+
+Aqui você configura a manutenção preditiva baseada nas horas de uso da máquina.
+
+### 12.1 Listar Planos
+- **Método**: `GET` | **URL**: `http://localhost:8000/api/planos-manutencao/`
+
+### 12.2 Criar Plano de Manutenção
+- **Método**: `POST` | **URL**: `http://localhost:8000/api/planos-manutencao/`
+- **Body (JSON)**:
+  ```json
+  {
+      "equipamento": 1,
+      "nome_servico": "Troca de Óleo",
+      "descricao": "Drenar e substituir óleo lubrificante 15W40.",
+      "intervalo_horas": 100.0,
+      "prioridade": "medio",
+      "ativo": true
+  }
+  ```
+
+| Campo           | Tipo    | Obrigatório? | Observação                                      |
+|-----------------|---------|--------------|-------------------------------------------------|
+| equipamento     | número  | ✅ Sim       | ID do equipamento                               |
+| nome_servico    | texto   | ✅ Sim       | Ex: "Limpeza de Filtros"                       |
+| descricao       | texto   | ✅ Sim       |                                                 |
+| intervalo_horas | decimal | ✅ Sim       | Intervalo entre manutenções (ex: 500)           |
+| prioridade      | texto   | ❌ Não       | `baixo`, `medio` ou `critico`                   |
+| ativo           | bool    | ❌ Não       | Se o plano está rodando (padrão: `true`)        |
+
+**A Lógica de Ouro (Como o disparo funciona na prática)**:
+
+A manutenção preditiva por horímetro opera em **dois passos separados** para garantir máxima flexibilidade (uma máquina pode ter 5 planos diferentes rolando ao mesmo tempo).
+
+**Passo a Passo do Teste Perfeito:**
+
+1. **O Ponto de Partida**: Imagine que você tem um motor operando e ele já acumula **500 horas** de uso (`horimetro: 500` no equipamento).
+2. **Criando o Plano**: Você cria um plano (POST acima) de "Troca de Óleo" com `intervalo_horas: 100`.
+3. **O Carimbo Oculto**: No exato milissegundo em que você cria o plano, o sistema "olha" para o motor e grava: *"A última manutenção (fictícia) foi em 500h"* (`horimetro_ultima_os: 500`).
+4. **O Alvo**: O sistema calcula internamente o próximo disparo: `500 + 100 = 600h`.
+5. **A Mágica Acontece**: Algum tempo depois, o técnico (ou o sistema do painel) atualiza o horímetro do equipamento via `PATCH /api/equipamentos/{id}/` para **605h**.
+   - O sistema intercepta o PATCH e detecta: `605 >= 600` (O limite do plano foi cruzado!).
+   - **Gera a O.S. automaticamente** com `tipo_os: "preditiva"` e título `[PREDITIVA] Troca de Óleo`.
+   - Atualiza o registro do plano: O novo "carimbo" (`horimetro_ultima_os`) passa a ser **605h**.
+6. **O Novo Alvo**: O próximo disparo projetado agora será: `605 + 100 = 705h`.
+
+**Sistemas Anti-Falhas Incluídos:**
+- **Anti-Duplicação**: Se o horímetro continuar subindo (ex: para 610h) antes do técnico fechar a O.S. gerada, o sistema **NÃO** vai criar outra O.S. igual. Ele espera o ciclo ser finalizado.
+- **Isolamento**: Se a máquina tem um plano para 100h e outro para 1000h, o sistema processa cada um de forma completamente independente.
+
+**Como Testar:**
+1. Crie o equipamento (Parte 5). Anote o ID e o horímetro inicial.
+2. Crie o Plano de Manutenção (Parte 12.2) apontando para o ID do equipamento.
+3. Faça um `PATCH` no Equipamento, aumentando o horímetro para um valor acima do intervalo.
+4. Faça um `GET /api/ordens-servico/` e veja a O.S. preditiva lá, prontinha para o técnico assumir!
+
 
 ---
 

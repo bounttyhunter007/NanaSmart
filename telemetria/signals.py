@@ -83,6 +83,7 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
                 titulo=titulo_os,
                 descricao=f"O.S. gerada automaticamente ({motivo}).\n{texto_alerta}",
                 prioridade=prioridade_alvo,
+                tipo_os='corretiva',
                 status='pendente'
             )
         else:

@@ -107,6 +107,7 @@ P.I-PlataformaManuntencaoWeb/
 | **OrdemServico**          | Equipamento                   | ForeignKey                 | PROTECT                                             | Não permite excluir equipamento com OS aberta |
 | **OrdemServico**          | Usuario (responsavel)         | ForeignKey                 | SET_NULL                                            | Se o responsável for excluído, fica nulo |
 | **HistoricoManutencao**   | OrdemServico                  | OneToOneField              | CASCADE                                             | Histórico é excluído junto com a OS |
+| **PlanoManutencao**      | Equipamento                   | ForeignKey                 | CASCADE                                             | Planos pertencem a um equipamento |
 
 ---
 
@@ -141,6 +142,28 @@ Qualquer anomalia detectada gera instantaneamente uma **Ordem de Serviço** para
 - **Escalada**: Se uma falha de nível "Médio" piorar para "Crítico", o sistema **eleva a prioridade** da O.S. já aberta em vez de criar uma duplicata.
 - **Multifuncionalidade**: Se houver falhas de tipos diferentes (ex: Temperatura e Vibração) no mesmo motor, o sistema cria **duas O.S. distintas** para rastreamento individual.
 
+### 4. Manutenção Preditiva por Horímetro (Tempo de Uso)
+Além dos sensores que detectam anomalias, o sistema conta com um motor preditivo baseado no desgaste natural (tempo de operação), medido pelo campo `horimetro` do equipamento.
+
+**Fluxo de Funcionamento Completo (A "Lógica de Ouro"):**
+
+1. **Criação do Equipamento (O Ponto de Partida)**:
+   - Ao cadastrar uma máquina (`POST /api/equipamentos/`), o gestor informa o horímetro atual (ex: `200` horas). 
+   - Se não for informado, o sistema assume `0.0`. Isso é crucial para máquinas que já estão em operação antes da adoção do sistema.
+
+2. **Criação dos Planos Customizados**:
+   - Uma máquina pode ter *múltiplos* planos de manutenção. Em vez de definir isso no equipamento, você cria planos vinculados a ele (`POST /api/planos-manutencao/`).
+   - Exemplo: "Troca de Óleo" a cada 100h e "Revisão Geral" a cada 1000h.
+   - **O Segredo (Carimbo Inicial)**: No exato momento em que você cria o plano "Troca de Óleo" (intervalo 100h) para a máquina que tem 200h, o sistema grava internamente: *Última manutenção foi em 200h*. Portanto, o **próximo disparo será em 300h**.
+
+3. **Monitoramento e Disparo Automático**:
+   - Conforme a máquina trabalha, o sistema externo ou o técnico atualiza o horímetro (`PATCH /api/equipamentos/{id}/`).
+   - Se o horímetro atingir ou ultrapassar 300h (ex: `PATCH` enviando `305`), o sistema intercepta essa atualização (via Signals) e **gera automaticamente uma O.S.** do tipo `preditiva`.
+
+4. **Ciclo Contínuo e Anti-Duplicação**:
+   - Após o disparo, o plano é atualizado. O novo "carimbo" passa a ser 305h. O próximo disparo será projetado para 405h.
+   - O sistema possui inteligência anti-duplicação: se o horímetro continuar subindo (ex: 310h), mas a O.S. Preditiva de "Troca de Óleo" ainda estiver aberta, ele **não** criará uma nova. Ele aguarda o fechamento do ciclo atual.
+
 ---
 
 ## 📖 Documentação Interativa
@@ -172,11 +195,13 @@ Com o servidor rodando, acesse:
 - Sistema de permissões RBAC por perfil e isolamento multi-tenant
 - Geração automática e escalada de O.S. para todos os níveis de alerta
 - Limites de alerta customizáveis individualmente por sensor
+- **Manutenção Preditiva por Horímetro**: Geração automática de O.S. baseada em horas de uso
+- **Classificação de O.S.**: Distinção entre ordens Corretivas (sensores), Preditivas (horímetro) e Preventivas (manuais)
 - Regras de visibilidade restrita para técnicos (Sigilo de O.S.)
 - Cálculo automático de KPIs no dashboard (Em testes)
 - Script de seed completo e realista
 - Documentação automática com Swagger e ReDoc
-- Suíte de 98 testes automatizados de integração e estresse
+- Suíte de 102 testes automatizados de integração e estresse
 
 ### 🔄 Em Desenvolvimento
 - Paginação e filtros avançados em todas as listagens
@@ -279,6 +304,16 @@ Com o servidor rodando, acesse:
 | GET    | /api/telemetria/leituras/         | Listar todas as leituras de telemetria |
 | POST   | /api/telemetria/leituras/         | Enviar nova leitura de sensor |
 | GET    | /api/telemetria/leituras/{id}/    | Detalhes de uma leitura específica |
+
+### 📅 Planos de Manutenção (Horímetro)
+
+| Método | Endpoint                          | Descrição |
+|--------|-----------------------------------|---------|
+| GET    | /api/planos-manutencao/           | Listar todos os planos de manutenção preditiva |
+| POST   | /api/planos-manutencao/           | Criar novo plano de manutenção por horímetro |
+| GET    | /api/planos-manutencao/{id}/      | Detalhes de um plano específico |
+| PATCH  | /api/planos-manutencao/{id}/      | Atualizar intervalo ou detalhes do plano |
+| DELETE | /api/planos-manutencao/{id}/      | Excluir um plano de manutenção |
 
 ### 📊 Dashboards
 

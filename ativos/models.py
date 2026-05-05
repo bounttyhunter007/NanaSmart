@@ -29,3 +29,39 @@ class EquipamentoLocalizacao(models.Model):
 
     def __str__(self):
         return f"Localização: {self.setor} ({self.equipamento.nome})"
+
+
+class PlanoManutencao(models.Model):
+    """
+    Define uma tarefa de manutenção recorrente para um equipamento,
+    baseada em intervalo de horímetro (horas de operação).
+    Exemplo: "Troca de Óleo" a cada 100 horas.
+    """
+    PRIORIDADE_CHOICES = (
+        ('baixo', 'Baixo'),
+        ('medio', 'Médio'),
+        ('critico', 'Crítico'),
+    )
+
+    equipamento     = models.ForeignKey(Equipamento, on_delete=models.CASCADE, related_name='planos_manutencao')
+    nome_servico    = models.CharField(max_length=200, help_text="Ex: Troca de Óleo, Revisão de Rolamentos")
+    descricao       = models.TextField(help_text="Detalhes do serviço a ser realizado")
+    intervalo_horas = models.FloatField(help_text="A cada quantas horas este serviço deve ser realizado")
+    prioridade      = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default='medio')
+    ativo           = models.BooleanField(default=True)
+
+    # Controle de execução
+    horimetro_ultima_os = models.FloatField(
+        default=0,
+        help_text="Horímetro do equipamento no momento em que a última O.S. foi gerada"
+    )
+
+    def save(self, *args, **kwargs):
+        # Na criação do plano, define horimetro_ultima_os com o horímetro atual do equipamento
+        # para que o próximo disparo seja: horímetro_atual + intervalo
+        if not self.pk:
+            self.horimetro_ultima_os = self.equipamento.horimetro
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.nome_servico} (a cada {self.intervalo_horas}h) — {self.equipamento.nome}"
