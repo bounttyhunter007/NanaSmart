@@ -22,12 +22,11 @@ class OrdemServico(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
     
     PRIORIDADE_CHOICES = (
-        ('baixa', 'Baixa'),
-        ('media', 'Média'),
-        ('alta', 'Alta'),
-        ('urgente', 'Urgente (Parada de Máquina)'),
+        ('baixo', 'Baixo'),
+        ('medio', 'Médio'),
+        ('critico', 'Crítico'),
     )
-    prioridade = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default='media')
+    prioridade = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default='baixo')
     
     # Datas
     data_abertura = models.DateTimeField(default=timezone.now) # Preenche com a hora atual, mas aceita valores manuais

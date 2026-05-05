@@ -57,6 +57,43 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
         status='ativo'
     ).first()
 
+    def garantir_ordem_servico(nivel_alerta, texto_alerta, motivo):
+        from manutencao.models import OrdemServico
+        
+        # Mapeamento de severidade do Alerta -> Prioridade da O.S. (Alinhado com Model)
+        prioridade_map = {
+            'critico': 'critico',
+            'medio': 'medio',
+            'baixo': 'baixo'
+        }
+        
+        prioridade_alvo = prioridade_map.get(nivel_alerta, 'baixo')
+        titulo_os = f"MANUTENÇÃO: {tipo_alerta}"
+        
+        # Verifica se já existe uma O.S. ativa para este equipamento E este problema específico
+        os_ativa = OrdemServico.objects.filter(
+            equipamento=equipamento,
+            status__in=['pendente', 'andamento'],
+            titulo=titulo_os
+        ).first()
+
+        if not os_ativa:
+            # Cria a O.S. se não houver nenhuma ativa para este tipo de problema
+            OrdemServico.objects.create(
+                equipamento=equipamento,
+                titulo=titulo_os,
+                descricao=f"O.S. gerada automaticamente ({motivo}).\n{texto_alerta}",
+                prioridade=prioridade_alvo,
+                status='pendente'
+            )
+        else:
+            # Se a O.S. já existe, verifica se o nível de prioridade precisa subir
+            ordem_peso = {'baixo': 1, 'medio': 2, 'critico': 3}
+            if ordem_peso[prioridade_alvo] > ordem_peso[os_ativa.prioridade]:
+                os_ativa.prioridade = prioridade_alvo
+                os_ativa.descricao += f"\n\n[ATUALIZAÇÃO]: Nível escalado para {nivel_alerta.upper()}. {texto_alerta}"
+                os_ativa.save()
+
     if alerta_existente:
         # Só atualiza se o nível piorou (baixo → medio → critico)
         ordem_nivel = {'baixo': 1, 'medio': 2, 'critico': 3}
@@ -71,22 +108,8 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
             alerta_existente.descricao = alerta_descricao_escalada
             alerta_existente.save()
 
-            # Se a escalada chegou a CRÍTICO, verifica criação de O.S.
-            if nivel == 'critico':
-                from manutencao.models import OrdemServico
-                os_ativa = OrdemServico.objects.filter(
-                    equipamento=equipamento,
-                    status__in=['pendente', 'andamento']
-                ).exists()
-
-                if not os_ativa:
-                    OrdemServico.objects.create(
-                        equipamento=equipamento,
-                        titulo=f"MANUTENÇÃO URGENTE: {tipo_alerta}",
-                        descricao=f"O.S. gerada automaticamente por AGRAVAMENTO para nível CRÍTICO.\n{alerta_descricao_escalada}",
-                        prioridade='urgente',
-                        status='pendente'
-                    )
+            # Gera ou atualiza a O.S. devido ao agravamento
+            garantir_ordem_servico(nivel, alerta_descricao_escalada, "AGRAVAMENTO")
         return
 
     # Cria novo alerta
@@ -104,21 +127,5 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
         descricao=alerta_descricao
     )
 
-    # Lógica de Automação: Se for CRÍTICO, gera O.S. automática
-    if nivel == 'critico':
-        from manutencao.models import OrdemServico
-        
-        # Verifica se já existe uma O.S. ativa para este equipamento
-        os_ativa = OrdemServico.objects.filter(
-            equipamento=equipamento,
-            status__in=['pendente', 'andamento']
-        ).exists()
-
-        if not os_ativa:
-            OrdemServico.objects.create(
-                equipamento=equipamento,
-                titulo=f"MANUTENÇÃO URGENTE: {tipo_alerta}",
-                descricao=f"O.S. gerada automaticamente pelo sistema preditivo.\n{alerta_descricao}",
-                prioridade='urgente',
-                status='pendente'
-            )
+    # Gera a O.S. inicial para o novo alerta
+    garantir_ordem_servico(nivel, alerta_descricao, "NOVO ALERTA")
