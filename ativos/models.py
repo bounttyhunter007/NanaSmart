@@ -11,6 +11,7 @@ class Equipamento(models.Model):
     modelo = models.CharField(max_length=100, blank=True, null=True)
     numero_serie = models.CharField(max_length=100, unique=True)
     data_instalacao = models.DateField(blank=True, null=True)
+    horimetro = models.FloatField(default=0, help_text="Horas de operação do equipamento")
 
     STATUS_CHOICES = (
         ('ativo', 'Ativo'),

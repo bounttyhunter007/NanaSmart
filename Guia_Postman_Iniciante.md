@@ -251,6 +251,7 @@ Para não precisar colar o token em cada requisição:
       "modelo": "GA 90+",
       "numero_serie": "AC-2024-001",
       "data_instalacao": "2024-03-15",
+      "horimetro": 150.5,
       "status": "ativo",
       "empresa": 1
   }
@@ -264,6 +265,7 @@ Para não precisar colar o token em cada requisição:
 | modelo           | texto  | ❌ Não       |                                      |
 | numero_serie     | texto  | ✅ Sim       | **Deve ser único** no sistema        |
 | data_instalacao  | data   | ❌ Não       | Formato: `AAAA-MM-DD`               |
+| horimetro        | número | ❌ Não       | Horas de operação (padrão: 0)        |
 | status           | texto  | ❌ Não       | `ativo`, `manutencao` ou `inativo`   |
 | empresa          | número | ✅ Sim       | ID da empresa                        |
 
