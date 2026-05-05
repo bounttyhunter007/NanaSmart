@@ -2,7 +2,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import Telemetria
 from alertas.models import Alerta
-from .config_alertas import obter_limite
 
 
 @receiver(post_save, sender=Telemetria)
@@ -31,7 +30,7 @@ def checar_limites_telemetria(sender, instance, created, **kwargs):
 
     valor = instance.valor
     equipamento = sensor.equipamento
-    limite = obter_limite(equipamento.tipo, sensor.tipo_sensor)
+    limite = sensor.limite_alerta
 
     if limite is None or limite <= 0:
         return
