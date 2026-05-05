@@ -117,10 +117,29 @@ Authorization: Bearer SEU_TOKEN_AQUI
 
 O sistema possui isolamento completo por empresa (multi-tenant). Um usuário só consegue ver e alterar dados da empresa à qual está vinculado.
 
-Perfis disponíveis:
+Perfis Disponíveis:
 - admin → Tem acesso total ao sistema
 - gestor → Pode gerenciar usuários, equipamentos e ordens da própria empresa
-- tecnico → Pode visualizar dados e registrar manutenções
+- tecnico → Pode visualizar dados e registrar manutenções. **Regra de Sigilo**: Técnicos só visualizam Ordens de Serviço que estão "sem responsável" ou que foram atribuídas a eles.
+
+---
+
+## ⚙️ Inteligência Preditiva e Automação
+
+O sistema monitora a telemetria em tempo real e toma decisões automáticas para prevenir falhas:
+
+### 1. Regras de Disparo de Alertas
+A severidade do alerta é calculada com base no percentual atingido do `limite_alerta` configurado no sensor:
+- 🟢 **Baixo**: Valor >= **70%** do limite.
+- 🟡 **Médio**: Valor >= **85%** do limite.
+- 🔴 **Crítico**: Valor >= **100%** do limite.
+
+### 2. Geração Automática de O.S.
+Qualquer anomalia detectada gera instantaneamente uma **Ordem de Serviço** para inspeção. A prioridade da O.S. (`baixo`, `medio`, `critico`) reflete exatamente o nível do alerta gerado.
+
+### 3. Escalada e Agrupamento Inteligente
+- **Escalada**: Se uma falha de nível "Médio" piorar para "Crítico", o sistema **eleva a prioridade** da O.S. já aberta em vez de criar uma duplicata.
+- **Multifuncionalidade**: Se houver falhas de tipos diferentes (ex: Temperatura e Vibração) no mesmo motor, o sistema cria **duas O.S. distintas** para rastreamento individual.
 
 ---
 
@@ -149,16 +168,17 @@ Com o servidor rodando, acesse:
 ### ✅ Concluído
 - Criação da estrutura completa de aplicativos Django
 - Implementação de todos os CRUDs necessários
-- Sistema completo de autenticação JWT
-- Sistema de permissões RBAC por perfil
-- Isolamento completo de dados por empresa
-- Geração automática de alertas através de Signals
-- Cálculo automático de KPIs no dashboard
+- Sistema completo de autenticação JWT com Refresh e Blacklist
+- Sistema de permissões RBAC por perfil e isolamento multi-tenant
+- Geração automática e escalada de O.S. para todos os níveis de alerta
+- Limites de alerta customizáveis individualmente por sensor
+- Regras de visibilidade restrita para técnicos (Sigilo de O.S.)
+- Cálculo automático de KPIs no dashboard (Em testes)
 - Script de seed completo e realista
 - Documentação automática com Swagger e ReDoc
+- Suíte de 98 testes automatizados de integração e estresse
 
 ### 🔄 Em Desenvolvimento
-- Implementação de testes automatizados completos
 - Paginação e filtros avançados em todas as listagens
 - Configuração oficial para PostgreSQL em produção
 - Suporte a WebSockets para telemetria em tempo real
@@ -246,7 +266,7 @@ Com o servidor rodando, acesse:
 | Método | Endpoint                          | Descrição |
 |--------|-----------------------------------|---------|
 | GET    | /api/telemetria/sensores/         | Listar todos os sensores |
-| POST   | /api/telemetria/sensores/         | Cadastrar novo sensor |
+| POST   | /api/telemetria/sensores/         | Cadastrar novo sensor (com limite_alerta customizado) |
 | GET    | /api/telemetria/sensores/{id}/    | Detalhes de um sensor |
 | PUT    | /api/telemetria/sensores/{id}/    | Atualizar completamente um sensor |
 | PATCH  | /api/telemetria/sensores/{id}/    | Atualizar parcialmente um sensor |
