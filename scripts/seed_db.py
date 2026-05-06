@@ -8,6 +8,7 @@ import django
 import random
 import re
 import argparse
+import time
 from datetime import timedelta, datetime
 from decimal import Decimal
 from django.utils import timezone
@@ -123,21 +124,28 @@ def log_progresso(etapa, atual, total):
 # Logica Principal
 # ---------------------------------------------------------------------------
 def run_seed(num_empresas, equip_por_empresa):
+    start_total = time.time()
     print(f"\n[START] Iniciando Seed Industrial: {num_empresas} empresas, ~{equip_por_empresa} ativos/empresa.")
     
     # 1. Limpeza
+    t_start = time.time()
     print("\n[CLEAN] Limpando banco de dados...")
     models_to_clear = [Alerta, HistoricoManutencao, OrdemServico, Telemetria, Sensor, PlanoManutencao, EquipamentoLocalizacao, Equipamento, Empresa]
     for model in models_to_clear:
         model.objects.all().delete()
     Usuario.objects.filter(is_superuser=False).delete()
     _usernames_usados.clear()
+    print(f"OK (Duracao: {time.time() - t_start:.2f}s)")
 
     # 2. Admin
+    print("\n[ADMIN] Configurando acesso administrativo...")
+    t_start = time.time()
     if not Usuario.objects.filter(username='admin').exists():
         Usuario.objects.create_superuser(username='admin', email='suporte@bughunter.com', password='admin', tipo_usuario='admin')
+    print(f"OK (Duracao: {time.time() - t_start:.2f}s)")
 
     # 3. Empresas e Usuarios
+    t_start = time.time()
     empresas = []
     for i in range(num_empresas):
         emp_nome = fake.company()
@@ -168,11 +176,13 @@ def run_seed(num_empresas, equip_por_empresa):
                 cargo=random.choice(CARGOS_TECNICO)
             )
         log_progresso("Empresas", i + 1, num_empresas)
+    print(f"OK (Duracao: {time.time() - t_start:.2f}s)")
 
     # 4. Equipamentos, Planos e Sensores
+    t_start = time.time()
     print("\n[ASSETS] Gerando Ativos e Instrumentação...")
     now = timezone.now()
-    inicio_historico = now - timedelta(days=30)
+    inicio_historico = now - timedelta(days=120) # Aumentado para 4 meses
     todos_sensores = []
     total_equip = num_empresas * equip_por_empresa
     count = 0
@@ -210,15 +220,17 @@ def run_seed(num_empresas, equip_por_empresa):
             
             count += 1
             log_progresso("Ativos", count, total_equip)
+    print(f"OK (Duracao: {time.time() - t_start:.2f}s)")
 
     # 5. Telemetria (Simulação Coerente)
-    print("\n[TELEMETRY] Gerando histórico (30 dias com tendências)...")
+    t_start = time.time()
+    print("\n[TELEMETRY] Gerando histórico (120 dias com tendências)...")
     leituras_bulk = []
     for sensor, min_v, max_v in todos_sensores:
         base_val = random.uniform(min_v, (min_v + max_v) / 2)
         trend = random.uniform(-0.01, 0.05) # Pequena tendência de desgaste
         
-        for h in range(30 * 24): # Horário (1 leitura por hora)
+        for h in range(120 * 24): # Horário (1 leitura por hora durante 120 dias)
             ponto = inicio_historico + timedelta(hours=h)
             fluctuacao = random.uniform(-0.5, 0.5)
             val = base_val + (h * trend) + fluctuacao
@@ -233,9 +245,10 @@ def run_seed(num_empresas, equip_por_empresa):
                 leituras_bulk = []
                 
     if leituras_bulk: Telemetria.objects.bulk_create(leituras_bulk)
-    print(f"OK: {Telemetria.objects.count()} registros de telemetria.")
+    print(f"OK: {Telemetria.objects.count()} registros de telemetria. (Duracao: {time.time() - t_start:.2f}s)")
 
     # 6. Ordens de Serviço e Histórico
+    t_start = time.time()
     print("\n[MAINTENANCE] Criando Ordens de Serviço e Alertas...")
     equips = Equipamento.objects.all()
     tecnicos = Usuario.objects.filter(tipo_usuario='tecnico')
@@ -244,8 +257,8 @@ def run_seed(num_empresas, equip_por_empresa):
         tecnicos_empresa = list(tecnicos.filter(empresa=eq.empresa))
         
         # Histórico de OS Concluídas
-        for _ in range(random.randint(1, 4)):
-            data_os = now - timedelta(days=random.randint(5, 60))
+        for _ in range(random.randint(2, 6)): # Mais OS por conta do período maior
+            data_os = now - timedelta(days=random.randint(5, 115))
             tipo_os = random.choice(['preventiva', 'corretiva'])
             os_obj = OrdemServico.objects.create(
                 equipamento=eq, responsavel=random.choice(tecnicos_empresa) if tecnicos_empresa else None,
@@ -286,8 +299,11 @@ def run_seed(num_empresas, equip_por_empresa):
             )
 
         log_progresso("Finalizando", idx + 1, equips.count())
+    print(f"OK (Duracao: {time.time() - t_start:.2f}s)")
 
-    print(f"\n[DONE] Banco de dados populado com sucesso! {Usuario.objects.count()} usuários, {Equipamento.objects.count()} ativos.")
+    total_time = time.time() - start_total
+    print(f"\n[DONE] Banco de dados populado com sucesso em {total_time:.2f}s!")
+    print(f"Resumo: {Usuario.objects.count()} usuários, {Equipamento.objects.count()} ativos.")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Seed industrial para o sistema BugHunter.')
@@ -301,14 +317,3 @@ if __name__ == '__main__':
         print(f"\n[ERROR] Falha crítica no seed: {e}")
         import traceback
         traceback.print_exc()
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Seed robusto para o sistema de manutencao.')
-    parser.add_argument('--empresas', type=int, default=3, help='Numero de empresas a criar')
-    parser.add_argument('--equipamentos', type=int, default=15, help='Numero de equipamentos por empresa')
-    args = parser.parse_args()
-    
-    try:
-        run_seed(args.empresas, args.equipamentos)
-    except Exception as e:
-        print(f"\n[ERROR] Erro durante o seed: {e}")
