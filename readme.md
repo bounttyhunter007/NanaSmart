@@ -48,7 +48,7 @@ Siga os passos abaixo na ordem exata:
    python manage.py migrate
 
 4. Popule o banco de dados com dados realistas executando o script de seed:
-   python scripts/automate_seed.py
+   python scripts/seed_db.py
    Este script limpa completamente o banco e cria empresas, usuários de diferentes perfis, equipamentos variados, sensores, leituras históricas de telemetria, alertas e ordens de serviço.
 
 5. Inicie o servidor de desenvolvimento com o comando:
@@ -57,6 +57,21 @@ Siga os passos abaixo na ordem exata:
    python manage.py runserver 9000
 
 Após iniciar, a API estará acessível em: http://localhost:8000
+
+---
+
+## 🧪 Como Executar os Testes
+
+O projeto utiliza o framework de testes nativo do Django. Os testes são isolados e não afetam o banco de dados de produção.
+
+1. Para rodar todos os testes do sistema:
+   python manage.py test
+
+2. Para rodar testes de um módulo específico (ex: ativos):
+   python manage.py test ativos
+
+3. Para ver o log detalhado dos testes:
+   python manage.py test -v 2
 
 ---
 

@@ -1,9 +1,18 @@
+"""
+Script de Teste de Carga (Stress Test) para Telemetria e Alertas.
+Testa a capacidade do sistema de processar múltiplas leituras e gerar alertas/O.S. concorrentemente.
+Uso:
+    python scripts/stress_telemetry.py --leituras 1000 --threads 20
+"""
 import os
 import sys
 import django
 import time
+import argparse
 import concurrent.futures
+import random
 
+# Setup Django
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
 django.setup()
@@ -11,50 +20,77 @@ django.setup()
 from ativos.models import Equipamento
 from telemetria.models import Sensor, Telemetria
 from accounts.models import Empresa
+from alertas.models import Alerta
 
-def run_stress_test():
-    print("Iniciando Teste de Carga de Telemetria e Alertas...")
+def run_stress_test(num_leituras, num_threads):
+    print(f"\n[STRESS] Iniciando Stress Test: {num_leituras} leituras com {num_threads} threads...")
     
-    # 1. Setup
-    empresa, _ = Empresa.objects.get_or_create(nome='StressCorp', cnpj='99.999.999/0001-99', email='stress@corp.com')
+    # 1. Setup de um cenário controlado
+    empresa, _ = Empresa.objects.get_or_create(
+        nome='StressTest_Lab', cnpj='00.000.000/0001-00', email='lab@stress.com'
+    )
     equipamento, _ = Equipamento.objects.get_or_create(
-        empresa=empresa, nome='Motor Stress', tipo='Motor Elétrico', numero_serie='STRESS-001'
+        empresa=empresa, nome='Turbina de Alta Carga', tipo='Motor Elétrico', numero_serie='STRESS-MAX-01'
     )
+    # Garante um sensor de temperatura com limite conhecido
     sensor, _ = Sensor.objects.get_or_create(
-        equipamento=equipamento, tipo_sensor='temperatura', unidade_medida='C'
+        equipamento=equipamento, tipo_sensor='temperatura', 
+        defaults={'unidade_medida': '°C', 'limite_alerta': 100.0}
     )
     
-    # Limpa leituras antigas para este sensor
+    # Limpa dados anteriores para precisão do teste
     Telemetria.objects.filter(sensor=sensor).delete()
+    Alerta.objects.filter(equipamento=equipamento).delete()
     
-    # Vamos inserir 500 leituras concorrentes
-    # Destas, algumas passarão o limite (ex: 85C, 100C) para acionar alertas.
-    # O limite do Motor Elétrico para Temperatura costuma ser ao redor de 80-100 na regra de negócio.
-    # Vou enviar valores flutuando entre 50 e 110.
-    import random
-    
+    print(f"Alvo: {equipamento.nome} | Sensor: {sensor.tipo_sensor} (Limite: {sensor.limite_alerta}C)")
+
     def insert_reading(val):
-        Telemetria.objects.create(sensor=sensor, valor=val)
-        
-    valores = [random.uniform(50, 110) for _ in range(500)]
+        try:
+            # O save() da Telemetria dispara signals que verificam alertas e criam O.S.
+            Telemetria.objects.create(sensor=sensor, valor=val)
+        except Exception as e:
+            return f"Erro: {e}"
+        return "OK"
+
+    # Gera valores que flutuam em torno do limite para forçar disparos e escaladas
+    valores = [random.uniform(70, 120) for _ in range(num_leituras)]
     
     start_time = time.time()
     
-    # Executa as inserções com 10 threads
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(insert_reading, valores)
+    # Execução Concorrente
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        results = list(executor.map(insert_reading, valores))
         
     end_time = time.time()
+    duration = end_time - start_time
     
-    print(f"500 inserções completadas em {end_time - start_time:.2f} segundos.")
+    # 2. Resultados
+    success = results.count("OK")
+    errors = len(results) - success
     
-    from alertas.models import Alerta
-    alertas_gerados = Alerta.objects.filter(equipamento=equipamento).count()
-    print(f"Alertas gerados durante o stress test: {alertas_gerados}")
+    print(f"\n[FINISH] Teste Finalizado!")
+    print(f"Tempo total: {duration:.2f}s")
+    print(f"Taxa: {num_leituras / duration:.2f} leituras/segundo")
+    print(f"Sucessos: {success}")
+    if errors > 0: print(f"Erros: {errors}")
+
+    # Verifica o estado final do sistema
+    alerta_final = Alerta.objects.filter(equipamento=equipamento, status='ativo').first()
+    from manutencao.models import OrdemServico
+    os_gerada = OrdemServico.objects.filter(equipamento=equipamento).first()
+
+    print("\n--- Estado Final do Sistema ---")
+    if alerta_final:
+        print(f"Alerta Ativo: Nivel {alerta_final.nivel.upper()} (Valor final processado)")
+    if os_gerada:
+        print(f"O.S. Vinculada: #{os_gerada.id} | Prioridade: {os_gerada.prioridade.upper()}")
     
-    if alertas_gerados > 0:
-         alerta_atual = Alerta.objects.filter(equipamento=equipamento, status='ativo').first()
-         print(f"Alerta atual ativo: {alerta_atual.nivel if alerta_atual else 'Nenhum'}")
+    print("-" * 30)
 
 if __name__ == '__main__':
-    run_stress_test()
+    parser = argparse.ArgumentParser(description='Simulador de carga para telemetria.')
+    parser.add_argument('--leituras', type=int, default=100, help='Total de leituras para enviar')
+    parser.add_argument('--threads', type=int, default=5, help='Número de threads concorrentes')
+    args = parser.parse_args()
+    
+    run_stress_test(args.leituras, args.threads)
