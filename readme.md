@@ -47,9 +47,8 @@ Siga os passos abaixo na ordem exata:
 4. Execute as migrações para criar as tabelas no banco de dados:
    python manage.py migrate
 
-4. Popule o banco de dados com dados realistas executando o script de seed:
+4. Popule o banco de dados com dados realistas. Veja a seção [Scripts de Utilidade](#-scripts-de-utilidade) para detalhes:
    python scripts/seed_db.py
-   Este script limpa completamente o banco e cria empresas, usuários de diferentes perfis, equipamentos variados, sensores, leituras históricas de telemetria, alertas e ordens de serviço.
 
 5. Inicie o servidor de desenvolvimento com o comando:
    python manage.py runserver
@@ -72,6 +71,36 @@ O projeto utiliza o framework de testes nativo do Django. Os testes são isolado
 
 3. Para ver o log detalhado dos testes:
    python manage.py test -v 2
+
+---
+
+## 🛠️ Scripts de Utilidade
+
+O projeto conta com scripts na pasta `scripts/` para facilitar o desenvolvimento e testes de carga.
+
+### 1. Seed de Banco de Dados (`seed_db.py`)
+Popula o banco com uma estrutura completa, multi-tenant e realista (inclui Horímetros e Planos de Manutenção).
+
+*   **Uso Padrão** (3 empresas, 15 equipamentos/cada):
+    ```bash
+    python scripts/seed_db.py
+    ```
+*   **Uso Customizado** (Ex: 5 empresas, 30 equipamentos/cada):
+    ```bash
+    python scripts/seed_db.py --empresas 5 --equipamentos 30
+    ```
+
+### 2. Teste de Estresse de Telemetria (`stress_telemetry.py`)
+Simula o envio massivo de dados de sensores para testar a performance e a escalada de alertas e O.S.
+
+*   **Uso Padrão** (100 leituras, 5 threads):
+    ```bash
+    python scripts/stress_telemetry.py
+    ```
+*   **Uso Pesado** (Ex: 1000 leituras, 20 threads):
+    ```bash
+    python scripts/stress_telemetry.py --leituras 1000 --threads 20
+    ```
 
 ---
 
@@ -110,7 +139,7 @@ P.I-PlataformaManuntencaoWeb/
 - **telemetria/** → Sensores IoT e Leituras de telemetria em tempo real
 - **alertas/** → Sistema de alertas automáticos gerados pela telemetria
 - **dashboards/** → Cálculo e retorno de KPIs (MTBF, MTTR, Disponibilidade, etc.)
-- **scripts/** → Scripts auxiliares como automate_seed.py para popular o banco
+- **scripts/** → Scripts auxiliares como `seed_db.py` e `stress_telemetry.py`
 
 ---
 
