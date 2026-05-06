@@ -5,6 +5,7 @@ from .models import OrdemServico, HistoricoManutencao
 from .serializers import OrdemServicoSerializer, HistoricoManutencaoSerializer
 from .permissions import IsOwnerOrGestorOrUnassigned
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
+from rest_framework.permissions import IsAuthenticated
 
 
 class HistoricoManutencaoFilter(df_filters.FilterSet):

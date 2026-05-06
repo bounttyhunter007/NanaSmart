@@ -24,8 +24,8 @@ O projeto foi construído com foco em modularidade, segurança, escalabilidade, 
 - django-cors-headers para permitir requisições do front-end
 - django-filter para filtros avançados nas listagens
 - Faker para geração de dados realistas durante o seed
-- SQLite como banco de dados para desenvolvimento
-- PostgreSQL como banco recomendado para produção
+- SQLite (suportado para desenvolvimento rápido)
+- PostgreSQL (Banco de dados oficial de produção e desenvolvimento)
 
 ---
 
@@ -39,7 +39,12 @@ Siga os passos abaixo na ordem exata:
 2. Instale todas as dependências do projeto com o comando:
    pip install -r requirements.txt
 
-3. Execute as migrações para criar as tabelas no banco de dados:
+3. Configure o seu banco de dados PostgreSQL (caso ainda não tenha feito):
+   - Certifique-se de que o serviço do PostgreSQL está rodando.
+   - Crie um banco de dados chamado `manutencao`.
+   - Ajuste o usuário e senha no arquivo `app/settings.py` se necessário.
+
+4. Execute as migrações para criar as tabelas no banco de dados:
    python manage.py migrate
 
 4. Popule o banco de dados com dados realistas executando o script de seed:
@@ -199,13 +204,13 @@ Com o servidor rodando, acesse:
 - **Classificação de O.S.**: Distinção entre ordens Corretivas (sensores), Preditivas (horímetro) e Preventivas (manuais)
 - Regras de visibilidade restrita para técnicos (Sigilo de O.S.)
 - Cálculo automático de KPIs no dashboard (Em testes)
+- Migração oficial para PostgreSQL (Pronto para produção)
 - Script de seed completo e realista
 - Documentação automática com Swagger e ReDoc
 - Suíte de 102 testes automatizados de integração e estresse
 
 ### 🔄 Em Desenvolvimento
 - Paginação e filtros avançados em todas as listagens
-- Configuração oficial para PostgreSQL em produção
 - Suporte a WebSockets para telemetria em tempo real
 - Preparação e deploy em ambiente de produção
 
