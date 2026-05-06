@@ -1,7 +1,6 @@
 """
-Script de seed robusto e inteligente -- popula o banco com dados realistas, escalaveis e completos.
-Uso:
-    python scripts/seed_db.py --empresas 3 --equipamentos 20
+Script de seed profissional e ultra-realista -- popula o banco com dados industriais completos.
+Gera hierarquia de empresas, usuários com cargos reais, ativos detalhados e telemetria coerente.
 """
 import os
 import sys
@@ -9,10 +8,9 @@ import django
 import random
 import re
 import argparse
-from datetime import timedelta, date
+from datetime import timedelta, datetime
 from decimal import Decimal
 from django.utils import timezone
-from django.core.management import call_command
 
 # Configuracao do Ambiente Django
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -29,25 +27,65 @@ from alertas.models import Alerta
 fake = Faker('pt_BR')
 
 # ---------------------------------------------------------------------------
-# Configuracoes e Dados Fixos
+# Dados Industriais Realistas
 # ---------------------------------------------------------------------------
-FABRICANTES = ['WEG', 'Siemens', 'ABB', 'Schneider Electric', 'Caterpillar', 'Bosch Rexroth', 'Atlas Copco', 'SEW-Eurodrive', 'Danfoss']
-TIPOS_EQUIP = [
-    ('Motor Eletrico',     ['temperatura', 'vibracao', 'corrente']),
-    ('Bomba Hidraulica',   ['pressao', 'vibracao', 'temperatura']),
-    ('Compressor',         ['pressao', 'temperatura', 'vibracao']),
-    ('Painel Eletrico',    ['corrente', 'temperatura']),
-    ('Prensa Hidraulica',  ['vibracao', 'pressao']),
-    ('Inversor de Frequencia', ['corrente', 'temperatura']),
-    ('Redutor de Velocidade',  ['vibracao', 'temperatura']),
+FABRICANTES = [
+    'WEG', 'Siemens', 'ABB', 'Schneider Electric', 'Caterpillar', 
+    'Bosch Rexroth', 'Atlas Copco', 'SEW-Eurodrive', 'Danfoss', 
+    'SKF', 'NSK', 'Parker Hannifin', 'Rockwell Automation'
 ]
-SETORES = ['Producao A', 'Producao B', 'Utilidades', 'Usinagem', 'Manutencao', 'Almoxarifado', 'Expedicao']
+
+CARGOS_GESTOR = [
+    'Gerente de Manutenção', 'Supervisor de Manutenção', 
+    'Coordenador de Confiabilidade', 'Engenheiro de Planejamento (PCM)'
+]
+
+CARGOS_TECNICO = [
+    'Técnico Mecânico III', 'Técnico de Eletrotécnica', 
+    'Mecânico de Manutenção Industrial', 'Eletricista de Manutenção',
+    'Técnico em Instrumentação', 'Lubrificador Industrial'
+]
+
+TIPOS_EQUIP = [
+    ('Motor Elétrico Trifásico', ['temperatura', 'vibracao', 'corrente'], 'WEG W22 Premium'),
+    ('Bomba Centrífuga', ['pressao', 'vibracao', 'temperatura'], 'KSB MegaCPK'),
+    ('Compressor de Parafuso', ['pressao', 'temperatura', 'vibracao'], 'Atlas Copco GA37'),
+    ('Painel de Comando (CCM)', ['corrente', 'temperatura'], 'Siemens Sivacon S8'),
+    ('Redutor de Velocidade', ['vibracao', 'temperatura'], 'SEW Eurodrive X-Series'),
+    ('Transformador de Potência', ['temperatura', 'corrente'], 'ABB Trafo 500kVA'),
+    ('Prensa Hidráulica', ['pressao', 'vibracao'], 'Schuler P-1000'),
+]
+
+SETORES = [
+    'Linha de Produção A', 'Linha de Produção B', 'Utilidades (Caldeiras)', 
+    'Tratamento de Efluentes (ETA)', 'Usinagem de Precisão', 
+    'Almoxarifado Central', 'Expedição e Logística', 'Subestação Elétrica'
+]
+
 CONFIG_SENSORES = {
-    'temperatura': ('C',   35.0, 75.0),
-    'vibracao':    ('mm/s',  0.2,  5.5),
-    'pressao':     ('bar',   1.5,  10.0),
-    'corrente':    ('A',     5.0, 50.0),
-    'umidade':     ('%',    30.0, 80.0),
+    'temperatura': ('°C', 35.0, 85.0),
+    'vibracao': ('mm/s RMS', 0.2, 7.0),
+    'pressao': ('bar', 2.0, 12.0),
+    'corrente': ('A', 10.0, 150.0),
+}
+
+ACOES_MANUTENCAO = {
+    'preventiva': [
+        "Substituição preventiva de rolamentos (Padrão SKF/NSK).",
+        "Troca de óleo lubrificante ISO VG 68 e limpeza de filtros.",
+        "Reaperto de conexões elétricas e inspeção termográfica.",
+        "Calibração de instrumentação e sensores de campo.",
+        "Limpeza técnica e desobstrução de dutos de ventilação.",
+        "Alinhamento a laser de eixos e ajuste de acoplamentos.",
+    ],
+    'corretiva': [
+        "Reparo emergencial em bobinagem de motor queimado.",
+        "Substituição de selo mecânico por vazamento excessivo.",
+        "Troca de contatora de potência após falha de acionamento.",
+        "Correção de desbalanceamento em hélice de exaustor.",
+        "Reparo em linha de pressão após rompimento de mangueira.",
+        "Substituição de sensor de temperatura com leitura intermitente.",
+    ]
 }
 
 # ---------------------------------------------------------------------------
@@ -55,17 +93,25 @@ CONFIG_SENSORES = {
 # ---------------------------------------------------------------------------
 _usernames_usados = set()
 
-def gerar_username_unico(nome):
-    nome = re.sub(r'[^\w\s]', '', nome.lower())
-    partes = nome.split()
-    base = f"{partes[0]}.{partes[1]}" if len(partes) >= 2 else partes[0]
-    username = base
+def gerar_credenciais_reais(nome, empresa_nome):
+    """Gera username e email profissionais baseados no nome real."""
+    nome_limpo = re.sub(r'[^\w\s]', '', nome.lower())
+    partes = nome_limpo.split()
+    if len(partes) >= 2:
+        username = f"{partes[0]}.{partes[-1]}"
+        email = f"{partes[0]}.{partes[-1]}@{empresa_nome.lower().replace(' ', '').split(',')[0]}.com.br"
+    else:
+        username = partes[0]
+        email = f"{partes[0]}@{empresa_nome.lower().replace(' ', '').split(',')[0]}.com.br"
+    
+    base = username
     contador = 1
     while username in _usernames_usados or Usuario.objects.filter(username=username).exists():
         username = f"{base}{contador}"
         contador += 1
+    
     _usernames_usados.add(username)
-    return username
+    return username, email
 
 def log_progresso(etapa, atual, total):
     percentual = (atual / total) * 100
@@ -77,10 +123,10 @@ def log_progresso(etapa, atual, total):
 # Logica Principal
 # ---------------------------------------------------------------------------
 def run_seed(num_empresas, equip_por_empresa):
-    print(f"\n[START] Iniciando Seed Inteligente: {num_empresas} empresas, ~{equip_por_empresa} ativos/empresa.")
+    print(f"\n[START] Iniciando Seed Industrial: {num_empresas} empresas, ~{equip_por_empresa} ativos/empresa.")
     
     # 1. Limpeza
-    print("\n[CLEAN] Limpando banco de dados (preservando admins)...")
+    print("\n[CLEAN] Limpando banco de dados...")
     models_to_clear = [Alerta, HistoricoManutencao, OrdemServico, Telemetria, Sensor, PlanoManutencao, EquipamentoLocalizacao, Equipamento, Empresa]
     for model in models_to_clear:
         model.objects.all().delete()
@@ -88,115 +134,173 @@ def run_seed(num_empresas, equip_por_empresa):
     _usernames_usados.clear()
 
     # 2. Admin
-    print("Garantindo superusuario admin...")
     if not Usuario.objects.filter(username='admin').exists():
-        Usuario.objects.create_superuser(username='admin', email='admin@admin.com', password='admin123', tipo_usuario='admin')
+        Usuario.objects.create_superuser(username='admin', email='suporte@bughunter.com', password='admin', tipo_usuario='admin')
 
     # 3. Empresas e Usuarios
-    print("Criando empresas e hierarquia de usuarios...")
     empresas = []
     for i in range(num_empresas):
-        emp = Empresa.objects.create(nome=fake.company(), cnpj=fake.cnpj(), email=fake.company_email(), telefone=fake.phone_number(), endereco=fake.address())
+        emp_nome = fake.company()
+        emp = Empresa.objects.create(
+            nome=emp_nome, cnpj=fake.cnpj(), email=fake.company_email(), 
+            telefone=fake.phone_number(), endereco=fake.address()
+        )
         empresas.append(emp)
         
-        # 1 Gestor
-        gestor_nome = fake.name()
-        Usuario.objects.create_user(username=gerar_username_unico(gestor_nome), email=fake.email(), password='123', empresa=emp, tipo_usuario='gestor', first_name=gestor_nome.split()[0], cargo='Gerente Industrial')
+        # Gestor
+        g_nome = fake.name()
+        u_name, u_email = gerar_credenciais_reais(g_nome, emp_nome)
+        Usuario.objects.create_user(
+            username=u_name, email=u_email, password='123', 
+            empresa=emp, tipo_usuario='gestor', 
+            first_name=g_nome.split()[0], last_name=" ".join(g_nome.split()[1:]),
+            cargo=random.choice(CARGOS_GESTOR)
+        )
         
-        # 4 Tecnicos
-        for _ in range(4):
-            tec_nome = fake.name()
-            Usuario.objects.create_user(username=gerar_username_unico(tec_nome), email=fake.email(), password='123', empresa=emp, tipo_usuario='tecnico', first_name=tec_nome.split()[0], cargo='Tecnico de Manutencao')
+        # Técnicos
+        for _ in range(random.randint(3, 5)):
+            t_nome = fake.name()
+            u_name, u_email = gerar_credenciais_reais(t_nome, emp_nome)
+            Usuario.objects.create_user(
+                username=u_name, email=u_email, password='123', 
+                empresa=emp, tipo_usuario='tecnico', 
+                first_name=t_nome.split()[0], last_name=" ".join(t_nome.split()[1:]),
+                cargo=random.choice(CARGOS_TECNICO)
+            )
         log_progresso("Empresas", i + 1, num_empresas)
 
     # 4. Equipamentos, Planos e Sensores
-    print("\nGerando Ativos, Planos de Manutencao e Sensores...")
+    print("\n[ASSETS] Gerando Ativos e Instrumentação...")
     now = timezone.now()
-    inicio_historico = now - timedelta(days=60)
+    inicio_historico = now - timedelta(days=30)
     todos_sensores = []
-    count = 0
     total_equip = num_empresas * equip_por_empresa
+    count = 0
     
     for emp in empresas:
         for _ in range(equip_por_empresa):
-            tipo_nome, sensores_list = random.choice(TIPOS_EQUIP)
-            status = random.choices(['ativo', 'manutencao', 'inativo'], weights=[0.8, 0.15, 0.05])[0]
+            tipo_nome, sensores_list, modelo_base = random.choice(TIPOS_EQUIP)
+            status = random.choices(['ativo', 'manutencao', 'inativo'], weights=[0.85, 0.10, 0.05])[0]
             
             eq = Equipamento.objects.create(
-                empresa=emp, nome=f'{tipo_nome} {fake.bothify(text="##-??")}', tipo=tipo_nome,
-                fabricante=random.choice(FABRICANTES), modelo=fake.bothify(text="MOD-####"),
+                empresa=emp, nome=f"{tipo_nome} {fake.bothify(text='##-??')}", tipo=tipo_nome,
+                fabricante=random.choice(FABRICANTES), modelo=f"{modelo_base} {fake.bothify(text='-####')}",
                 numero_serie=fake.unique.bothify(text="SN-####-####").upper(),
-                data_instalacao=fake.date_between(start_date='-2y', end_date='-6m'),
-                status=status, horimetro=random.uniform(500, 5000)
+                data_instalacao=fake.date_between(start_date='-3y', end_date='-6m'),
+                status=status, horimetro=random.uniform(100, 8000)
             )
             EquipamentoLocalizacao.objects.create(equipamento=eq, setor=random.choice(SETORES))
 
-            # Cria 1-2 Planos de Manutencao por Horimetro
+            # Planos
             PlanoManutencao.objects.create(
-                equipamento=eq, nome_servico="Troca de Oleo / Filtros", 
-                intervalo_horas=random.choice([250.0, 500.0]), prioridade='medio'
+                equipamento=eq, nome_servico="Revisão Periódica Nível 1", 
+                intervalo_horas=random.choice([500.0, 1000.0]), prioridade='medio'
             )
-            if random.random() > 0.7:
+            if random.random() > 0.6:
                 PlanoManutencao.objects.create(
-                    equipamento=eq, nome_servico="Revisao Geral do Sistema", 
-                    intervalo_horas=2000.0, prioridade='critico'
+                    equipamento=eq, nome_servico="Inspeção Geral de Segurança (NR-12/NR-13)", 
+                    intervalo_horas=4000.0, prioridade='critico'
                 )
 
-            # Cria Sensores
+            # Sensores
             for s_tipo in sensores_list:
                 unidade, min_v, max_v = CONFIG_SENSORES.get(s_tipo, ('un', 0, 100))
                 sensor = Sensor.objects.create(equipamento=eq, tipo_sensor=s_tipo, unidade_medida=unidade)
                 todos_sensores.append((sensor, min_v, max_v))
             
             count += 1
-            log_progresso("Equipamentos", count, total_equip)
+            log_progresso("Ativos", count, total_equip)
 
-    # 5. Telemetria (Bulk para performance)
-    print("\nGerando historico de telemetria (60 dias)...")
+    # 5. Telemetria (Simulação Coerente)
+    print("\n[TELEMETRY] Gerando histórico (30 dias com tendências)...")
     leituras_bulk = []
     for sensor, min_v, max_v in todos_sensores:
-        for d in range(60):
-            ponto = inicio_historico + timedelta(days=d)
-            val = random.uniform(min_v, max_v)
-            if random.random() > 0.95: val *= 1.3 # Injetar algumas anomalias
+        base_val = random.uniform(min_v, (min_v + max_v) / 2)
+        trend = random.uniform(-0.01, 0.05) # Pequena tendência de desgaste
+        
+        for h in range(30 * 24): # Horário (1 leitura por hora)
+            ponto = inicio_historico + timedelta(hours=h)
+            fluctuacao = random.uniform(-0.5, 0.5)
+            val = base_val + (h * trend) + fluctuacao
+            
+            # Garantir limites
+            val = max(min_v * 0.8, min(val, max_v * 1.5))
+            
             leituras_bulk.append(Telemetria(sensor=sensor, valor=round(val, 2), data_hora=ponto))
-        if len(leituras_bulk) > 5000:
-            Telemetria.objects.bulk_create(leituras_bulk)
-            leituras_bulk = []
+            
+            if len(leituras_bulk) > 5000:
+                Telemetria.objects.bulk_create(leituras_bulk)
+                leituras_bulk = []
+                
     if leituras_bulk: Telemetria.objects.bulk_create(leituras_bulk)
-    print(f"OK: {Telemetria.objects.count()} leituras geradas.")
+    print(f"OK: {Telemetria.objects.count()} registros de telemetria.")
 
-    # 6. Ordens de Servico e Alertas
-    print("\nCriando Ordens de Servico e Alertas historicos...")
-    tecnicos = list(Usuario.objects.filter(tipo_usuario='tecnico'))
+    # 6. Ordens de Serviço e Histórico
+    print("\n[MAINTENANCE] Criando Ordens de Serviço e Alertas...")
     equips = Equipamento.objects.all()
-    total_eq = equips.count()
+    tecnicos = Usuario.objects.filter(tipo_usuario='tecnico')
     
     for idx, eq in enumerate(equips):
-        if random.random() > 0.5: # 50% dos equips têm histórico de OS
-            for _ in range(random.randint(1, 3)):
-                abertura = now - timedelta(days=random.randint(5, 55))
-                os_obj = OrdemServico.objects.create(
-                    equipamento=eq, responsavel=random.choice([t for t in tecnicos if t.empresa == eq.empresa] or [None]),
-                    titulo=f"Manutencao em {eq.nome}", descricao=fake.sentence(),
-                    status='concluida', tipo_os=random.choice(['corretiva', 'preventiva']),
-                    prioridade=random.choice(['baixo', 'medio', 'critico']), data_abertura=abertura
-                )
-                HistoricoManutencao.objects.create(
-                    ordem_servico=os_obj, data_execucao=abertura.date(),
-                    descricao_servico="Servico executado com sucesso.",
-                    custo_pecas=Decimal(random.uniform(50, 500)), custo_mao_de_obra=Decimal(random.uniform(100, 300))
-                )
+        tecnicos_empresa = list(tecnicos.filter(empresa=eq.empresa))
         
-        # Alertas Ativos
-        if random.random() > 0.8:
-            Alerta.objects.create(
-                equipamento=eq, tipo_alerta="Sobrecarga Termica", nivel=random.choice(['medio', 'critico']),
-                descricao="Temperatura acima do limite operacional.", status='ativo'
+        # Histórico de OS Concluídas
+        for _ in range(random.randint(1, 4)):
+            data_os = now - timedelta(days=random.randint(5, 60))
+            tipo_os = random.choice(['preventiva', 'corretiva'])
+            os_obj = OrdemServico.objects.create(
+                equipamento=eq, responsavel=random.choice(tecnicos_empresa) if tecnicos_empresa else None,
+                titulo=f"{tipo_os.capitalize()} - {eq.nome}", 
+                descricao=f"Atendimento de rotina para {eq.tipo}.",
+                status='concluida', tipo_os=tipo_os,
+                prioridade=random.choice(['baixo', 'medio', 'critico']),
+                data_abertura=data_os
             )
-        log_progresso("Finalizando", idx + 1, total_eq)
+            
+            HistoricoManutencao.objects.create(
+                ordem_servico=os_obj, data_execucao=data_os.date(),
+                descricao_servico=random.choice(ACOES_MANUTENCAO[tipo_os]),
+                custo_pecas=Decimal(random.uniform(100, 2500)),
+                custo_mao_de_obra=Decimal(random.uniform(200, 1500))
+            )
 
-    print(f"\n[DONE] Seed finalizado com sucesso! Explore o Dashboard e a API.")
+        # Alertas e OS em aberto
+        if eq.status == 'manutencao':
+            os_ativa = OrdemServico.objects.create(
+                equipamento=eq, responsavel=random.choice(tecnicos_empresa) if tecnicos_empresa else None,
+                titulo=f"Manutenção em Andamento - {eq.nome}",
+                descricao="Equipamento parado para intervenção técnica.",
+                status='em_andamento', tipo_os='corretiva', prioridade='critico',
+                data_abertura=now - timedelta(hours=random.randint(1, 12))
+            )
+            Alerta.objects.create(
+                equipamento=eq, tipo_alerta="Parada Não Programada", nivel='critico',
+                descricao="Alerta gerado automaticamente por interrupção de operação.",
+                status='ativo'
+            )
+        
+        elif random.random() > 0.85: # Alertas esporádicos em equipamentos ativos
+            Alerta.objects.create(
+                equipamento=eq, tipo_alerta="Anomalia de Vibração", nivel='medio',
+                descricao="Nível de vibração RMS acima da zona A (ISO 10816).",
+                status='ativo'
+            )
+
+        log_progresso("Finalizando", idx + 1, equips.count())
+
+    print(f"\n[DONE] Banco de dados populado com sucesso! {Usuario.objects.count()} usuários, {Equipamento.objects.count()} ativos.")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Seed industrial para o sistema BugHunter.')
+    parser.add_argument('--empresas', type=int, default=2, help='Numero de empresas a criar')
+    parser.add_argument('--equipamentos', type=int, default=10, help='Numero de equipamentos por empresa')
+    args = parser.parse_args()
+    
+    try:
+        run_seed(args.empresas, args.equipamentos)
+    except Exception as e:
+        print(f"\n[ERROR] Falha crítica no seed: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Seed robusto para o sistema de manutencao.')
