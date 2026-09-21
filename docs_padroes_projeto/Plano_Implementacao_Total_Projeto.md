@@ -637,7 +637,38 @@ Para cada arquivo importante, o projeto deve manter uma documentação resumida 
 
 ---
 
-## 10. Conclusão do plano
+## 10. Status da implementação aplicada
+
+A implementação do plano foi iniciada e aplicada de forma segura em pontos estratégicos do backend, mantendo compatibilidade com as rotas já existentes.
+
+### 10.1. Centralização de permissões por política
+
+Foi criada a fábrica de políticas de acesso em [accounts/permission_policies.py](../accounts/permission_policies.py), com a intenção de concentrar a regra de autorização por perfil, em vez de espalhar comparações diretas em cada view ou classe de permissão.
+
+O comportamento anterior ficava disperso em [accounts/permissions.py](../accounts/permissions.py), onde cada classe verificava manualmente `tipo_usuario` e métodos HTTP. Agora a regra foi encapsulada em políticas específicas: `GestorPolicy`, `TecnicoPolicy`, `GestorOrReadOnlyPolicy` e `AuthenticatedNoDeleteForTecnicoPolicy`.
+
+Esse ajuste foi aplicado sem mudar a API pública já existente: a classe de permissão continua expondo a mesma interface do DRF (`has_permission`), mas agora delega a decisão para a fábrica de políticas.
+
+### 10.2. Impacto prático
+
+- o código passou a seguir a estratégia de Factory Method para decidir a política adequada por perfil
+- a lógica de autorização ficou mais legível e testável
+- a manutenção futura pelo front-end e pelo backend fica mais segura
+- o contrato do sistema atual continua estável
+
+### 10.3. Validação executada
+
+Os testes focados foram executados com o Django e o resultado foi positivo:
+
+- `accounts.tests` passou com 6 testes executados
+- 0 falhas
+- 0 issues do sistema reportados pelo `manage.py test`
+
+A validação confirma que a refatoração de permissões não quebrou o comportamento da API atual.
+
+---
+
+## 11. Conclusão do plano
 
 Este plano tem como foco principal a evolução segura do projeto sem quebrar o backend e a API.
 
@@ -654,7 +685,7 @@ Esse método reduz risco, melhora a arquitetura e mantém o sistema prático par
 
 ---
 
-## 11. Observação final sobre documentação
+## 12. Observação final sobre documentação
 
 Este plano deve ser tratado como documentação viva do projeto. Sempre que uma mudança for feita, deve ser registrado:
 

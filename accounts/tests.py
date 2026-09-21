@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import Empresa, Usuario
+from .permission_policies import PermissionPolicyFactory
 
 class AuthTests(APITestCase):
     def setUp(self):
@@ -75,3 +76,30 @@ class UserProfileTests(APITestCase):
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Usuario.objects.filter(username="novo_tecnico").count(), 1)
+
+
+class PermissionPolicyFactoryTests(APITestCase):
+    def setUp(self):
+        self.empresa = Empresa.objects.create(nome="Empresa Teste", cnpj="99.999.999/0001-99", email="teste@empresa.com")
+        self.gestor = Usuario.objects.create_user(
+            username="gestor_policy",
+            password="123",
+            tipo_usuario="gestor",
+            empresa=self.empresa,
+        )
+        self.tecnico = Usuario.objects.create_user(
+            username="tecnico_policy",
+            password="123",
+            tipo_usuario="tecnico",
+            empresa=self.empresa,
+        )
+
+    def test_factory_selects_gestor_policy(self):
+        policy = PermissionPolicyFactory.create('gestor')
+        self.assertTrue(policy.can_access(self.gestor, 'POST'))
+        self.assertFalse(policy.can_access(self.tecnico, 'POST'))
+
+    def test_factory_keeps_read_only_access_for_authenticated_users(self):
+        policy = PermissionPolicyFactory.create('gestor_or_readonly')
+        self.assertTrue(policy.can_access(self.tecnico, 'GET'))
+        self.assertFalse(policy.can_access(self.tecnico, 'POST'))
