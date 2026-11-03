@@ -207,7 +207,10 @@ def escolher_responsavel(tecnicos_empresa, tecnicos_global, obrigatorio=False):
     return None
 
 def salvar_telemetria_bulk(leituras):
+    timestamps = [leitura.timestamp for leitura in leituras]
     Telemetria.objects.bulk_create(leituras)
+    for leitura, timestamp in zip(leituras, timestamps):
+        leitura.timestamp = timestamp
     Telemetria.objects.bulk_update(leituras, ['timestamp'], batch_size=5000)
 
 # ---------------------------------------------------------------------------
@@ -517,7 +520,6 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
                 titulo=f"{tipo_os.capitalize()} - {eq.nome}", 
                 descricao=f"Atendimento de manutenção {tipo_os} para o equipamento {eq.nome} ({eq.tipo}).",
                 status=status_os, 
-                tipo_os=tipo_os,
                 data_abertura=data_abertura,
                 data_conclusao=data_conclusao_os,
                 **dados_prioridade
