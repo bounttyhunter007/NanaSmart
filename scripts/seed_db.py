@@ -21,9 +21,11 @@ django.setup()
 
 from faker import Faker
 from accounts.models import Empresa, Usuario
-from ativos.models import Equipamento, EquipamentoLocalizacao, PlanoManutencao
+from ativos.models import Equipamento, EquipamentoLocalizacao, PlanoManutencao, TipoEquipamento
+from ativos.services import aplicar_criticidade
 from telemetria.models import Sensor, Telemetria, TrendConfig
 from manutencao.models import OrdemServico, HistoricoManutencao
+from manutencao.services import PrioridadeOSService
 from alertas.models import Alerta
 from gemini_api.models import PromptConfig
 from gemini_api.prompt_builder import DEFAULTS as GEMINI_DEFAULTS
@@ -105,6 +107,16 @@ TIPOS_EQUIP = [
         'Prensa hidráulica de conformação metálica com sistema de automação e sensores de segurança.'
     ),
 ]
+
+CRITICIDADE_TIPOS = {
+    'Motor Elétrico Trifásico': ('B', 'Sugestão inicial para motor de acionamento industrial; validar conforme redundância e impacto da parada.'),
+    'Bomba Centrífuga': ('A', 'Sugestão inicial para bomba de processo; validar conforme fluido, redundância e impacto ambiental.'),
+    'Compressor de Parafuso': ('B', 'Sugestão inicial para compressor de utilidades; validar conforme redundância e impacto na produção.'),
+    'Painel de Comando (CCM)': ('A', 'Sugestão inicial para centro de controle de motores; validar conforme cargas atendidas e riscos elétricos.'),
+    'Redutor de Velocidade': ('B', 'Sugestão inicial para redutor de acionamento; validar conforme impacto da parada e redundância.'),
+    'Transformador de Potência': ('A', 'Sugestão inicial para transformador de potência; validar conforme redundância e impacto no fornecimento.'),
+    'Prensa Hidráulica': ('A', 'Sugestão inicial para prensa industrial; validar conforme análise de risco e impacto da parada.'),
+}
 
 SETORES = [
     'Linha de Produção A', 'Linha de Produção B', 'Utilidades (Caldeiras)', 
@@ -194,6 +206,10 @@ def escolher_responsavel(tecnicos_empresa, tecnicos_global, obrigatorio=False):
         return random.choice(tecnicos_global)
     return None
 
+def salvar_telemetria_bulk(leituras):
+    Telemetria.objects.bulk_create(leituras)
+    Telemetria.objects.bulk_update(leituras, ['timestamp'], batch_size=5000)
+
 # ---------------------------------------------------------------------------
 # Lógica Principal
 # ---------------------------------------------------------------------------
@@ -213,6 +229,7 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
         PlanoManutencao, 
         EquipamentoLocalizacao, 
         Equipamento, 
+        TipoEquipamento,
         PromptConfig, 
         Empresa
     ]
@@ -266,6 +283,7 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
     # 4. Empresas e Usuários
     t_start = time.time()
     empresas = []
+    tipos_por_empresa = {}
     print("\n[USERS] Criando Empresas, Gestores e Técnicos...")
     for i in range(num_empresas):
         emp_nome = fake.company()
@@ -280,6 +298,15 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
             endereco=fake.address()
         )
         empresas.append(emp)
+        tipos_por_empresa[emp.id] = {}
+        for tipo_nome, (criticidade_padrao, criterios) in CRITICIDADE_TIPOS.items():
+            tipo_catalogo = TipoEquipamento.objects.create(
+                empresa=emp,
+                nome=tipo_nome,
+                criticidade_padrao=criticidade_padrao,
+                descricao_criterios=criterios,
+            )
+            tipos_por_empresa[emp.id][tipo_nome] = tipo_catalogo
         
         # Gestor
         g_nome = fake.name()
@@ -327,20 +354,26 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
         for _ in range(equip_por_empresa):
             tipo_nome, sensores_list, modelo_base, desc_equip = random.choice(TIPOS_EQUIP)
             status = random.choices(['ativo', 'manutencao', 'inativo'], weights=[0.85, 0.10, 0.05])[0]
-            criticidade = random.choices(['normal', 'alta'], weights=[0.7, 0.3])[0]
+            criticidade_sugerida = CRITICIDADE_TIPOS[tipo_nome][0]
             
             eq = Equipamento.objects.create(
                 empresa=emp, 
                 nome=f"{tipo_nome} {fake.bothify(text='##-??')}", 
                 tipo=tipo_nome,
+                tipo_equipamento=tipos_por_empresa[emp.id][tipo_nome],
                 fabricante=random.choice(FABRICANTES), 
                 modelo=f"{modelo_base} {fake.bothify(text='-####')}",
                 numero_serie=fake.unique.bothify(text="SN-####-####").upper(),
                 descricao=desc_equip,
                 data_instalacao=fake.date_between(start_date='-3y', end_date='-6m'),
                 status=status, 
-                criticidade=criticidade,
                 horimetro=random.uniform(150.0, 9500.0)
+            )
+            aplicar_criticidade(
+                eq,
+                eq.tipo_equipamento.criticidade_padrao,
+                eq.tipo_equipamento.descricao_criterios,
+                origem='tipo',
             )
             EquipamentoLocalizacao.objects.create(equipamento=eq, setor=random.choice(SETORES))
 
@@ -359,7 +392,7 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
                     nome_servico="Inspeção Geral de Segurança e Confiabilidade (NR-12/NR-13)", 
                     descricao="Inspeção técnica completa para atendimento às normas regulamentadoras e teste de intertravamentos.",
                     intervalo_horas=random.choice([2000.0, 4000.0]), 
-                    prioridade='critica' if criticidade == 'alta' else 'alta',
+                    prioridade='critica' if criticidade_sugerida == 'A' else 'alta',
                     ativo=True
                 )
 
@@ -408,11 +441,11 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
             leituras_bulk.append(Telemetria(sensor=sensor, valor=round(val, 2), timestamp=ponto))
             
             if len(leituras_bulk) >= 5000:
-                Telemetria.objects.bulk_create(leituras_bulk)
+                salvar_telemetria_bulk(leituras_bulk)
                 leituras_bulk = []
                 
     if leituras_bulk: 
-        Telemetria.objects.bulk_create(leituras_bulk)
+        salvar_telemetria_bulk(leituras_bulk)
     print(f"OK: {Telemetria.objects.count()} registros de telemetria gerados. (Duração: {time.time() - t_start:.2f}s)")
 
     # 7. Ordens de Serviço, Histórico e Alertas
@@ -434,6 +467,15 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
 
         for ordem_idx in range(num_os):
             tipo_os = random.choice(['preventiva', 'corretiva', 'preditiva'])
+            gravidade = (
+                random.choice(['baixa', 'moderada', 'alta', 'critica'])
+                if tipo_os == 'corretiva' else 'ausente'
+            )
+            dados_prioridade = PrioridadeOSService.preencher({
+                'tipo_os': tipo_os,
+                'gravidade_condicao': gravidade,
+                'risco_seguranca': tipo_os == 'corretiva' and random.random() < 0.08,
+            }, eq)
             
             # A última OS tem maior probabilidade de estar em aberto ou em andamento
             if ordem_idx == num_os - 1:
@@ -469,8 +511,6 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
                     obrigatorio=status_os in ['concluida', 'cancelada', 'andamento']
                 )
 
-            prioridade_os = random.choice(['baixa', 'media', 'alta', 'critica'])
-
             os_obj = OrdemServico.objects.create(
                 equipamento=eq, 
                 responsavel=responsavel_os,
@@ -478,9 +518,9 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
                 descricao=f"Atendimento de manutenção {tipo_os} para o equipamento {eq.nome} ({eq.tipo}).",
                 status=status_os, 
                 tipo_os=tipo_os,
-                prioridade=prioridade_os,
                 data_abertura=data_abertura,
-                data_conclusao=data_conclusao_os
+                data_conclusao=data_conclusao_os,
+                **dados_prioridade
             )
             
             # Histórico para OS Concluídas
@@ -507,22 +547,13 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
 
         # Alertas e OS para equipamentos em manutenção
         if eq.status == 'manutencao':
-            OrdemServico.objects.create(
-                equipamento=eq,
-                responsavel=escolher_responsavel(tecnicos_empresa, tecnicos, obrigatorio=True),
-                titulo=f"Intervenção Corretiva Emergencial - {eq.nome}",
-                descricao="Equipamento em parada não programada por anomalia severa de operação.",
-                status='andamento', 
-                tipo_os='corretiva', 
-                prioridade='critica',
-                data_abertura=now - timedelta(hours=random.randint(1, 10))
-            )
             Alerta.objects.create(
                 equipamento=eq, 
                 tipo_alerta="Parada Não Programada", 
                 nivel='critico',
                 descricao="Alerta disparado por interrupção brusca nos parâmetros operacionais.",
-                status='ativo'
+                status='ativo',
+                origem='manual',
             )
         
         elif random.random() > 0.8: # Alertas esporádicos em equipamentos ativos
@@ -538,7 +569,8 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
                 tipo_alerta=tipo_al, 
                 nivel=nivel_alerta,
                 descricao=f"Desvio detectado: {tipo_al} fora dos padrões nominais da ISO 10816 / FMEA.",
-                status=random.choice(['ativo', 'resolvido'])
+                status=random.choice(['ativo', 'resolvido']),
+                origem='manual',
             )
 
         log_progresso("Manutenção & Alertas", idx + 1, total_equips)
