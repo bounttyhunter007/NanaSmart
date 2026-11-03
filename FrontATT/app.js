@@ -1,5 +1,5 @@
 const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
-const BASE = 'http://127.0.0.1:8000';
+const BASE = 'http://127.0.0.1:9000';
 const TELEMETRY_CHART_WIDTH = 320;
 const TELEMETRY_CHART_HEIGHT = 100;
 const TELEMETRY_CHART_LEFT_PAD = 45;
