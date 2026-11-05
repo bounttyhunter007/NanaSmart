@@ -1,3 +1,5 @@
+import math
+
 from rest_framework import serializers
 from .models import Sensor, Telemetria, TrendConfig
 from accounts.validation import validate_equipment_resource, validate_sensor_resource
@@ -42,6 +44,11 @@ class TelemetriaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Telemetria
         fields = '__all__'
+
+    def validate_valor(self, value):
+        if not math.isfinite(value):
+            raise serializers.ValidationError('Informe uma leitura numérica finita.')
+        return value
 
     def validate(self, data):
         request = self.context.get('request')

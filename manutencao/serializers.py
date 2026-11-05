@@ -13,6 +13,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'data_abertura', 'data_conclusao', 'prioridade_automatica',
             'justificativa_prioridade', 'criticidade_na_abertura',
             'justificativa_criticidade_na_abertura', 'prioridade_manual',
+            'alerta_origem', 'sensor_origem',
         ]
 
     def validate(self, data):
@@ -37,8 +38,15 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             if self.instance and self.instance.responsavel and self.instance.responsavel != user:
                 raise serializers.ValidationError('Técnicos não podem editar ordens atribuídas a outro técnico.')
 
-        if self.instance and self.instance.status == 'concluida' and data.get('status') not in (None, 'concluida'):
-            raise serializers.ValidationError({'status': 'Uma ordem concluída não pode voltar para outro status.'})
+        if self.instance and self.instance.status in ('concluida', 'cancelada'):
+            if data.get('status', self.instance.status) != self.instance.status:
+                raise serializers.ValidationError({'status': 'Uma ordem concluída ou cancelada não pode mudar de status.'})
+
+        sensor = getattr(self.instance, 'sensor_origem', None)
+        alerta = getattr(self.instance, 'alerta_origem', None)
+        if equipamento and ((sensor and sensor.equipamento_id != equipamento.pk)
+                            or (alerta and alerta.equipamento_id != equipamento.pk)):
+            raise serializers.ValidationError({'equipamento': 'O equipamento deve corresponder à origem da ordem.'})
 
         return data
 
@@ -73,6 +81,8 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
                 'risco_seguranca': validated_data.get('risco_seguranca', instance.risco_seguranca),
             }
             PrioridadeOSService.preencher(dados_calculo, validated_data.get('equipamento', instance.equipamento))
+            dados_calculo.pop('criticidade_na_abertura', None)
+            dados_calculo.pop('justificativa_criticidade_na_abertura', None)
             validated_data.update(dados_calculo)
         else:
             validated_data.pop('prioridade', None)

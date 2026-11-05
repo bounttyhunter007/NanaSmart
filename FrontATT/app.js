@@ -1702,17 +1702,20 @@ createApp({
     }
 
     async function assumirOSFromAlerta(alerta) {
-      // Busca uma OS pendente/andamento para o mesmo equipamento deste alerta
-      const os = lists.ordens.find(o => 
-        o.equipamento === alerta.equipamento && 
-        !o.responsavel && 
-        o.status !== 'concluida' && o.status !== 'cancelada'
-      );
-      if (os) {
+      if (!alerta.ordem_servico_id) {
+        toast('Este alerta não possui O.S. vinculada.', 'error');
+        return;
+      }
+      try {
+        const os = await api('/api/ordens-servico/' + alerta.ordem_servico_id + '/');
+        if (['concluida', 'cancelada'].includes(os.status) || os.responsavel) {
+          toast('A O.S. vinculada está encerrada ou já possui responsável.', 'error');
+          return;
+        }
         await assumirOS(os);
-        navigate(view.value); // Recarrega a tela atual
-      } else {
-        toast('Nenhuma O.S. pendente encontrada para este equipamento', 'error');
+        navigate(view.value);
+      } catch {
+        toast('Não foi possível acessar a O.S. vinculada.', 'error');
       }
     }
 

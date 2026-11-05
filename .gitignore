@@ -63,8 +63,6 @@ node_modules/       # se tiver frontend JS
 dist/
 build/
 
-# Migrações (opcional - só ignore se for projeto solo / iniciante)
-**/migrations/*
-!**/migrations/__init__.py
+# Migrações fazem parte da especificação do banco e devem ser versionadas.
 
 *.code-workspace

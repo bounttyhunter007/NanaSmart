@@ -55,12 +55,14 @@ class GeminiApiTests(APITestCase):
             status="concluida",
             prioridade="medio",
         )
-        HistoricoManutencao.objects.create(
+        HistoricoManutencao.objects.update_or_create(
             ordem_servico=self.os_concluida,
-            descricao_servico="Troca de rolamentos",
-            data_execucao="2026-05-20",
-            custo_pecas=120.00,
-            custo_mao_de_obra=80.00,
+            defaults={
+                'descricao_servico': "Troca de rolamentos",
+                'data_execucao': "2026-05-20",
+                'custo_pecas': 120.00,
+                'custo_mao_de_obra': 80.00,
+            },
         )
         Alerta.objects.create(
             equipamento=self.equipamento,

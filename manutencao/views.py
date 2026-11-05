@@ -7,7 +7,6 @@ from .permissions import IsOwnerOrGestorOrUnassigned
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
-from django.utils import timezone
 
 
 class HistoricoManutencaoFilter(df_filters.FilterSet):
@@ -32,40 +31,25 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['data_abertura', 'prioridade', 'status']
     ordering = ['-data_abertura']
 
-    @staticmethod
-    def _ensure_history(ordem):
-        HistoricoManutencao.objects.get_or_create(
-            ordem_servico=ordem,
-            defaults={
-                'descricao_servico': ordem.descricao or ordem.titulo,
-                'data_execucao': timezone.localdate(),
-            },
-        )
-
     @transaction.atomic
     def perform_create(self, serializer):
         validated = serializer.validated_data
         status = validated.get('status')
         responsavel = validated.get('responsavel')
         if status == 'concluida' and responsavel is None:
-            ordem = serializer.save(responsavel=self.request.user)
+            serializer.save(responsavel=self.request.user)
         else:
-            ordem = serializer.save()
-        if ordem.status == 'concluida':
-            self._ensure_history(ordem)
+            serializer.save()
 
     @transaction.atomic
     def perform_update(self, serializer):
-        was_concluded = serializer.instance.status == 'concluida'
         validated = serializer.validated_data
         status = validated.get('status', serializer.instance.status)
         responsavel = validated.get('responsavel', serializer.instance.responsavel)
         if status == 'concluida' and responsavel is None:
-            ordem = serializer.save(responsavel=self.request.user)
+            serializer.save(responsavel=self.request.user)
         else:
-            ordem = serializer.save()
-        if ordem.status == 'concluida' and not was_concluded:
-            self._ensure_history(ordem)
+            serializer.save()
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):

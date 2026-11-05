@@ -24,11 +24,17 @@ class TrendAnalysisRulesTests(TestCase):
 
     def _readings(self, values, start=None, step_minutes=30):
         start = start or (timezone.now() - timedelta(hours=2))
-        Telemetria.objects.bulk_create([
+        leituras = Telemetria.objects.bulk_create([
             Telemetria(sensor=self.sensor, valor=value,
                        timestamp=start + timedelta(minutes=index * step_minutes))
             for index, value in enumerate(values)
         ])
+        # auto_now_add substitui timestamp também no bulk_create.
+        # Ajustar o relógio da fixture permite testar intervalos reais.
+        for index, leitura in enumerate(leituras):
+            Telemetria.objects.filter(pk=leitura.pk).update(
+                timestamp=start + timedelta(minutes=index * step_minutes)
+            )
 
     def test_uses_the_most_recent_readings(self):
         TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
@@ -75,3 +81,20 @@ class TrendAnalysisRulesTests(TestCase):
         sync_sensor_trend(self.sensor.id)
         self.assertFalse(Alerta.objects.filter(sensor=self.sensor, origem='tendencia', status='ativo').exists())
         self.assertTrue(Alerta.objects.filter(sensor=self.sensor, origem='tendencia', status='resolvido').exists())
+        self.assertEqual(OrdemServico.objects.get(tipo_os='preditiva').status, 'pendente')
+
+    def test_predictive_order_is_linked_and_not_recreated_after_conclusion(self):
+        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
+        self._readings([80, 90, 98])
+        sync_sensor_trend(self.sensor.id)
+        alerta = Alerta.objects.get(sensor=self.sensor, origem='tendencia', status='ativo')
+        ordem = OrdemServico.objects.get(alerta_origem=alerta)
+        self.assertEqual(alerta.ordem_servico_id, ordem.pk)
+        ordem.status = 'concluida'
+        ordem.save()
+        sync_sensor_trend(self.sensor.id)
+        alerta.refresh_from_db()
+        ordem.refresh_from_db()
+        self.assertEqual(alerta.status, 'ativo')
+        self.assertEqual(ordem.status, 'concluida')
+        self.assertEqual(OrdemServico.objects.count(), 1)

@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from ativos.models import Equipamento
 
 class Sensor(models.Model):
@@ -67,6 +67,12 @@ class Telemetria(models.Model):
     sensor = models.ForeignKey(Sensor, on_delete=models.CASCADE, related_name='leituras')
     valor = models.FloatField()
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Serializa ingestão e sinais por sensor; a leitura e seus efeitos são atômicos.
+        with transaction.atomic():
+            Sensor.objects.select_for_update().get(pk=self.sensor_id)
+            super().save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Telemetrias"

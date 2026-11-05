@@ -1,4 +1,5 @@
-from django.db import models
+from django.db import models, transaction
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
 from ativos.models import Equipamento
@@ -64,11 +65,23 @@ class OrdemServico(models.Model):
     data_conclusao = models.DateTimeField(null=True, blank=True) # Só preenche quando o técnico terminar
 
     def save(self, *args, **kwargs):
-        # Se o status for concluída e a data de conclusão ainda estiver vazia...
-        if self.status == 'concluida' and not self.data_conclusao:
-            self.data_conclusao = timezone.now() # O servidor carimba a data e hora exatas!
-            
-        super().save(*args, **kwargs) # Continua o processo normal de salvar no banco
+        with transaction.atomic():
+            anterior = type(self).objects.select_for_update().filter(pk=self.pk).first() if self.pk else None
+            if anterior and anterior.status in ('concluida', 'cancelada') and self.status != anterior.status:
+                raise ValidationError({'status': 'Uma ordem concluída ou cancelada não pode mudar de status.'})
+            if self.status == 'concluida' and not self.data_conclusao:
+                self.data_conclusao = timezone.now()
+                if kwargs.get('update_fields') is not None:
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'data_conclusao'}
+            super().save(*args, **kwargs)
+            if self.status == 'concluida':
+                HistoricoManutencao.objects.get_or_create(
+                    ordem_servico=self,
+                    defaults={
+                        'descricao_servico': self.descricao or self.titulo,
+                        'data_execucao': timezone.localdate(self.data_conclusao),
+                    },
+                )
 
     def __str__(self):
         return f"OS #{self.id} - {self.titulo} ({self.equipamento.nome})"

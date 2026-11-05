@@ -26,7 +26,12 @@ class Alerta(models.Model):
         ('tendencia', 'Tendência preditiva'),
         ('manual', 'Manual'),
     )
-    origem = models.CharField(max_length=20, choices=ORIGEM_CHOICES, default='limite')
+    origem = models.CharField(max_length=20, choices=ORIGEM_CHOICES, default='manual')
+    ordem_servico = models.ForeignKey(
+        'manutencao.OrdemServico', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='alertas_relacionados',
+        help_text='Ordem que atende esta ocorrência; pode atender outras recorrências.',
+    )
     evento_chave = models.CharField(
         max_length=160, blank=True, default='', db_index=True,
         help_text='Identificador estável do episódio para reprocessamento idempotente.'

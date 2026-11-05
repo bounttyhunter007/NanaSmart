@@ -835,15 +835,16 @@
                 </div>
               </div>
               <div class="alerta-card-body" v-if="a.descricao">{{ a.descricao }}</div>
-              <div v-if="a.origem === 'tendencia'" class="alerta-card-body" style="color:var(--warn)">
-                Tendência preditiva · OS vinculada: {{ a.ordem_servico_id ? '#' + a.ordem_servico_id : 'não necessária' }}
+              <div class="alerta-card-body" style="color:var(--warn)">
+                O.S. vinculada: {{ a.ordem_servico_id ? '#' + a.ordem_servico_id : 'sem vínculo' }}
+                <span v-if="a.origem === 'limite' && a.dados_analise?.nivel_atual"> · Condição atual: {{ a.dados_analise.nivel_atual }} · Pico: {{ a.nivel }}</span>
               </div>
               <div class="alerta-card-footer">
                 <div class="alerta-card-equip">⚙ {{ eqNome(a.equipamento) }}</div>
                 <div class="alerta-card-date">{{ fmtDate(a.data_alerta) }}</div>
               </div>
               <div class="alerta-card-actions" style="padding-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-                <button v-if="isTecnico && !a._assumindo_os" class="btn btn-primary btn-sm" @click="assumirOSFromAlerta(a)">Assumir O.S.</button>
+                <button v-if="isTecnico && a.ordem_servico_id && !a._assumindo_os" class="btn btn-primary btn-sm" @click="assumirOSFromAlerta(a)">Assumir O.S.</button>
                 <button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="editItem('alerta',a)">Editar</button>
                 <button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('alertas',a.id)">✕</button>
               </div>
@@ -1364,12 +1365,12 @@
         <template v-if="modal.type==='alerta'">
           <div class="field-row">
             <div class="field" :class="{hasError:formErrors.tipo_alerta}">
-              <label>Tipo de Alerta *</label><input v-model="fd.tipo_alerta" placeholder="Ex: Alta Temperatura" />
+              <label>Tipo de Alerta *</label><input v-model="fd.tipo_alerta" :disabled="modal.editId && fd.origem !== 'manual'" placeholder="Ex: Alta Temperatura" />
               <span v-if="formErrors.tipo_alerta" class="field-error">{{ formErrors.tipo_alerta }}</span>
             </div>
             <div class="field" :class="{hasError:formErrors.equipamento}">
               <label>Equipamento *</label>
-              <select v-model.number="fd.equipamento">
+              <select v-model.number="fd.equipamento" :disabled="modal.editId && fd.origem !== 'manual'">
                 <option :value="null">— Selecione —</option>
                 <option v-for="e in lists.equipamentos" :key="e.id" :value="e.id">{{ e.nome }} (#{{ e.id }})</option>
               </select>
@@ -1378,24 +1379,25 @@
           </div>
           <div class="field-row">
             <div class="field"><label>Nível</label>
-              <select v-model="fd.nivel">
+              <select v-model="fd.nivel" :disabled="modal.editId && fd.origem !== 'manual'">
                 <option value="baixo">Baixo</option>
                 <option value="medio">Médio</option>
                 <option value="critico">Crítico</option>
               </select>
             </div>
             <div class="field"><label>Status</label>
-              <select v-model="fd.status">
-                <option value="ativo">Ativo</option>
-                <option value="resolvido">Resolvido</option>
+              <select v-model="fd.status" :disabled="modal.editId && fd.origem === 'limite' && modal.oldStatus !== 'ativo'">
+                <option value="ativo" :disabled="modal.editId && modal.oldStatus !== 'ativo'">Ativo</option>
+                <option value="resolvido" :disabled="fd.origem === 'limite'">Resolvido</option>
                 <option value="ignorado">Ignorado</option>
               </select>
             </div>
           </div>
           <div class="field" :class="{hasError:formErrors.descricao}">
-            <label>Descrição *</label><textarea v-model="fd.descricao" rows="3" placeholder="Descreva o alerta..."></textarea>
+            <label>Descrição *</label><textarea v-model="fd.descricao" :disabled="modal.editId && fd.origem !== 'manual'" rows="3" placeholder="Descreva o alerta..."></textarea>
             <span v-if="formErrors.descricao" class="field-error">{{ formErrors.descricao }}</span>
           </div>
+          <p v-if="fd.origem === 'limite'">A recuperação é confirmada após duas leituras normais consecutivas. Ignorar o alerta não encerra a O.S.</p>
         </template>
 
         <!-- ORDEM -->

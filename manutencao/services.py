@@ -63,20 +63,53 @@ class PrioridadeOSService:
         return dados
 
     @classmethod
+    @transaction.atomic
     def criar_por_alerta(cls, alerta):
+        from alertas.models import Alerta
+        from telemetria.models import Sensor
+
+        if alerta.origem == 'limite' and alerta.sensor_id:
+            Sensor.objects.select_for_update().get(pk=alerta.sensor_id)
+        alerta = Alerta.objects.select_for_update().get(pk=alerta.pk)
+        if alerta.status != 'ativo':
+            return None
         gravidade = {'baixo': 'baixa', 'medio': 'moderada', 'critico': 'critica'}[alerta.nivel]
         titulo = f'MANUTENÇÃO: {alerta.tipo_alerta}'
-        ordem = OrdemServico.objects.filter(equipamento=alerta.equipamento, status__in=['pendente', 'andamento'], titulo=titulo).first()
+        ordem = OrdemServico.objects.select_for_update().filter(pk=alerta.ordem_servico_id).first()
+        if ordem is None:
+            ordem = OrdemServico.objects.select_for_update().filter(alerta_origem=alerta).first()
+        # Uma recorrência usa o trabalho ainda aberto do MESMO sensor.
+        # Alertas manuais são ocorrências próprias e não se agrupam pelo título.
+        if ordem is None and alerta.origem == 'limite' and alerta.sensor_id:
+            ordem = OrdemServico.objects.select_for_update().filter(
+                equipamento_id=alerta.equipamento_id, sensor_origem_id=alerta.sensor_id,
+                tipo_os='corretiva', alerta_origem__origem='limite',
+                status__in=['pendente', 'andamento'],
+            ).order_by('pk').first()
+        if ordem and ordem.status in ('concluida', 'cancelada'):
+            return ordem
         dados = cls.preencher({
             'tipo_os': 'corretiva', 'gravidade_condicao': gravidade, 'risco_seguranca': False,
         }, alerta.equipamento)
         descricao = f'O.S. vinculada ao alerta: {alerta.tipo_alerta}.\n{alerta.descricao}'
         if ordem is None:
-            return OrdemServico.objects.create(equipamento=alerta.equipamento, titulo=titulo, descricao=descricao, status='pendente', **dados)
-        if not ordem.prioridade_manual and PESO[dados['prioridade']] > PESO[ordem.prioridade]:
-            for campo, valor in dados.items():
-                setattr(ordem, campo, valor)
-            ordem.descricao += f'\n\n[ATUALIZAÇÃO DE ALERTA] {alerta.descricao}'
+            return OrdemServico.objects.create(
+                equipamento=alerta.equipamento, alerta_origem=alerta, sensor_origem=alerta.sensor,
+                titulo=titulo, descricao=descricao, status='pendente', **dados,
+            )
+        peso_gravidade = {'ausente': 0, 'baixa': 1, 'moderada': 2, 'alta': 3, 'critica': 4}
+        agravou = peso_gravidade[gravidade] > peso_gravidade[ordem.gravidade_condicao]
+        nova_ocorrencia = alerta.ordem_servico_id != ordem.pk and ordem.alerta_origem_id != alerta.pk
+        prioridade_maior = PESO[dados['prioridade']] > PESO[ordem.prioridade_automatica or ordem.prioridade]
+        if agravou or nova_ocorrencia or prioridade_maior:
+            if agravou:
+                ordem.gravidade_condicao = gravidade
+            if prioridade_maior:
+                ordem.prioridade_automatica = dados['prioridade']
+            if not ordem.prioridade_manual and PESO[dados['prioridade']] > PESO[ordem.prioridade]:
+                ordem.prioridade = dados['prioridade']
+                ordem.justificativa_prioridade = dados['justificativa_prioridade']
+            ordem.descricao += f'\n\n[ATUALIZAÇÃO DO ALERTA #{alerta.pk}] {alerta.descricao}'
             ordem.save()
         return ordem
 
@@ -111,6 +144,9 @@ class PrioridadeOSService:
             f'projeção até o limite: {dados.get("projected_breach_hours")} horas.'
         )
         with transaction.atomic():
+            # Bloquear o alerta também protege a criação quando ainda não há OS.
+            from alertas.models import Alerta
+            Alerta.objects.select_for_update().get(pk=alerta.pk)
             ordem = (
                 OrdemServico.objects.select_for_update()
                 .filter(alerta_origem=alerta)

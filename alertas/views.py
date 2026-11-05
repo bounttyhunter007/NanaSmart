@@ -16,7 +16,7 @@ class AlertaViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Alerta.objects.none()
         user = self.request.user
-        qs = Alerta.objects.select_related('equipamento').order_by('-data_alerta')
+        qs = Alerta.objects.select_related('equipamento', 'ordem_servico', 'ordem_servico_preditiva').order_by('-data_alerta')
         if user.tipo_usuario == 'admin':
             return qs.all()
         if user.empresa:

@@ -527,12 +527,14 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
             
             # Histórico para OS Concluídas
             if status_os == 'concluida':
-                HistoricoManutencao.objects.create(
+                HistoricoManutencao.objects.update_or_create(
                     ordem_servico=os_obj,
-                    data_execucao=(data_conclusao_os.date() if data_conclusao_os else data_abertura.date()),
-                    descricao_servico=random.choice(ACOES_MANUTENCAO.get(tipo_os, ACOES_MANUTENCAO['preventiva'])),
-                    custo_pecas=Decimal(round(random.uniform(150.0, 3200.0), 2)),
-                    custo_mao_de_obra=Decimal(round(random.uniform(250.0, 1800.0), 2))
+                    defaults={
+                        'data_execucao': (data_conclusao_os.date() if data_conclusao_os else data_abertura.date()),
+                        'descricao_servico': random.choice(ACOES_MANUTENCAO.get(tipo_os, ACOES_MANUTENCAO['preventiva'])),
+                        'custo_pecas': Decimal(round(random.uniform(150.0, 3200.0), 2)),
+                        'custo_mao_de_obra': Decimal(round(random.uniform(250.0, 1800.0), 2)),
+                    },
                 )
 
             # Avançar a data da próxima OS
