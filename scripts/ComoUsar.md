@@ -32,27 +32,54 @@ Este documento descreve brevemente os scripts disponíveis em `scripts/` e como 
 
 ## 2. `simulador_realtime.py`
 
-**O que faz**
-- Simula geração contínua de leituras de telemetria para sensores ativos.
-- Preserva histórico de valor para fazer transições suaves.
-- Permite filtrar por sensor ou por equipamento.
-- Executa em ciclos com intervalos aleatórios entre valores mínimo e máximo.
+Gera leituras para sensores ativos de equipamentos em operação. Usa os modelos e
+as configurações Django atuais (`DJANGO_SETTINGS_MODULE`, padrão `app.settings`).
+Verifica migrações antes de iniciar; não cria tabelas nem cadastros.
 
-**Como usar**
-- Execute a partir da raiz do projeto:
-  ```bash
-  python scripts/simulador_realtime.py --interval-min 1 --interval-max 3 --cycles 100
-  ```
+```bash
+# Conferir sem gravar; --debug mostra cada leitura
+python scripts/simulador_realtime.py --dry-run --cycles 3 --debug
 
-**Argumentos úteis**
-- `--interval-min`: intervalo mínimo em segundos entre ciclos (default: `1.0`)
-- `--interval-max`: intervalo máximo em segundos entre ciclos (default: `3.0`)
-- `--cycles`: número máximo de ciclos; `0` = executa continuamente
-- `--seed`: semente para gerar valores determinísticos
-- `--sensor`: IDs de sensores específicos para simular
-- `--equipamento`: IDs de equipamentos específicos para simular
-- `--dry-run`: não grava leituras no banco, apenas emula o fluxo
-- `--debug`: habilita logs de depuração
+# Operação contínua, restrita à empresa escolhida
+python scripts/simulador_realtime.py --empresa 1 --cenario normal
+
+# Demonstração completa: 5 fases de 8 ciclos cada
+python scripts/simulador_realtime.py --sensor 1 --cenario escalada --cycles 40 --seed 42
+```
+
+- `--interval-min` / `--interval-max`: cadência de 1 a 3 segundos por padrão.
+  O tempo de processamento é descontado da espera; não há espera após o último ciclo.
+- `--cycles`: ciclos a executar; `0` mantém execução contínua. Ctrl+C encerra.
+- `--empresa`, `--equipamento`, `--sensor`: aceitam vários IDs separados por espaços;
+  filtros combinados usam interseção. IDs inexistentes/inativos não geram dados.
+- `--cenario`: `normal`, `misto` (padrão), `baixo`, `medio`, `critico`,
+  `recuperacao` ou `escalada`.
+- `--fase-ciclos`: duração de cada fase da escalada (padrão 8). Repete
+  normal → baixo → médio → crítico → recuperação.
+- `--chance-anomalia`: probabilidade por sensor/ciclo no modo misto (padrão 0.01).
+- `--seed`: sequência reproduzível para o mesmo cadastro, histórico inicial e cenário.
+- `--max-falhas`: encerra após ciclos consecutivos com falha (padrão 5).
+- `--dry-run`: consulta o banco e atualiza memória local, sem leituras ou efeitos persistidos.
+- `--debug`: detalhes por sensor; normalmente exibe somente resumo por ciclo.
+
+Os cenários usam os três percentuais configurados em cada sensor (padrões
+70/85/100), inclusive quando o crítico está abaixo de 100%. Não impõem um limite
+fictício de 100 para configurações inválidas: identificam e ignoram o sensor.
+No modo normal há variação suave dentro da faixa segura; cenários de alerta
+entram diretamente na faixa escolhida. Recuperação produz leituras abaixo do
+limiar baixo (a aplicação exige duas leituras normais para resolver uma ocorrência).
+Se o limiar baixo for zero, não existe faixa não negativa de recuperação.
+
+As gravações passam por `Telemetria.save()` e pelos sinais reais: podem criar
+alertas, análises preditivas e ordens de serviço conforme as regras atuais.
+Não usa `bulk_create` nem cria alertas manualmente. A memória só avança após uma
+gravação bem-sucedida; uma falha de banco por sensor não desfaz os outros sensores.
+Sensores e limites são atualizados a cada ciclo, e o histórico é consultado somente
+para sensores que entram na simulação. Execuções simultâneas no mesmo sensor
+podem intercalar leituras; prefira filtros sem sobreposição.
+
+Saída: `0` ao terminar sem falha no último ciclo, `1` por erro ou limite de falhas,
+`130` por interrupção do operador; argumentos inválidos retornam `2`.
 
 ## 3. `stress_telemetry.py`
 

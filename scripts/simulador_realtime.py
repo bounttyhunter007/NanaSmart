@@ -1,248 +1,255 @@
-"""
-Simulador de Telemetria Industrial em Tempo Real.
+"""Telemetria ao vivo pelo fluxo real de ingestão, alertas e manutenção.
 
-Este script detecta dinamicamente sensores ativos e equipamentos com status 'ativo'
-no banco de dados, preserva o histórico de valor para transições suaves e grava
-leituras de telemetria na mesma cadência do ambiente real.
-
-O objetivo é simular um fluxo confiável de dados para a aplicação, ajudando a
-identificar alertas, relatórios e dashboards sem gerar leituras fora de contexto.
+Execute --help para filtros e cenários. Não cria cadastros nem altera o esquema.
 """
 
 import argparse
 import logging
+import math
 import os
+from pathlib import Path
 import random
 import sys
 import time
 
-import django
-from django.db import DatabaseError, transaction
-
-# Configuração do ambiente Django
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
-django.setup()
-
-from telemetria.models import Sensor, Telemetria
 
 logger = logging.getLogger('simulador_realtime')
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Simulador de Telemetria Industrial em Tempo Real',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument('--interval-min', type=float, default=1.0,
-                        help='Tempo mínimo em segundos entre ciclos')
-    parser.add_argument('--interval-max', type=float, default=3.0,
-                        help='Tempo máximo em segundos entre ciclos')
-    parser.add_argument('--cycles', type=int, default=0,
-                        help='Número máximo de ciclos de geração. 0 = execução contínua')
-    parser.add_argument('--seed', type=int,
-                        help='Semente para tornar a geração de valores determinística')
-    parser.add_argument('--sensor', type=int, nargs='+',
-                        help='IDs de sensores específicos para simular')
-    parser.add_argument('--equipamento', type=int, nargs='+',
-                        help='IDs de equipamentos para limitar a simulação')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Executa o simulador sem gravar leituras no banco')
-    parser.add_argument('--debug', action='store_true',
-                        help='Ativa logs de depuração')
-    return parser.parse_args()
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--interval-min', type=float, default=1.0)
+    parser.add_argument('--interval-max', type=float, default=3.0)
+    parser.add_argument('--cycles', type=int, default=0, help='0 = contínuo')
+    parser.add_argument('--seed', type=int)
+    parser.add_argument('--sensor', type=int, nargs='+', help='IDs dos sensores')
+    parser.add_argument('--equipamento', type=int, nargs='+', help='IDs dos equipamentos')
+    parser.add_argument('--empresa', type=int, nargs='+', help='IDs das empresas')
+    parser.add_argument('--cenario', choices=['normal', 'misto', 'baixo', 'medio', 'critico',
+                                              'recuperacao', 'escalada'], default='misto',
+                        help='Escalada repete normal → baixo → médio → crítico → recuperação')
+    parser.add_argument('--fase-ciclos', type=int, default=8, help='Ciclos por fase da escalada')
+    parser.add_argument('--chance-anomalia', type=float, default=0.01,
+                        help='Probabilidade por sensor/ciclo no cenário misto (0 a 1)')
+    parser.add_argument('--max-falhas', type=int, default=5,
+                        help='Encerra após este número de ciclos consecutivos com falha')
+    parser.add_argument('--dry-run', action='store_true', help='Consulta e simula sem gravar')
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args(argv)
+    if any(not math.isfinite(v) or v <= 0 for v in (args.interval_min, args.interval_max)):
+        parser.error('Os intervalos devem ser finitos e maiores que zero.')
+    if args.interval_min > args.interval_max:
+        parser.error('--interval-min não pode superar --interval-max.')
+    if args.cycles < 0 or args.fase_ciclos < 1 or args.max_falhas < 1:
+        parser.error('Ciclos devem ser >= 0; fase-ciclos e max-falhas devem ser >= 1.')
+    if not math.isfinite(args.chance_anomalia) or not 0 <= args.chance_anomalia <= 1:
+        parser.error('--chance-anomalia deve estar entre 0 e 1.')
+    if any(i <= 0 for ids in (args.sensor, args.equipamento, args.empresa) if ids for i in ids):
+        parser.error('IDs devem ser positivos.')
+    return args
 
 
 def configurar_logging(debug=False):
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('[%(levelname)s] %(message)s')
-    handler.setFormatter(formatter)
-    logger.setLevel(logging.DEBUG if debug else logging.INFO)
     if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%H:%M:%S'))
         logger.addHandler(handler)
-    else:
-        for h in logger.handlers:
-            if isinstance(h, logging.StreamHandler):
-                h.setFormatter(formatter)
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.propagate = False
 
 
-def obter_sensores_ativos(sensor_ids=None, equipamento_ids=None):
-    filtro = {'ativo': True, 'equipamento__status': 'ativo'}
-    queryset = Sensor.objects.filter(**filtro).select_related('equipamento')
+def obter_sensores_ativos(sensor_ids=None, equipamento_ids=None, empresa_ids=None):
+    from telemetria.models import Sensor
+    qs = Sensor.objects.filter(ativo=True, equipamento__status='ativo').select_related('equipamento')
+    for campo, ids in [('pk', sensor_ids), ('equipamento_id', equipamento_ids),
+                       ('equipamento__empresa_id', empresa_ids)]:
+        if ids:
+            qs = qs.filter(**{f'{campo}__in': ids})
+    return qs.order_by('equipamento_id', 'pk')
 
-    if sensor_ids:
-        queryset = queryset.filter(id__in=sensor_ids)
-    if equipamento_ids:
-        queryset = queryset.filter(equipamento_id__in=equipamento_ids)
 
-    return queryset.order_by('equipamento__nome', 'nome')
+def limites_sensor(sensor):
+    """Mesmos padrões e fronteiras inclusivas do serviço de alertas."""
+    limite = sensor.limite_alerta
+    percentuais = tuple(getattr(sensor, f'limite_alerta_{nivel}_pct')
+                        if getattr(sensor, f'limite_alerta_{nivel}_pct') is not None else padrao
+                        for nivel, padrao in [('baixo', 70.), ('medio', 85.), ('critico', 100.)])
+    if limite is None or not math.isfinite(limite) or limite <= 0:
+        raise ValueError('limite operacional deve ser finito e positivo')
+    if not all(math.isfinite(p) for p in percentuais) or not 0 <= percentuais[0] < percentuais[1] < percentuais[2] <= 100:
+        raise ValueError('percentuais devem obedecer 0 <= baixo < médio < crítico <= 100')
+    return tuple(limite * p / 100 for p in percentuais)
 
 
 def carregar_ultimo_valor_por_sensor(sensores):
-    sensor_ids = [sensor.id for sensor in sensores]
-    ultima_leitura = {}
-
-    if not sensor_ids:
-        return ultima_leitura
-
-    leituras = (Telemetria.objects
-                .filter(sensor_id__in=sensor_ids)
-                .order_by('sensor_id', '-timestamp'))
-
-    for leitura in leituras:
-        if leitura.sensor_id not in ultima_leitura:
-            ultima_leitura[leitura.sensor_id] = float(leitura.valor)
-            if len(ultima_leitura) == len(sensor_ids):
-                break
-
-    return ultima_leitura
+    from django.db.models import OuterRef, Subquery
+    from telemetria.models import Sensor, Telemetria
+    ultima = Telemetria.objects.filter(sensor_id=OuterRef('pk')).order_by('-timestamp', '-pk')
+    return dict(Sensor.objects.filter(pk__in=[s.pk for s in sensores]).annotate(
+        ultimo=Subquery(ultima.values('valor')[:1])).values_list('pk', 'ultimo'))
 
 
 def inicializar_memoria_sensores(sensores, memoria_atual):
+    novos = [s for s in sensores if s.pk not in memoria_atual]
+    historico = carregar_ultimo_valor_por_sensor(novos) if novos else {}
     memoria = {}
-    ultima_leitura_por_sensor = carregar_ultimo_valor_por_sensor(sensores)
-
     for sensor in sensores:
-        if sensor.id in memoria_atual:
-            memoria[sensor.id] = memoria_atual[sensor.id]
-            continue
-
-        if sensor.id in ultima_leitura_por_sensor:
-            memoria[sensor.id] = ultima_leitura_por_sensor[sensor.id]
-            continue
-
-        limite = sensor.limite_alerta if sensor.limite_alerta and sensor.limite_alerta > 0 else 100.0
-        limite_baixo_pct = sensor.limite_alerta_baixo_pct if sensor.limite_alerta_baixo_pct is not None else 70.0
-        
-        # Iniciar no meio da faixa segura (ex: 60% se o limite for 70%)
-        safe_pct = max(35.0, limite_baixo_pct - 10.0) / 100.0
-        memoria[sensor.id] = round(limite * safe_pct, 2)
-        logger.debug('Inicializando sensor %s (%s) em %.2f', sensor.nome, sensor.get_tipo_display(), memoria[sensor.id])
-
+        valor = memoria_atual.get(sensor.pk, historico.get(sensor.pk))
+        if valor is None or not math.isfinite(valor):
+            valor = limites_sensor(sensor)[0] * .8
+        memoria[sensor.pk] = valor
     return memoria
 
 
-def gerar_valor_sensor(sensor, valor_anterior):
-    limite = sensor.limite_alerta if sensor.limite_alerta and sensor.limite_alerta > 0 else 100.0
-    limite_baixo_pct = sensor.limite_alerta_baixo_pct if sensor.limite_alerta_baixo_pct is not None else 70.0
-
-    # Define faixa segura dinâmica mais alta e estreita para gráficos mais vibrantes.
-    # Ex: se limite_baixo é 70%, o alvo é oscilar entre 55% e 68%.
-    pct_max = max(40.0, limite_baixo_pct - 2.0) / 100.0
-    pct_min = max(30.0, limite_baixo_pct - 15.0) / 100.0
-    
-    alvo_minimo = limite * pct_min
-    alvo_maximo = limite * pct_max
-
-    # 1% de chance de gerar um pico (anomalia)
-    is_anomalia = random.random() < 0.01
-
-    if is_anomalia:
-        # Pico forte para cima, podendo passar do limite baixo/médio/crítico raramente
-        flutuacao_pct = random.uniform(0.05, 0.20)
-    else:
-        # Aumentar a variação normal (até 5%) com efeito elástico nas bordas
-        if valor_anterior > alvo_maximo:
-            flutuacao_pct = random.uniform(-0.06, 0.01) # Puxa para baixo
-        elif valor_anterior < alvo_minimo:
-            flutuacao_pct = random.uniform(-0.01, 0.06) # Puxa para cima
-        else:
-            flutuacao_pct = random.uniform(-0.05, 0.05) # Variação solta
-
-    novo_valor = valor_anterior + (limite * flutuacao_pct)
-
-    novo_valor = round(max(0.1, novo_valor), 2)
-    return novo_valor, limite, alvo_minimo, alvo_maximo
+def fase_cenario(cenario, ciclo, fase_ciclos):
+    if cenario != 'escalada':
+        return cenario
+    fases = ('normal', 'baixo', 'medio', 'critico', 'recuperacao')
+    return fases[((ciclo - 1) // fase_ciclos) % len(fases)]
 
 
-def imprimir_resumo_ciclo(ciclo, sensores, novos, removidos):
-    logger.info('Ciclo %s: %s sensores ativos (%s novos, %s removidos)',
-                ciclo, len(sensores), len(novos), len(removidos))
-    if novos:
-        logger.debug('Sensores adicionados: %s', ', '.join(str(s) for s in novos))
-    if removidos:
-        logger.debug('Sensores removidos: %s', ', '.join(str(s) for s in removidos))
+def gerar_valor_sensor(sensor, valor_anterior, rng=None, cenario='misto', chance_anomalia=.01):
+    rng = rng or random
+    baixo, medio, critico = limites_sensor(sensor)
+    if cenario == 'misto':
+        cenario = rng.choice(('baixo', 'medio', 'critico')) if rng.random() < chance_anomalia else 'normal'
+    faixas = {'normal': (baixo * .65, baixo * .95),
+              'recuperacao': (baixo * .65, baixo * .90),
+              'baixo': (baixo, medio), 'medio': (medio, critico),
+              'critico': (critico, critico + sensor.limite_alerta * .15)}
+    minimo, maximo = faixas[cenario]
+    # Margem interna evita cruzar níveis por arredondamento. Não arredondar o dado
+    # persistido: sensores de pequena escala também precisam manter sua precisão.
+    margem = (maximo - minimo) * .05
+    alvo = rng.uniform(minimo + margem, maximo - margem)
+    # Temperatura/umidade respondem lentamente; corrente e vibração têm
+    # maior variabilidade. Os limites sempre vêm do cadastro, não do tipo.
+    resposta, ruido = {
+        'temperatura': (.12, .015), 'umidade': (.08, .01),
+        'pressao': (.25, .03), 'corrente': (.40, .05),
+        'vibracao': (.50, .07),
+    }.get(sensor.tipo, (.25, .04))
+    valor = valor_anterior + (alvo - valor_anterior) * resposta + rng.uniform(-1, 1) * (maximo - minimo) * ruido
+    valor = min(maximo - margem, max(minimo + margem, valor))
+    return valor, critico, minimo, maximo
 
 
-def rodar_ciclo(sensores, memoria_valores, dry_run=False):
-    leituras_criadas = 0
-
+def rodar_ciclo(sensores, memoria_valores, dry_run=False, rng=None, cenario='misto', chance_anomalia=.01):
+    from django.db import DatabaseError, transaction
+    from telemetria.models import Sensor, Telemetria
+    criadas = simuladas = falhas = ignoradas = 0
     for sensor in sensores:
-        valor_anterior = memoria_valores[sensor.id]
-        novo_valor, limite, alvo_minimo, alvo_maximo = gerar_valor_sensor(sensor, valor_anterior)
-        memoria_valores[sensor.id] = novo_valor
-
-        descricao = (
-            f"[{sensor.equipamento.nome}] {sensor.get_tipo_display()} - {sensor.nome}: "
-            f"{novo_valor} {sensor.unidade_medida or ''} "
-            f"(alvo {alvo_minimo:.1f}-{alvo_maximo:.1f}, crítico {limite:.1f})"
-        )
-        logger.info(descricao)
-
+        valor, critico, minimo, maximo = gerar_valor_sensor(
+            sensor, memoria_valores[sensor.pk], rng, cenario, chance_anomalia)
         if not dry_run:
             try:
-                Telemetria.objects.create(sensor=sensor, valor=novo_valor)
-                leituras_criadas += 1
-            except DatabaseError as exc:
-                logger.exception('Falha ao gravar leitura para sensor %s: %s', sensor.id, exc)
+                # Um sensor com erro não desfaz os demais. Save e sinais continuam
+                # no fluxo oficial (bulk_create pularia os alertas e tendências).
+                with transaction.atomic():
+                    atual = Sensor.objects.select_for_update().select_related('equipamento').get(pk=sensor.pk)
+                    if not atual.ativo or atual.equipamento.status != 'ativo':
+                        ignoradas += 1
+                        continue
+                    if limites_sensor(atual) != limites_sensor(sensor):
+                        ignoradas += 1
+                        continue  # configuração mudou: atualizar no próximo ciclo
+                    Telemetria.objects.create(sensor=atual, valor=valor)
+                criadas += 1
+            except Sensor.DoesNotExist:
+                ignoradas += 1
+                continue
+            except DatabaseError:
+                falhas += 1
+                logger.exception('Falha na gravação do sensor %s; memória preservada.', sensor.pk)
+                continue
+        else:
+            simuladas += 1
+        memoria_valores[sensor.pk] = valor
+        logger.debug('%s | sensor=%s %s | %.6g %s | faixa %.6g–%.6g; crítico %.6g',
+                     sensor.equipamento.nome, sensor.pk, sensor.nome, valor,
+                     sensor.unidade_medida, minimo, maximo, critico)
+    return {'gravadas': criadas, 'simuladas': simuladas, 'falhas': falhas, 'ignoradas': ignoradas}
 
-    return leituras_criadas
+
+def verificar_banco():
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+    executor = MigrationExecutor(connection)
+    if executor.migration_plan(executor.loader.graph.leaf_nodes()):
+        raise RuntimeError('Há migrações pendentes. Execute python manage.py migrate antes de simular.')
+    logger.info('Banco: %s | %s | host=%s', connection.vendor, connection.settings_dict['NAME'],
+                connection.settings_dict.get('HOST') or 'local')
 
 
 def run_simulator(args):
+    from django.db import OperationalError, InterfaceError, close_old_connections, connections
     configurar_logging(args.debug)
-
-    if args.interval_min <= 0 or args.interval_max <= 0:
-        raise ValueError('Os intervalos devem ser maiores que zero.')
-    if args.interval_min > args.interval_max:
-        args.interval_min, args.interval_max = args.interval_max, args.interval_min
-
-    if args.seed is not None:
-        random.seed(args.seed)
-        logger.debug('Semente de aleatoriedade definida: %s', args.seed)
-
-    logger.info('Iniciando simulador de telemetria. dry_run=%s, sensor=%s, equipamento=%s',
-                args.dry_run, args.sensor, args.equipamento)
-    logger.info('Intervalo entre ciclos: %.1f-%.1f segundos', args.interval_min, args.interval_max)
-
-    memoria_valores = {}
-    ciclo = 1
-    ciclos_totais = args.cycles if args.cycles > 0 else float('inf')
-
+    rng = random.Random(args.seed)
+    espera = random.Random(args.seed)  # cadência não interfere na sequência dos valores
+    memoria = {}
+    concluidos = consecutivas = total = erros = 0
     try:
-        while ciclo <= ciclos_totais:
-            sensores_ativos = obter_sensores_ativos(sensor_ids=args.sensor, equipamento_ids=args.equipamento)
-            ids_ativos = {sensor.id for sensor in sensores_ativos}
-            ids_memoria = set(memoria_valores)
-
-            novos = ids_ativos - ids_memoria
-            removidos = ids_memoria - ids_ativos
-
-            for sensor_id in removidos:
-                memoria_valores.pop(sensor_id, None)
-
-            memoria_valores = inicializar_memoria_sensores(sensores_ativos, memoria_valores)
-            imprimir_resumo_ciclo(ciclo, sensores_ativos, novos, removidos)
-
-            if not sensores_ativos:
-                logger.warning('Nenhum sensor ativo encontrado. Aguarde ou ative sensores/equipamentos no Admin.')
-            else:
-                with transaction.atomic():
-                    leituras = rodar_ciclo(sensores_ativos, memoria_valores, dry_run=args.dry_run)
-                    logger.info('Leituras geradas no ciclo %s: %s', ciclo, leituras)
-
-            intervalo = random.uniform(args.interval_min, args.interval_max)
-            logger.debug('Durma por %.1f segundos antes do próximo ciclo.', intervalo)
-            time.sleep(intervalo)
-            ciclo += 1
-
+        verificar_banco()
+        logger.info('Iniciando cenário=%s dry_run=%s empresa=%s equipamento=%s sensor=%s',
+                    args.cenario, args.dry_run, args.empresa, args.equipamento, args.sensor)
+        while not args.cycles or concluidos < args.cycles:
+            inicio = time.monotonic()
+            falhou = False
+            try:
+                close_old_connections()
+                sensores = list(obter_sensores_ativos(args.sensor, args.equipamento, args.empresa))
+                validos = []
+                for sensor in sensores:
+                    try:
+                        limites_sensor(sensor)
+                    except ValueError as exc:
+                        logger.error('Sensor %s ignorado: %s', sensor.pk, exc)
+                        falhou = True
+                    else:
+                        validos.append(sensor)
+                memoria = inicializar_memoria_sensores(validos, memoria)
+                fase = fase_cenario(args.cenario, concluidos + 1, args.fase_ciclos)
+                resumo = rodar_ciclo(validos, memoria, args.dry_run, rng, fase, args.chance_anomalia)
+                falhou |= resumo['falhas'] > 0
+                total += resumo['gravadas']
+                erros += resumo['falhas']
+                logger.info('Ciclo %s | fase=%s sensores=%s | %s', concluidos + 1, fase, len(validos), resumo)
+                if not sensores:
+                    logger.warning('Nenhum sensor ativo corresponde aos filtros; aguardando cadastros/ativação.')
+            except (OperationalError, InterfaceError):
+                logger.exception('Banco indisponível; nova tentativa no próximo ciclo.')
+                connections.close_all()
+                falhou = True
+                erros += 1
+            concluidos += 1
+            consecutivas = consecutivas + 1 if falhou else 0
+            if consecutivas >= args.max_falhas:
+                logger.error('Limite de %s ciclos consecutivos com falha atingido.', args.max_falhas)
+                return 1
+            if args.cycles and concluidos >= args.cycles:
+                break
+            time.sleep(max(0, espera.uniform(args.interval_min, args.interval_max) - (time.monotonic() - inicio)))
+        return 1 if consecutivas else 0
     except KeyboardInterrupt:
-        logger.info('Simulação interrompida pelo operador.')
-    except Exception as exc:
-        logger.exception('Erro inesperado no simulador: %s', exc)
+        logger.info('Interrompido pelo operador.')
+        return 130
+    except Exception:
+        logger.exception('Simulação encerrada por erro.')
+        return 1
     finally:
-        logger.info('Simulador finalizado após %s ciclos.', ciclo - 1)
+        connections.close_all()
+        logger.info('Finalizado: %s ciclos, %s leituras gravadas, %s erros de banco.', concluidos, total, erros)
+
+
+def main(argv=None):
+    args = parse_args(argv)  # --help e argumentos inválidos não precisam do Django/banco
+    import django
+    django.setup()
+    return run_simulator(args)
 
 
 if __name__ == '__main__':
-    run_simulator(parse_args())
+    sys.exit(main())
