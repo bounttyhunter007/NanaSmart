@@ -216,7 +216,16 @@ def salvar_telemetria_bulk(leituras):
 # ---------------------------------------------------------------------------
 # Lógica Principal
 # ---------------------------------------------------------------------------
-def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_only=False):
+def run_seed(
+    num_empresas=2,
+    equip_por_empresa=10,
+    dias_historico=120,
+    clean_only=False,
+    funcionarios_por_empresa=None,
+):
+    if funcionarios_por_empresa is not None and funcionarios_por_empresa < 1:
+        raise ValueError('O número de funcionários por empresa deve ser pelo menos 1.')
+
     start_total = time.time()
     
     # 1. Limpeza
@@ -247,7 +256,7 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
         print("\n[INFO] Modo apenas limpeza executado. Encerrando.")
         return
 
-    print(f"\n[START] Populando banco de dados: {num_empresas} empresas, ~{equip_por_empresa} ativos/empresa, {dias_historico} dias de histórico.")
+    print(f"\n[START] Populando banco de dados: {num_empresas} empresas, funcionários por empresa: {funcionarios_por_empresa or '3 a 5 técnicos + 1 gestor'}, ~{equip_por_empresa} ativos/empresa, {dias_historico} dias de histórico.")
 
     # 2. Configurações Globais (Prompts Gemini e TrendConfig)
     print("\n[CONFIG] Configurando Prompts do Gemini AI e TrendConfig padrão...")
@@ -273,7 +282,8 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
     # 3. Admin
     print("\n[ADMIN] Configurando acesso administrativo...")
     t_start = time.time()
-    if not Usuario.objects.filter(username='admin').exists():
+    admin_user = Usuario.objects.filter(username='admin').first()
+    if admin_user is None:
         Usuario.objects.create_superuser(
             username='admin', 
             email='suporte@bughunter.com', 
@@ -281,6 +291,9 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
             tipo_usuario='admin',
             cargo='Administrador do Sistema'
         )
+    elif admin_user.is_superuser and admin_user.tipo_usuario != 'admin':
+        admin_user.tipo_usuario = 'admin'
+        admin_user.save(update_fields=['tipo_usuario'])
     print(f"OK (Duração: {time.time() - t_start:.2f}s)")
 
     # 4. Empresas e Usuários
@@ -326,8 +339,13 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
             telefone=fake.phone_number()
         )
         
-        # Técnicos (3 a 5 por empresa)
-        for _ in range(random.randint(3, 5)):
+        # Mantém o comportamento aleatório padrão ou completa o total solicitado com técnicos.
+        total_tecnicos = (
+            funcionarios_por_empresa - 1
+            if funcionarios_por_empresa is not None
+            else random.randint(3, 5)
+        )
+        for _ in range(total_tecnicos):
             t_nome = fake.name()
             u_name, u_email = gerar_credenciais_reais(t_nome, emp_nome)
             Usuario.objects.create_user(
@@ -598,12 +616,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Seed industrial completo e atualizado para o sistema BugHunter.')
     parser.add_argument('--empresas', type=int, default=2, help='Número de empresas a criar')
     parser.add_argument('--equipamentos', type=int, default=10, help='Número de equipamentos por empresa')
+    parser.add_argument('--funcionarios', type=int, default=None, help='Total de funcionários por empresa, incluindo o gestor')
     parser.add_argument('--days', type=int, default=120, help='Dias de histórico de telemetria e manutenção')
     parser.add_argument('--clean-only', action='store_true', help='Apenas limpa o banco de dados sem popular')
     args = parser.parse_args()
     
     try:
-        run_seed(args.empresas, args.equipamentos, args.days, args.clean_only)
+        run_seed(
+            args.empresas,
+            args.equipamentos,
+            args.days,
+            args.clean_only,
+            args.funcionarios,
+        )
     except Exception as e:
         print(f"\n[ERROR] Falha crítica no seed: {e}")
         import traceback

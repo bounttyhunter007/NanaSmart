@@ -12,11 +12,12 @@ Este documento descreve brevemente os scripts disponíveis em `scripts/` e como 
 **Como usar**
 - Execute a partir da raiz do projeto:
   ```bash
-  python scripts/seed_db.py --empresas 3 --equipamentos 8
+  python scripts/seed_db.py --empresas 3 --equipamentos 8 --funcionarios 20
   ```
 - Parâmetros disponíveis:
   - `--empresas`: número de empresas a criar (default: `2`)
   - `--equipamentos`: número de equipamentos por empresa (default: `10`)
+  - `--funcionarios`: total de funcionários por empresa, incluindo o gestor (default: `1 gestor + 3 a 5 técnicos aleatórios`)
   - `--days`: dias de histórico de telemetria e manutenção (default: `120`)
   - `--clean-only`: apenas limpa o banco de dados sem popular
 
