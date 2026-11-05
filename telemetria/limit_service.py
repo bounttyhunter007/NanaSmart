@@ -46,6 +46,8 @@ def sync_limit_reading(leitura):
         dados = {}
 
     limites = {'baixo': baixo, 'medio': medio, 'critico': critico}
+    dados.setdefault('limites_na_abertura_pct', limites.copy())
+    dados.setdefault('limite_na_abertura', sensor.limite_alerta)
     if dados.get('limites_pct') != limites or dados.get('limite_operacional') != sensor.limite_alerta:
         dados['leituras_normais_consecutivas'] = 0
 

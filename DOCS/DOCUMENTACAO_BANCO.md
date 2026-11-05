@@ -95,13 +95,17 @@ Histórico massivo de leituras.
 - `id`: Primary Key (BigInt)
 - `equipamento_id`: **Foreign Key** -> `ativos_equipamento` (1:N)
 - `responsavel_id`: **Foreign Key** -> `accounts_usuario` (1:N)
+- `alerta_origem_id`: **OneToOne**, opcional -> `alertas_alerta`; preserva a ocorrência inicial que originou a ordem.
+- `sensor_origem_id`: **Foreign Key**, opcional -> `telemetria_sensor`.
 - `tipo_os`: Enum ('corretiva', 'preditiva', 'preventiva')
 - `titulo`: Char(200)
 - `descricao`: TextField
 - `status`: Enum ('pendente', 'andamento', 'concluida', 'cancelada')
-- `prioridade`: Enum ('baixo', 'medio', 'critico')
+- `prioridade`: Enum ('baixa', 'media', 'alta', 'critica')
 - `data_abertura`: DateTime
 - `data_conclusao`: DateTime
+
+Concluída/cancelada não mudam de status pelo modelo/API. A conclusão pelo modelo garante um único histórico. Normalizar leituras ou resolver alertas não altera automaticamente a ordem. Campos de prioridade e contexto de criticidade seguem a matriz existente; o contexto da abertura é preservado.
 
 ### Tabela: `manutencao_historicomanutencao`
 Fechamento financeiro e técnico da OS.
@@ -124,6 +128,15 @@ Fechamento financeiro e técnico da OS.
 - `status`: Enum ('ativo', 'resolvido', 'ignorado')
 - `descricao`: TextField
 - `data_alerta`: DateTime (Auto)
+- `sensor_id`: **Foreign Key**, opcional -> `telemetria_sensor`.
+- `origem`: Enum ('manual', 'limite', 'tendencia'); padrão de novos registros: `manual`.
+- `evento_chave`: Char(160), indexado; chave da condição monitorada. Restrição única parcial para chaves não vazias de alertas ativos.
+- `dados_analise`: JSON; parâmetros e resultados de tendência ou condição atual, pico e confirmação de recuperação por limite.
+- `data_ultima_analise`: DateTime, opcional.
+- `analise_ia`: Text, opcional.
+- `ordem_servico_id`: **Foreign Key**, opcional -> `manutencao_ordemservico`, `SET_NULL`; várias ocorrências podem ser atendidas por uma ordem.
+
+O vínculo `OrdemServico.alerta_origem` é a origem inicial; `Alerta.ordem_servico` é a ordem que atende cada ocorrência, incluindo recorrências. As migrações mantêm esses papéis sem substituir o histórico. [Especificação e procedimento de atualização](FLUXO_ALERTAS_ORDENS_SERVICO.md).
 
 ---
 
@@ -141,6 +154,10 @@ Fechamento financeiro e técnico da OS.
 | `manutencao_ordemservico` | `accounts_usuario` | FK | N:1 |
 | `manutencao_historicomanutencao` | `manutencao_ordemservico` | OneToOne | 1:1 |
 | `alertas_alerta` | `ativos_equipamento` | FK | N:1 |
+| `alertas_alerta` | `telemetria_sensor` | FK opcional | N:1 |
+| `alertas_alerta` | `manutencao_ordemservico` | FK opcional de atendimento | N:1 |
+| `manutencao_ordemservico` | `alertas_alerta` | OneToOne opcional de origem inicial | 1:1 |
+| `manutencao_ordemservico` | `telemetria_sensor` | FK opcional | N:1 |
 | `accounts_usuario` | `auth_group` | N:N | N:N (via table `groups`) |
 | `accounts_usuario` | `auth_permission` | N:N | N:N (via table `user_permissions`) |
 

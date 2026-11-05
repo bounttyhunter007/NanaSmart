@@ -159,6 +159,8 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 
 ## 🚨 Alertas (CRUD)
 
+Especificação do ciclo de vida: [Alertas e Ordens de Serviço](FLUXO_ALERTAS_ORDENS_SERVICO.md). Novos alertas pela API têm origem `manual`; origens automáticas são controladas pelo backend.
+
 **Endpoints:**
 - `GET /api/alertas/`
 - `POST /api/alertas/`
@@ -180,13 +182,26 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | descricao    | Text        | -                     | Descrição do alerta                            | Obrigatório                    |
 | data_alerta  | DateTime    | -                     | Data e hora do alerta                          | Auto (auto_now_add)            |
 | status       | String      | -                     | Status (ativo, resolvido, ignorado)            | Obrigatório (default: ativo)   |
+| sensor       | Integer/null | **FK** → Sensor.id | Ponto de medição de origem | Deve pertencer ao equipamento |
+| origem       | String | - | manual, limite ou tendencia | Na criação pela API, somente manual |
+| evento_chave | String | - | Identidade da condição monitorada | Somente leitura na API |
+| dados_analise | JSON | - | Condição atual, pico e recuperação; ou indicadores preditivos | Somente leitura na API |
+| data_ultima_analise | DateTime/null | - | Última análise automática | Somente leitura |
+| analise_ia | Text | - | Explicação pelos recursos próprios de IA | Somente leitura neste CRUD |
+| ordem_servico_id | Integer/null | Relação derivada | O.S. que atende a ocorrência | Somente leitura; todas as origens |
 
-### Regras de Geração Automática (Preditivo)
+### Regras de geração por limite operacional
 
-Alertas são gerados via signal ao registrar novas telemetrias, baseados em % do limite configurado:
+Alertas são gerados ao registrar novas telemetrias, com percentuais configurados por sensor. Os valores abaixo são os padrões quando a configuração estiver ausente:
 - **CRÍTICO**: Valor >= 100% do limite.
 - **MÉDIO**: Valor >= 85% do limite.
 - **BAIXO**: Valor >= 70% do limite (Próximo à falha).
+
+No alerta por limite, `nivel` é o maior nível registrado no episódio; `dados_analise.nivel_atual` é a condição atual. Duas novas leituras normais consecutivas confirmam recuperação. Alterar uma leitura existente não reexecuta o ciclo de ingestão.
+
+Alertas automáticos não permitem editar sensor, equipamento, tipo, nível ou descrição pelo CRUD. A origem é imutável. Alertas vinculados à O.S., inclusive manuais, não podem trocar de sensor/equipamento. Para alertas de limite, a API permite `ativo → ignorado`; a resolução depende das leituras. Não é permitido voltar um alerta resolvido/ignorado para ativo pela API.
+
+Todas as ocorrências manuais e de limite ativas podem gerar O.S. corretiva, inclusive nível baixo, conforme política existente. O fluxo de tendência é independente e só cria O.S. quando recomenda intervenção.
 
 ---
 
@@ -201,6 +216,8 @@ Alertas são gerados via signal ao registrar novas telemetrias, baseados em % do
 - `DELETE /api/ordens-servico/{id}/`
 
 **Model:** `OrdemServico`
+
+`alerta_origem` e `sensor_origem` são campos controlados pelo backend no CRUD. A origem inicial permanece preservada; várias ocorrências podem apontar para a mesma ordem aberta via `Alerta.ordem_servico`. Concluir/cancelar uma ordem não resolve alertas, e recuperar uma leitura não encerra a ordem. Concluída e cancelada são estados terminais quanto ao status. A conclusão registra data e um único histórico.
 
 ### Campos do modelo
 

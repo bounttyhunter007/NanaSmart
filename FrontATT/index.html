@@ -1370,7 +1370,7 @@
             </div>
             <div class="field" :class="{hasError:formErrors.equipamento}">
               <label>Equipamento *</label>
-              <select v-model.number="fd.equipamento" :disabled="modal.editId && fd.origem !== 'manual'">
+              <select v-model.number="fd.equipamento" :disabled="modal.editId && (fd.origem !== 'manual' || fd.ordem_servico_id)">
                 <option :value="null">— Selecione —</option>
                 <option v-for="e in lists.equipamentos" :key="e.id" :value="e.id">{{ e.nome }} (#{{ e.id }})</option>
               </select>

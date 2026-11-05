@@ -1607,7 +1607,11 @@ createApp({
 
         let createdOsId = modal.editId;
         if (modal.editId) {
-          await api(cfg.endpoint + modal.editId + '/', { method: 'PUT', body: JSON.stringify(payload) });
+          const alertaAutomatico = modal.type === 'alerta' && fd.origem !== 'manual';
+          await api(cfg.endpoint + modal.editId + '/', {
+            method: alertaAutomatico ? 'PATCH' : 'PUT',
+            body: JSON.stringify(alertaAutomatico ? { status: payload.status } : payload),
+          });
         } else {
           const res = await api(cfg.endpoint, { method: 'POST', body: JSON.stringify(payload) });
           if ((modal.type === 'ordem' || modal.type === 'encerrar_os') && res) createdOsId = res.id;

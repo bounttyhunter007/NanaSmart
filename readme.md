@@ -107,6 +107,17 @@ python scripts/stress_telemetry.py --help
 
 ## Testes e verificações
 
+Para validar o projeto sem acessar o PostgreSQL de desenvolvimento, use o banco descartável configurado para testes:
+
+```powershell
+python manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests --settings=app.test_settings --noinput
+python manage.py check --settings=app.test_settings
+python manage.py makemigrations --check --dry-run --settings=app.test_settings
+node --check FrontATT/app.js
+```
+
+As migrações do banco são versionadas. Antes de atualizar uma base já existente, consulte o procedimento de compatibilidade na [especificação de alertas e O.S.](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md#atualização-do-banco-e-compatibilidade). A descoberta padrão de testes pode omitir `gemini_api.tests`; o comando acima o inclui explicitamente.
+
 ```powershell
 python manage.py check
 python manage.py test
@@ -142,6 +153,10 @@ Os perfis têm escopos diferentes. Administradores têm acesso global; gestores 
 - A análise de tendências pode recomendar intervenção, gerar alerta e criar ou atualizar a ordem preditiva correspondente.
 - Alterações de horímetro são comparadas com os planos ativos do equipamento para avaliar a necessidade de manutenção.
 - A prioridade das ordens considera a criticidade do equipamento, a gravidade informada e o risco de segurança. Alterações de criticidade mantêm histórico.
+
+Alertas por limite são separados por sensor, preservam o maior nível do episódio e registram a condição atual. Duas novas leituras normais consecutivas confirmam recuperação, sem encerrar a O.S. Recorrências preservam outro registro de alerta e podem reutilizar a ordem ainda aberta do mesmo sensor. Uma ordem concluída ou cancelada não é recriada automaticamente enquanto persistir a mesma ocorrência.
+
+Diagnóstico, regras RN-01 a RN-23, matriz de situações, cenários de validação e migrações estão documentados em [Fluxo de alertas e Ordens de Serviço](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md).
 
 Os detalhes de parâmetros e respostas estão documentados no Swagger e nos serializers da API.
 
