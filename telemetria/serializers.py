@@ -1,6 +1,7 @@
 import math
 
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Sensor, Telemetria, TrendConfig
 from accounts.validation import validate_equipment_resource, validate_sensor_resource
 
@@ -74,10 +75,14 @@ class TrendConfigSerializer(serializers.ModelSerializer):
                 'sensor': 'Somente administradores podem alterar a configuração global.'
             })
         validate_sensor_resource(user, sensor)
-        periodo = data.get('periodo_horas', getattr(self.instance, 'periodo_horas', 24))
-        leituras = data.get('num_leituras', getattr(self.instance, 'num_leituras', 50))
-        if periodo < 1:
-            raise serializers.ValidationError({'periodo_horas': 'Informe um período positivo.'})
-        if not 3 <= leituras <= 500:
-            raise serializers.ValidationError({'num_leituras': 'Use entre 3 e 500 leituras.'})
+        fields = ('periodo_horas', 'num_leituras', 'minimo_leituras', 'duracao_minima_minutos',
+                  'persistencia_minima', 'r2_minimo', 'direcao_alerta', 'sensibilidade', 'ativo')
+        candidate = TrendConfig(**{
+            field: data.get(field, getattr(self.instance, field, TrendConfig._meta.get_field(field).default))
+            for field in fields
+        })
+        try:
+            candidate.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         return data

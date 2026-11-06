@@ -11,6 +11,8 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 - Painéis com indicadores de manutenção, exportações CSV/Excel/PDF e integração opcional com Google Gemini.
 - Frontend em `FrontATT/`, incluindo dashboard, gestão operacional e chat de IA.
 
+As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
+
 ## Requisitos
 
 - Python 3.10 ou superior.

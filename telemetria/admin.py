@@ -19,5 +19,5 @@ class TelemetriaAdmin(admin.ModelAdmin):
 
 @admin.register(TrendConfig)
 class TrendConfigAdmin(admin.ModelAdmin):
-    list_display = ('sensor', 'periodo_horas', 'num_leituras', 'sensibilidade', 'ativo')
-    list_filter = ('sensibilidade', 'ativo')
+    list_display = ('sensor', 'periodo_horas', 'minimo_leituras', 'num_leituras', 'direcao_alerta', 'sensibilidade', 'ativo')
+    list_filter = ('direcao_alerta', 'sensibilidade', 'ativo')

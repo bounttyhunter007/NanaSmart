@@ -2,6 +2,8 @@
 
 Data: 04/11/2026. Escopo: monitoramento por limite, alertas manuais, integração com O.S. e preservação do fluxo preditivo existente.
 
+Atualização de 06/11/2026: as referências deste documento aos critérios preditivos anteriores são históricas. A revisão em [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) passa a definir persistência, desativação, sentidos anormais e geração de OS para toda anomalia confirmada. O fluxo de limites e alertas manuais descrito abaixo permanece vigente.
+
 Este documento registra a análise do código e a especificação implementada. A autorização posterior para corrigir e documentar substituiu a restrição inicial de executar apenas a análise. Não foram criados estados, entidades, telas, integrações ou notificações. Foi acrescentado um relacionamento opcional entre entidades existentes, justificado na seção G.
 
 ## A. Diagnóstico do sistema encontrado antes das correções

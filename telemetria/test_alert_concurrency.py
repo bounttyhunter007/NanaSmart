@@ -1,15 +1,18 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from threading import Barrier
 from unittest.mock import patch
 
 from django.db import close_old_connections
 from django.test import TransactionTestCase, skipUnlessDBFeature
+from django.utils import timezone
 
 from ativos.models import Empresa, Equipamento
 from alertas.models import Alerta
 from manutencao.models import OrdemServico
 from manutencao.services import PrioridadeOSService
 from .models import Sensor, Telemetria
+from .predictive_service import sync_sensor_trend
 
 
 @skipUnlessDBFeature('has_select_for_update')
@@ -53,3 +56,14 @@ class AlertConcurrencyTests(TransactionTestCase):
         )])[0]
         self.paralelo(lambda: PrioridadeOSService.criar_por_alerta(alerta))
         self.assertEqual(OrdemServico.objects.filter(alerta_origem=alerta).count(), 1)
+
+    def test_analise_simultanea_nao_duplica_alerta_e_os_preditiva(self):
+        readings = Telemetria.objects.bulk_create([
+            Telemetria(sensor=self.sensor, valor=value) for value in (10, 20, 30)
+        ])
+        start = timezone.now() - timedelta(hours=1)
+        for index, reading in enumerate(readings):
+            Telemetria.objects.filter(pk=reading.pk).update(timestamp=start + timedelta(minutes=index * 20))
+        self.paralelo(lambda: sync_sensor_trend(self.sensor.pk))
+        self.assertEqual(Alerta.objects.filter(origem='tendencia', status='ativo').count(), 1)
+        self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)

@@ -1959,7 +1959,9 @@
           
           <div v-if="equipModal.selectedSensor" style="display:flex; align-items:center; gap:8px; margin-left:auto;">
             <!-- Badge de Tendência -->
-            <div v-if="trendDataCache[equipModal.selectedSensor] && !trendDataCache[equipModal.selectedSensor].insufficient_data" 
+            <span v-if="trendDataCache[equipModal.selectedSensor]?.analysis_enabled === false">Análise desativada</span>
+            <span v-else-if="trendDataCache[equipModal.selectedSensor]?.insufficient_data">Aguardando leituras e duração mínimas</span>
+            <div v-else-if="trendDataCache[equipModal.selectedSensor]"
                  class="trend-risk-badge" :class="'risk-' + trendDataCache[equipModal.selectedSensor].risk_level"
                  style="font-size:12px; padding:4px 10px;">
               <span v-if="trendDataCache[equipModal.selectedSensor].direction === 'increasing'">📈</span>
@@ -2143,10 +2145,14 @@
       <div class="modal-body">
         <div v-if="trendConfigModal.loading" class="loading"><div class="spinner"></div></div>
         <form v-else @submit.prevent="saveTrendConfig">
+          <div v-if="trendConfigModal.error" class="field-error-global">{{ trendConfigModal.error }}</div>
           <div v-if="trendConfigModal.isGlobal" class="field-error-global" style="background:rgba(255,255,255,0.05); color:var(--t2); border-color:var(--edge); display:flex; align-items:center; gap:8px;">
-            <span>ℹ️</span> Este sensor está usando a configuração global padrão. Salvar este formulário criará uma configuração específica para ele.
+            <span>ℹ️</span> Este sensor herda a configuração padrão exibida abaixo. Salvar criará uma configuração específica para ele.
           </div>
           
+          <div class="field">
+            <label><input type="checkbox" v-model="trendConfigModal.form.ativo"> Análise de tendências ativa</label>
+          </div>
           <div class="field">
             <label>Período de Análise (Horas)</label>
             <input type="number" v-model.number="trendConfigModal.form.periodo_horas" required min="1" max="720">
@@ -2155,18 +2161,39 @@
           
           <div class="field">
             <label>Número de Leituras (Máximo)</label>
-            <select v-model.number="trendConfigModal.form.num_leituras" required>
-              <option value="20">20 Leituras</option>
-              <option value="50">50 Leituras</option>
-              <option value="100">100 Leituras</option>
-              <option value="200">200 Leituras</option>
+            <input type="number" v-model.number="trendConfigModal.form.num_leituras" required min="3" max="500">
+          </div>
+          <div class="field">
+            <label>Mínimo de leituras válidas</label>
+            <input type="number" v-model.number="trendConfigModal.form.minimo_leituras" required min="3" :max="trendConfigModal.form.num_leituras">
+          </div>
+          <div class="field">
+            <label>Duração mínima da amostra (minutos)</label>
+            <input type="number" v-model.number="trendConfigModal.form.duracao_minima_minutos" required min="1" :max="trendConfigModal.form.periodo_horas * 60">
+          </div>
+          <div class="field">
+            <label>Condição anormal</label>
+            <select v-model="trendConfigModal.form.direcao_alerta" required>
+              <option value="crescente">Aumento persistente</option>
+              <option value="decrescente">Redução persistente</option>
+              <option value="ambas">Aumento ou redução persistente</option>
             </select>
+            <div style="font-size:11px; color:var(--t4); margin-top:4px;">Cada condição confirmada gera um alerta e uma OS preditiva de inspeção. Reduções não têm projeção de limite inferior.</div>
+          </div>
+          <div class="field">
+            <label>Persistência mínima (0,5 a 1)</label>
+            <input type="number" v-model.number="trendConfigModal.form.persistencia_minima" required min="0.5" max="1" step="0.01">
+            <div style="font-size:11px; color:var(--t4); margin-top:4px;">0,7 exige pelo menos 70% dos intervalos no mesmo sentido.</div>
+          </div>
+          <div class="field">
+            <label>Consistência mínima da tendência — R² (0,5 a 1)</label>
+            <input type="number" v-model.number="trendConfigModal.form.r2_minimo" required min="0.5" max="1" step="0.01">
           </div>
           
           <div class="field">
             <label>Nível de Sensibilidade</label>
             <select v-model="trendConfigModal.form.sensibilidade" required>
-              <option value="alta">Alta (qualquer leve variação é detectada)</option>
+              <option value="alta">Alta (variações menores por hora)</option>
               <option value="media">Média (recomendado para a maioria)</option>
               <option value="baixa">Baixa (apenas grandes variações)</option>
             </select>

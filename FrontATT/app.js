@@ -76,8 +76,8 @@ createApp({
     const trendConfigModal = reactive({
       open: false, loading: false, saving: false,
       sensorId: '', equipamentoId: '',
-      form: { periodo_horas: 24, num_leituras: 50, sensibilidade: 'media' },
-      isGlobal: false
+      form: {},
+      isGlobal: false, error: ''
     });
     const leiturasTodayCount = ref(0);
     const leiturasTotalCount = ref(0);
@@ -1183,6 +1183,7 @@ createApp({
       trendConfigModal.loading = true;
       trendConfigModal.open = true;
       trendConfigModal.isGlobal = false;
+      trendConfigModal.error = '';
       
       try {
         // Fetch specific config
@@ -1190,19 +1191,16 @@ createApp({
         const results = normList(data);
         if (results && results.length > 0) {
           const config = results[0];
-          trendConfigModal.form = {
-            id: config.id,
-            periodo_horas: config.periodo_horas,
-            num_leituras: config.num_leituras,
-            sensibilidade: config.sensibilidade,
-          };
+          trendConfigModal.form = { ...config };
           trendConfigModal.isGlobal = false;
         } else {
-          // Defaults if no specific config
-          trendConfigModal.form = { periodo_horas: 24, num_leituras: 50, sensibilidade: 'media' };
+          // Usa a configuração efetiva, incluindo a global visível pelo backend.
+          const trend = await api(`/api/telemetria/tendencias/?sensor_id=${sensorId}`);
+          trendConfigModal.form = { ...trend.config_used };
           trendConfigModal.isGlobal = true;
         }
       } catch (err) {
+        trendConfigModal.open = false;
         toast('Erro ao carregar configuração de tendência', 'error');
       } finally {
         trendConfigModal.loading = false;
@@ -1211,13 +1209,19 @@ createApp({
 
     async function saveTrendConfig() {
       trendConfigModal.saving = true;
+      trendConfigModal.error = '';
       try {
         const payload = {
           sensor: trendConfigModal.sensorId,
           periodo_horas: trendConfigModal.form.periodo_horas,
           num_leituras: trendConfigModal.form.num_leituras,
+          minimo_leituras: trendConfigModal.form.minimo_leituras,
+          duracao_minima_minutos: trendConfigModal.form.duracao_minima_minutos,
+          persistencia_minima: trendConfigModal.form.persistencia_minima,
+          r2_minimo: trendConfigModal.form.r2_minimo,
+          direcao_alerta: trendConfigModal.form.direcao_alerta,
           sensibilidade: trendConfigModal.form.sensibilidade,
-          ativo: true
+          ativo: trendConfigModal.form.ativo
         };
         
         let url = '/api/telemetria/trend-config/';
@@ -1237,6 +1241,7 @@ createApp({
           fetchTrendForSensor(trendConfigModal.sensorId);
         }
       } catch (err) {
+        trendConfigModal.error = err.fieldErrors ? Object.entries(err.fieldErrors).map(([field, messages]) => `${field}: ${[].concat(messages).join(' ')}`).join(' · ') : 'Não foi possível salvar. Confira os critérios e tente novamente.';
         toast('Erro ao salvar configuração', 'error');
       } finally {
         trendConfigModal.saving = false;

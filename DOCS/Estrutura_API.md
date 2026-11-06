@@ -157,6 +157,16 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 
 ---
 
+## Tendências de sensores
+
+Configurações: CRUD `/api/telemetria/trend-config/`. Consulta sem gravações: `GET /api/telemetria/tendencias/?sensor_id=1` ou lista com `?all=true`. A criação dos alertas e OS ocorre na ingestão ou por `python manage.py analisar_tendencias`.
+
+`TrendConfig` inclui `ativo`, `periodo_horas`, `num_leituras` (máximo), `minimo_leituras`, `duracao_minima_minutos`, `sensibilidade`, `persistencia_minima`, `r2_minimo` e `direcao_alerta` (`crescente`, `decrescente`, `ambas`). A configuração específica prevalece sobre a global, inclusive se inativa. Somente administrador gerencia a global; o acesso aos sensores respeita a empresa e o perfil existentes.
+
+A resposta de análise inclui `analysis_enabled`, `insufficient_data`, `data_quality`, `direction`, `is_anomalous`, `r_squared`, `persistence_ratio`, `sample_duration_minutes`, `config_used`, `readings_summary`, `projected_breach_hours`, `intervention_recommended`, `active_alert_id` e `predictive_work_order`. Toda anomalia confirmada abre uma OS preditiva de inspeção por episódio; reduções não têm projeção de limite inferior.
+
+Defaults, validações, exemplo JSON e critérios de aceitação: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md), revisão de 06/11/2026.
+
 ## 🚨 Alertas (CRUD)
 
 Especificação do ciclo de vida: [Alertas e Ordens de Serviço](FLUXO_ALERTAS_ORDENS_SERVICO.md). Novos alertas pela API têm origem `manual`; origens automáticas são controladas pelo backend.

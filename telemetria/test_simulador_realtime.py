@@ -3,7 +3,7 @@ import random
 from unittest.mock import patch
 
 from django.db import OperationalError
-from django.test import TestCase
+from django.test import TransactionTestCase
 
 from accounts.models import Empresa
 from ativos.models import Equipamento
@@ -12,7 +12,9 @@ from telemetria.models import Sensor, Telemetria
 from scripts import simulador_realtime as sim
 
 
-class SimulatorTests(TestCase):
+class SimulatorTests(TransactionTestCase):
+    # O simulador fecha conexões como um processo real. TestCase manteria uma
+    # transação externa aberta nessa conexão, invalidando os testes no PostgreSQL.
     def setUp(self):
         empresa = Empresa.objects.create(nome='Simulação', cnpj='SIM', email='sim@example.com')
         self.equipamento = Equipamento.objects.create(empresa=empresa, nome='Motor', numero_serie='SIM')

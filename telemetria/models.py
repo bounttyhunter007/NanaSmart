@@ -107,6 +107,15 @@ class TrendConfig(models.Model):
         default=50,
         help_text="Número máximo de leituras para análise"
     )
+    minimo_leituras = models.IntegerField(default=3, help_text='Mínimo de leituras válidas com horários distintos.')
+    duracao_minima_minutos = models.IntegerField(default=30, help_text='Duração mínima coberta pela amostra.')
+    persistencia_minima = models.FloatField(default=0.7, help_text='Fração mínima de intervalos no sentido da tendência (0 a 1).')
+    r2_minimo = models.FloatField(default=0.8, help_text='Qualidade mínima do ajuste linear (0 a 1).')
+    direcao_alerta = models.CharField(
+        max_length=20, default='crescente',
+        choices=(('crescente', 'Aumento'), ('decrescente', 'Redução'), ('ambas', 'Ambas')),
+        help_text='Sentidos considerados anormais para este sensor.',
+    )
     sensibilidade = models.CharField(
         max_length=20,
         choices=SENSIBILIDADE_CHOICES,
@@ -123,6 +132,17 @@ class TrendConfig(models.Model):
             raise ValidationError({'num_leituras': 'São necessárias pelo menos três leituras.'})
         if self.num_leituras > 500:
             raise ValidationError({'num_leituras': 'O limite configurável é de 500 leituras.'})
+        if not 3 <= self.minimo_leituras <= self.num_leituras:
+            raise ValidationError({'minimo_leituras': 'Use de 3 até o máximo de leituras configurado.'})
+        if not 1 <= self.duracao_minima_minutos <= self.periodo_horas * 60:
+            raise ValidationError({'duracao_minima_minutos': 'Use de 1 minuto até a duração da janela.'})
+        for field in ('persistencia_minima', 'r2_minimo'):
+            if not 0.5 <= getattr(self, field) <= 1:
+                raise ValidationError({field: 'Use um valor entre 0,5 e 1.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Configuração de Tendência"
