@@ -96,8 +96,6 @@ createApp({
       equipamentos: { search: '', status: '', empresa: '', setor: '' },
       alertas: { search: '', nivel: '', status: '' },
       ordens: { search: '', status: '', prioridade: '', tipo_os: '' },
-      telemetria_sensores: { search: '', tipo: '', ativo: '' },
-      telemetria_leituras: { valor_min: '', valor_max: '', timestamp_de: '', timestamp_ate: '' },
       historico: { search: '', data_de: '', data_ate: '', custo_min: '', custo_max: '' },
       empresas: { search: '' },
       usuarios: { search: '' },
@@ -933,7 +931,7 @@ createApp({
       equipamentos: () => fetchEquipamentos(),
       alertas: () => fetchAlertas(),
       ordens: () => fetchOrdens(),
-      telemetria: () => fetchTelemetria(),
+      telemetria: () => enterTelemetry(),
       historico: () => fetchHistorico(),
       empresas: () => fetchEmpresas(),
       usuarios: () => fetchUsuarios(),
@@ -1130,9 +1128,9 @@ createApp({
 
     async function fetchTrendAlerts() {
       try {
-        const data = await api('/api/telemetria/tendencias/');
+        const data = await api('/api/telemetria/tendencias/' + (globalEmpresa.value ? '?empresa_id=' + globalEmpresa.value : ''));
         if (Array.isArray(data)) {
-          trendAlerts.value = data;
+          trendAlerts.value = data.filter(trend => trend.is_anomalous);
         }
       } catch (err) {
         console.error('Erro ao buscar tendências:', err);
@@ -1177,7 +1175,9 @@ createApp({
       return null;
     }
 
+    let trendConfigRequest = 0;
     async function openTrendConfig(sensorId, equipamentoId) {
+      const request = ++trendConfigRequest;
       trendConfigModal.sensorId = sensorId;
       trendConfigModal.equipamentoId = equipamentoId;
       trendConfigModal.loading = true;
@@ -1187,23 +1187,28 @@ createApp({
       
       try {
         // Fetch specific config
-        const data = await api(`/api/telemetria/trend-config/?sensor=${sensorId}`);
+        const data = await api(sensorId ? `/api/telemetria/trend-config/?sensor=${sensorId}` : '/api/telemetria/trend-config/?sensor__isnull=true');
+        if (request !== trendConfigRequest) return;
         const results = normList(data);
         if (results && results.length > 0) {
           const config = results[0];
           trendConfigModal.form = { ...config };
           trendConfigModal.isGlobal = false;
+        } else if (!sensorId) {
+          trendConfigModal.form = { ativo:true, periodo_horas:24, num_leituras:50, minimo_leituras:3, duracao_minima_minutos:30, persistencia_minima:0.7, r2_minimo:0.8, direcao_alerta:'crescente', sensibilidade:'media' };
         } else {
           // Usa a configuração efetiva, incluindo a global visível pelo backend.
           const trend = await api(`/api/telemetria/tendencias/?sensor_id=${sensorId}`);
+          if (request !== trendConfigRequest) return;
           trendConfigModal.form = { ...trend.config_used };
           trendConfigModal.isGlobal = true;
         }
       } catch (err) {
+        if (request !== trendConfigRequest) return;
         trendConfigModal.open = false;
         toast('Erro ao carregar configuração de tendência', 'error');
       } finally {
-        trendConfigModal.loading = false;
+        if (request === trendConfigRequest) trendConfigModal.loading = false;
       }
     }
 
@@ -1236,6 +1241,7 @@ createApp({
         toast('Configuração de tendência salva', 'success');
         trendConfigModal.open = false;
         
+        if (view.value === 'telemetria') await fetchTelemetria();
         // Refresh trend data if open
         if (equipModal.open) {
           fetchTrendForSensor(trendConfigModal.sensorId);
@@ -1305,31 +1311,168 @@ createApp({
       });
     }
 
-    async function fetchTelemetria() {
-      await withLoading(async () => {
-        const ps = new URLSearchParams();
-        if (filters.telemetria_sensores.search) ps.set('search', filters.telemetria_sensores.search);
-        if (filters.telemetria_sensores.tipo) ps.set('tipo', filters.telemetria_sensores.tipo);
-        if (filters.telemetria_sensores.ativo !== '') ps.set('ativo', filters.telemetria_sensores.ativo);
-        if (globalEmpresa.value) ps.set('equipamento__empresa', globalEmpresa.value);
-
-        const pl = new URLSearchParams();
-        if (filters.telemetria_leituras.valor_min) pl.set('valor_min', filters.telemetria_leituras.valor_min);
-        if (filters.telemetria_leituras.valor_max) pl.set('valor_max', filters.telemetria_leituras.valor_max);
-        if (filters.telemetria_leituras.timestamp_de) pl.set('timestamp_de', filters.telemetria_leituras.timestamp_de);
-        if (filters.telemetria_leituras.timestamp_ate) pl.set('timestamp_ate', filters.telemetria_leituras.timestamp_ate);
-
-        const [s, l] = await Promise.all([
-          api('/api/telemetria/sensores/?' + ps),
-          api('/api/telemetria/leituras/?' + pl + (pl.toString() ? '&' : '') + 'ordering=-timestamp'),
+    const telemetry = reactive({
+      tab: 'leituras', busy: false, error: '', updatedAt: null,
+      equipment: '', sensor: '', search: '', tipo: '', ativo: '', condition: '',
+      min: '', max: '', from: '', to: '', size: 20, offset: 0,
+      rows: [], count: 0, trends: [], equipments: [], sensors: [], optionsError: '',
+      detail: null,
+    });
+    let telemetryRequest = 0;
+    let telemetryOptionsRequest = 0;
+    const telemetrySensors = computed(() => telemetry.sensors.filter(sensor =>
+      !telemetry.equipment || Number(sensor.equipamento) === Number(telemetry.equipment)));
+    function trendCondition(trend) {
+      if (!trend.analysis_enabled) return 'disabled';
+      if (trend.insufficient_data) return 'insufficient';
+      return trend.is_anomalous ? 'anomalous' : 'normal';
+    }
+    function trendConditionLabel(trend) {
+      return { disabled: 'Análise desativada', insufficient: 'Aguardando dados',
+        anomalous: 'Anomalia confirmada', normal: 'Sem tendência anormal' }[trendCondition(trend)];
+    }
+    function trendDirection(trend) {
+      if (['disabled', 'insufficient'].includes(trendCondition(trend))) return '—';
+      return { increasing: 'Crescente', decreasing: 'Decrescente', stable: 'Estável' }[trend.direction] || '—';
+    }
+    const scopedTrends = computed(() => telemetry.trends.filter(trend =>
+      (!telemetry.equipment || Number(trend.sensor_info.equipamento_id) === Number(telemetry.equipment)) &&
+      (!telemetry.sensor || trend.sensor_id === Number(telemetry.sensor))));
+    const filteredTrends = computed(() => scopedTrends.value.filter(trend =>
+      !telemetry.condition || trendCondition(trend) === telemetry.condition));
+    const telemetryCount = computed(() => telemetry.tab === 'tendencias' ? filteredTrends.value.length : telemetry.count);
+    const telemetryRows = computed(() => telemetry.tab === 'tendencias'
+      ? filteredTrends.value.slice(telemetry.offset, telemetry.offset + telemetry.size) : telemetry.rows);
+    const telemetrySummary = computed(() => ({
+      anomalous: scopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
+      normal: scopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
+      insufficient: scopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
+      disabled: scopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
+    }));
+    const telemetryChart = computed(() => {
+      const rows = telemetry.detail?.readings_summary || [];
+      if (!rows.length) return { points: '', min: 0, max: 0, from: '', to: '' };
+      const values = rows.map(row => row.valor);
+      const min = Math.min(...values), max = Math.max(...values);
+      const first = Date.parse(rows[0].timestamp), last = Date.parse(rows[rows.length - 1].timestamp);
+      return { min, max, from: rows[0].timestamp, to: rows[rows.length - 1].timestamp,
+        points: rows.map(row => `${30 + (Date.parse(row.timestamp) - first) / (last - first || 1) * 640},${140 - (row.valor - min) / (max - min || 1) * 110}`).join(' ') };
+    });
+    async function telemetryAll(path) {
+      const result = [];
+      while (path) {
+        const data = await api(path.replace(/^https?:\/\/[^/]+/, ''));
+        if (!data) throw new Error('Sessão indisponível. Entre novamente.');
+        result.push(...normList(data));
+        path = data.next;
+      }
+      return result;
+    }
+    async function loadTelemetryOptions() {
+      const request = ++telemetryOptionsRequest;
+      const company = globalEmpresa.value;
+      telemetry.optionsError = '';
+      try {
+        const [equipments, sensors] = await Promise.all([
+          telemetryAll('/api/equipamentos/?limit=100' + (company ? '&empresa=' + company : '')),
+          telemetryAll('/api/telemetria/sensores/?limit=100' + (company ? '&equipamento__empresa=' + company : '')),
         ]);
-        let sItems = normList(s);
-        let lItems = normList(l);
-        lists.sensores = sItems;
-        Object.assign(pages.sensores, normPages(s));
-        lists.leituras = lItems;
-        Object.assign(pages.leituras, normPages(l));
-      });
+        if (request !== telemetryOptionsRequest || company !== globalEmpresa.value) return;
+        telemetry.equipments = equipments;
+        telemetry.sensors = sensors;
+      } catch {
+        if (request === telemetryOptionsRequest) telemetry.optionsError = 'Não foi possível carregar os filtros de equipamentos e sensores.';
+      }
+    }
+    async function fetchTelemetria() {
+      const request = ++telemetryRequest;
+      telemetry.busy = true;
+      telemetry.error = '';
+      const tab = telemetry.tab;
+      try {
+        if (tab === 'leituras') {
+          if (telemetry.min !== '' && telemetry.max !== '' && Number(telemetry.min) > Number(telemetry.max))
+            throw new Error('O valor mínimo deve ser menor ou igual ao máximo.');
+          if (telemetry.from && telemetry.to && telemetry.from > telemetry.to)
+            throw new Error('O início do período deve ser anterior ao fim.');
+        }
+        const query = new URLSearchParams({ limit: telemetry.size, offset: telemetry.offset });
+        let endpoint;
+        if (tab === 'tendencias') {
+          endpoint = '/api/telemetria/tendencias/?all=true';
+          if (globalEmpresa.value) endpoint += '&empresa_id=' + globalEmpresa.value;
+        } else if (tab === 'sensores') {
+          endpoint = '/api/telemetria/sensores/';
+          if (globalEmpresa.value) query.set('equipamento__empresa', globalEmpresa.value);
+          if (telemetry.equipment) query.set('equipamento', telemetry.equipment);
+          if (telemetry.search.trim()) query.set('search', telemetry.search.trim());
+          if (telemetry.tipo) query.set('tipo', telemetry.tipo);
+          if (telemetry.ativo !== '') query.set('ativo', telemetry.ativo);
+        } else {
+          endpoint = '/api/telemetria/leituras/';
+          if (globalEmpresa.value) query.set('sensor__equipamento__empresa', globalEmpresa.value);
+          if (telemetry.equipment) query.set('sensor__equipamento', telemetry.equipment);
+          if (telemetry.sensor) query.set('sensor', telemetry.sensor);
+          if (telemetry.min !== '') query.set('valor_min', telemetry.min);
+          if (telemetry.max !== '') query.set('valor_max', telemetry.max);
+          if (telemetry.from) query.set('timestamp_de', new Date(telemetry.from).toISOString());
+          if (telemetry.to) query.set('timestamp_ate', new Date(telemetry.to).toISOString());
+        }
+        const data = await api(endpoint + (tab === 'tendencias' ? '' : '?' + query));
+        if (!data) throw new Error('Não foi possível carregar a telemetria. Entre novamente.');
+        if (request !== telemetryRequest) return;
+        if (tab === 'tendencias') {
+          if (!Array.isArray(data)) throw new Error('Resposta de tendências indisponível. Tente atualizar.');
+          telemetry.trends = data;
+          if (telemetry.offset >= filteredTrends.value.length) telemetry.offset = 0;
+          if (telemetry.detail) telemetry.detail = data.find(t => t.sensor_id === telemetry.detail.sensor_id) || null;
+        } else {
+          telemetry.rows = normList(data);
+          telemetry.count = data.count ?? telemetry.rows.length;
+          if (telemetry.count > 0 && telemetry.offset >= telemetry.count) {
+            telemetry.offset = Math.floor((telemetry.count - 1) / telemetry.size) * telemetry.size;
+            await fetchTelemetria(); return;
+          }
+        }
+        telemetry.updatedAt = new Date().toISOString();
+      } catch (err) {
+        if (request === telemetryRequest) {
+          telemetry.error = err.fieldErrors ? Object.values(err.fieldErrors).flat().join(' ') : err.message || 'Erro ao carregar telemetria.';
+          telemetry.rows = []; telemetry.count = 0; telemetry.trends = []; telemetry.detail = null;
+        }
+      } finally {
+        if (request === telemetryRequest) telemetry.busy = false;
+      }
+    }
+    async function enterTelemetry() {
+      await Promise.all([loadTelemetryOptions(), fetchTelemetria()]);
+    }
+    function setTelemetryTab(tab) {
+      if (telemetry.tab === tab) return;
+      telemetry.tab = tab; telemetry.offset = 0; telemetry.rows = []; telemetry.count = 0;
+      telemetry.detail = null;
+      fetchTelemetria();
+    }
+    function applyTelemetryFilters(equipmentChanged = false) {
+      telemetry.offset = 0; telemetry.detail = null;
+      if (equipmentChanged) telemetry.sensor = '';
+      if (telemetry.tab !== 'tendencias') fetchTelemetria();
+    }
+    function clearTelemetryFilters() {
+      Object.assign(telemetry, { equipment: '', sensor: '', search: '', tipo: '', ativo: '',
+        condition: '', min: '', max: '', from: '', to: '', offset: 0 });
+      fetchTelemetria();
+    }
+    function changeTelemetryPage(delta) {
+      telemetry.offset = Math.max(0, telemetry.offset + delta * telemetry.size);
+      if (telemetry.tab !== 'tendencias') fetchTelemetria();
+    }
+    function sensorTipoLabel(tipo) { return {temperatura:'Temperatura', vibracao:'Vibração', pressao:'Pressão', corrente:'Corrente elétrica', umidade:'Umidade'}[tipo] || tipo; }
+    function openTelemetryTrend(trend) { telemetry.detail = trend; nextTick(() => document.getElementById('telemetry-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
+    function showTelemetryTrends(equipment = '', sensor = '') {
+      telemetry.tab = 'tendencias'; telemetry.equipment = equipment; telemetry.sensor = sensor;
+      telemetry.condition = ''; telemetry.offset = 0; telemetry.detail = null;
+      view.value = 'telemetria'; closeEquipModal(); enterTelemetry();
     }
 
     async function fetchHistorico() {
@@ -2084,7 +2227,7 @@ createApp({
 
     async function pollEquipamentoReadings() {
       if (!equipModal.open || !equipModal.selectedSensor) return;
-      await fetchEquipamentoReadings(equipModal.selectedSensor, { silent: true });
+      await Promise.all([fetchEquipamentoReadings(equipModal.selectedSensor, { silent: true }), fetchTrendForSensor(equipModal.selectedSensor)]);
       if (equipModal.open && equipModal.selectedSensor) {
         equipModalPollTimer = window.setTimeout(pollEquipamentoReadings, 5000);
       }
@@ -2143,7 +2286,7 @@ createApp({
 
     watch(() => equipModal.selectedSensor, async (sensorId) => {
       if (sensorId && equipModal.open) {
-        await fetchEquipamentoReadings(sensorId);
+        await Promise.all([fetchEquipamentoReadings(sensorId), fetchTrendForSensor(sensorId)]);
         stopEquipModalPolling();
         pollEquipamentoReadings();
       }
@@ -2254,6 +2397,9 @@ createApp({
     });
 
     function onGlobalEmpresaChange() {
+      if (view.value === 'telemetria') {
+        Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, detail: null, rows: [], trends: [], equipments: [], sensors: [] });
+      }
       // Recarrega a aba atual ao mudar o filtro global
       // Também recarrega o dashboard se estiver nele
       const currentView = view.value;
@@ -2269,7 +2415,9 @@ createApp({
       // Adicionar listener para fechar janelas com ESC
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-          if (modal.open) modal.open = false;
+          if (trendConfigModal.open) trendConfigModal.open = false;
+          else if (telemetry.detail && view.value === 'telemetria') telemetry.detail = null;
+          else if (modal.open) modal.open = false;
           else if (equipModal.open) closeEquipModal();
           else if (chatOpen.value) chatOpen.value = false;
         }
@@ -2344,14 +2492,6 @@ createApp({
                 alertCount.value = lists.alertas.length;
                 dashAlerts.value = lists.alertas.slice(0, 5);
               }
-            }
-            else if (view.value === 'telemetria') {
-              // Atualiza a tabela de leituras sem disparar a tela de loading global
-              const pl = new URLSearchParams();
-              if (filters.telemetria_leituras.valor_min) pl.set('valor_min', filters.telemetria_leituras.valor_min);
-              if (filters.telemetria_leituras.valor_max) pl.set('valor_max', filters.telemetria_leituras.valor_max);
-              const res = await api('/api/telemetria/leituras/?' + pl + (pl.toString() ? '&' : '') + 'ordering=-timestamp');
-              if (res) lists.leituras = normList(res);
             }
             else if (view.value === 'alertas') {
               // Atualização silenciosa — reutiliza os filtros ativos do usuário
@@ -2627,6 +2767,9 @@ createApp({
       modal, fd, formErrors, globalEmpresa,
       isAdmin, isAdminOrGestor, isTecnico, userInitial, viewTitle, osSemTecnicoCount,
       doLogin, logout, navigate, debouncedFetch,
+      telemetry, telemetrySensors, telemetryCount, telemetryRows, telemetrySummary, telemetryChart,
+      sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,
+      clearTelemetryFilters, changeTelemetryPage, openTelemetryTrend, showTelemetryTrends, enterTelemetry,
       fetchEquipamentos, fetchAlertas, fetchOrdens, fetchTelemetria,
       fetchHistorico, fetchEmpresas, fetchUsuarios, fetchLocalizacoes, fetchPrompts, fetchPage, fetchDashboard,
       openModal, editItem, saveItem, deleteItem, exportData, assumirOS, iniciarAtendimento, openEncerrarOS, assumirOSFromAlerta,

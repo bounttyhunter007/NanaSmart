@@ -349,13 +349,13 @@
 
           <!-- Painel de Tendências -->
           <div v-if="!isTecnico && trendAlerts.length > 0" class="dash-section-label" style="margin-top:24px; color:var(--warn)">
-            <span style="font-size:16px; margin-right:6px">⚠️</span> Tendências de Falha (Risco Preditivo)
+            <span style="font-size:16px; margin-right:6px">⚠️</span> Tendências anormais confirmadas
           </div>
           <div v-if="!isTecnico && trendAlerts.length > 0" class="dash-grid" style="margin-bottom:20px">
             <div v-for="trend in trendAlerts" :key="trend.sensor_id" 
                  class="chart-card trend-card kpi-clickable" 
                  :class="'risk-' + trend.risk_level"
-                 @click="openEquipamentoDetails(trend.sensor_info.equipamento_id)">
+                 @click="showTelemetryTrends(trend.sensor_info.equipamento_id,trend.sensor_id)">
               <div class="trend-card-header">
                 <div class="trend-sensor-name">{{ trend.sensor_info.nome }} ({{ trend.sensor_info.tipo_display }})</div>
                 <div class="trend-risk-badge">{{ trend.risk_level.toUpperCase() }}</div>
@@ -365,7 +365,7 @@
                 <div class="trend-direction">
                   <span class="trend-dir-icon" v-if="trend.direction === 'increasing'">📈</span>
                   <span class="trend-dir-icon" v-if="trend.direction === 'decreasing'">📉</span>
-                  Tendência {{ trend.direction === 'increasing' ? 'Crescente' : 'Decrescente' }}
+                  Tendência {{ trendDirection(trend) }}
                 </div>
                 <div class="trend-projection" v-if="trend.projected_breach_hours !== null">
                   <span v-if="trend.projected_breach_hours === 0" style="color:var(--danger); font-weight:600">Limite ultrapassado!</span>
@@ -954,110 +954,67 @@
           </div>
         </div>
 
-        <!-- ══════════ TELEMETRIA ══════════ -->
-        <div v-if="view==='telemetria'">
-          <div class="tele-grid" style="margin-bottom:20px">
-            <div>
-              <div class="section-header">
-                <div class="section-title">Sensores <span class="live-dot" style="margin-left:8px"></span></div>
-                <button v-if="isAdminOrGestor" class="btn btn-primary btn-sm" @click="openModal('sensor')">+ Sensor</button>
-              </div>
-              <div class="filter-bar" style="margin-bottom:12px; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid var(--border)">
-                <input class="filter-input" style="flex:1" v-model="filters.telemetria_sensores.search" placeholder="Buscar..." @input="debouncedFetch('ts',fetchTelemetria)" />
-                <select class="filter-select" style="flex:1" v-model="filters.telemetria_sensores.tipo" @change="fetchTelemetria">
-                  <option value="">Tipo (Todos)</option>
-                  <option value="temperatura">Temperatura</option>
-                  <option value="vibracao">Vibração</option>
-                  <option value="pressao">Pressão</option>
-                  <option value="corrente">Corrente Elétrica</option>
-                  <option value="umidade">Umidade</option>
-                </select>
-                <select class="filter-select" style="flex:1" v-model="filters.telemetria_sensores.ativo" @change="fetchTelemetria">
-                  <option value="">Status (Todos)</option>
-                  <option value="true">Ativo</option>
-                  <option value="false">Inativo</option>
-                </select>
-              </div>
-              <div v-if="loading" class="loading"><div class="spinner"></div></div>
-              <div v-else-if="lists.sensores.length===0" class="empty"><div class="empty-icon">⬡</div>Sem sensores</div>
-              
-              <!-- SENSOR CARDS GRID -->
-              <div v-else class="sensor-cards-grid">
-                <div v-for="s in lists.sensores" :key="s.id" class="sensor-card">
-                  <div class="sensor-card-header">
-                    <div class="sensor-card-title">
-                      <span class="badge-dot" :style="{background: s.ativo ? 'var(--mint)' : 'var(--t4)'}"></span>
-                      {{ s.nome }}
-                    </div>
-                    <div class="sensor-card-type">{{ s.tipo }}</div>
-                  </div>
-                  <div class="sensor-card-equip">⚙ {{ eqNome(s.equipamento) }}</div>
-                  <div style="font-size:11px;color:var(--t3);margin-top:2px">{{ empresaNomeSensor(s) }}</div>
-                  
-                  <div class="sensor-card-footer">
-                    <span style="font-size:10px;color:var(--t4)">Unid: {{ s.unidade_medida || '—' }}</span>
-                    <div class="action-btns">
-                      <button class="btn btn-ghost btn-sm" @click="editItem('sensor',s)">Editar</button>
-                      <button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('telemetria/sensores',s.id)">✕</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="pagination">
-                <button class="page-btn" :disabled="!pages.sensores.prev" @click="fetchPage('sensores',pages.sensores.prev)">← Anterior</button>
-                <span class="page-info">{{ lists.sensores.length }} sensores</span>
-                <button class="page-btn" :disabled="!pages.sensores.next" @click="fetchPage('sensores',pages.sensores.next)">Próxima →</button>
-              </div>
+        <!-- Telemetria: uma tarefa por aba, filtros e paginação independentes. -->
+        <section v-if="view==='telemetria'" class="telemetry-workspace">
+          <header class="telemetry-heading">
+            <div><div class="telemetry-eyebrow">MONITORAMENTO DOS ATIVOS</div><h1>Telemetria</h1><p>Consulte as medições, organize os sensores e acompanhe condições anormais.</p></div>
+            <div class="telemetry-actions">
+              <button v-if="isAdminOrGestor && telemetry.tab !== 'tendencias'" class="btn btn-primary" @click="openModal(telemetry.tab === 'sensores' ? 'sensor' : 'leitura')">{{ telemetry.tab === 'sensores' ? '+ Cadastrar sensor' : '+ Registrar leitura' }}</button>
+              <button class="btn btn-ghost" :disabled="telemetry.busy" @click="enterTelemetry">↻ Atualizar</button>
             </div>
-            <div>
-              <div class="section-header">
-                <div class="section-title">Últimas Leituras</div>
-                <div style="display:flex;gap:8px">
-                  <button v-if="isAdminOrGestor" class="btn btn-primary btn-sm" @click="openModal('leitura')">+ Leitura</button>
-                  <button class="btn btn-ghost btn-sm" @click="fetchTelemetria">↺ Atualizar</button>
-                </div>
-              </div>
-              <div class="filter-bar" style="margin-bottom:12px; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid var(--border)">
-                <label style="font-size:11px;color:var(--t4);white-space:nowrap">Valor:</label>
-                <input type="number" class="filter-input" style="flex:1" v-model="filters.telemetria_leituras.valor_min" placeholder="Mínimo" @input="debouncedFetch('tlmin',fetchTelemetria)" />
-                <span style="color:var(--t4)">-</span>
-                <input type="number" class="filter-input" style="flex:1" v-model="filters.telemetria_leituras.valor_max" placeholder="Máximo" @input="debouncedFetch('tlmax',fetchTelemetria)" />
-                <span style="color:var(--t4);margin-left:12px">|</span>
-                <label style="font-size:11px;color:var(--t4);white-space:nowrap;margin-left:8px">Período:</label>
-                <input type="datetime-local" class="filter-input" style="flex:1" v-model="filters.telemetria_leituras.timestamp_de" @change="fetchTelemetria" />
-                <span style="color:var(--t4)">até</span>
-                <input type="datetime-local" class="filter-input" style="flex:1" v-model="filters.telemetria_leituras.timestamp_ate" @change="fetchTelemetria" />
-              </div>
-              <div class="table-wrap">
-                <div v-if="loading" class="loading"><div class="spinner"></div></div>
-                <div v-else-if="lists.leituras.length===0" class="empty"><div class="empty-icon">⬡</div>Sem leituras</div>
-                <table v-else>
-                  <thead><tr><th>ID</th><th>Equipamento</th><th>Sensor</th><th>Valor</th><th>Data/Hora</th><th>Ações</th></tr></thead>
-                  <tbody>
-                    <tr v-for="l in lists.leituras.slice(0,30)" :key="l.id">
-                      <td style="font-family:var(--mono);color:var(--t4)">#{{ l.id }}</td>
-                      <td style="font-size:11px; font-weight:600; color:var(--t1)">{{ sensorEquipNome(l.sensor) }}</td>
-                      <td style="font-size:11px; color:var(--t3)">{{ sensorNome(l.sensor) }}</td>
-                      <td style="font-weight:700;color:var(--acid);font-family:var(--mono)">{{ l.valor }}</td>
-                      <td style="font-family:var(--mono);font-size:10px;color:var(--t4)">{{ fmtDate(l.timestamp) }}</td>
-                      <td><div class="action-btns">
-                        <button class="btn btn-ghost btn-sm" @click="editItem('leitura',l)">Editar</button>
-                        <button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('telemetria/leituras',l.id)">✕</button>
-                      </div></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="pagination">
-                <button class="page-btn" :disabled="!pages.leituras.prev" @click="fetchPage('leituras',pages.leituras.prev)">← Anterior</button>
-                <span class="page-info">{{ lists.leituras.length }} leituras</span>
-                <button class="page-btn" :disabled="!pages.leituras.next" @click="fetchPage('leituras',pages.leituras.next)">Próxima →</button>
-              </div>
-            </div>
+          </header>
+          <nav class="telemetry-tabs" aria-label="Áreas da telemetria">
+            <button v-for="tab in [{id:'leituras',label:'Leituras',hint:'Histórico de medições'},{id:'sensores',label:'Sensores',hint:'Cadastro e limites'},{id:'tendencias',label:'Tendências',hint:'Condições e inspeções'}]" :key="tab.id" :aria-pressed="telemetry.tab === tab.id" :class="{active:telemetry.tab === tab.id}" @click="setTelemetryTab(tab.id)"><strong>{{ tab.label }}</strong><span>{{ tab.hint }}</span></button>
+          </nav>
+          <div v-if="telemetry.tab === 'tendencias'" class="telemetry-summary" aria-label="Resumo de tendências no contexto selecionado">
+            <button v-for="card in [{id:'anomalous',label:'Anomalias confirmadas'},{id:'normal',label:'Sem tendência anormal'},{id:'insufficient',label:'Aguardando dados'},{id:'disabled',label:'Análise desativada'}]" :key="card.id" :class="['telemetry-stat', card.id, {selected:telemetry.condition === card.id}]" :aria-pressed="telemetry.condition === card.id" @click="telemetry.condition = telemetry.condition === card.id ? '' : card.id; applyTelemetryFilters()"><span>{{ card.label }}</span><strong>{{ telemetry.busy || telemetry.error ? '—' : telemetrySummary[card.id] }}</strong><small>Filtrar sensores →</small></button>
           </div>
-        </div>
-
+          <div class="telemetry-panel">
+            <div class="telemetry-section-head"><div><h2>{{ {leituras:'Histórico de leituras',sensores:'Sensores cadastrados',tendencias:'Análise de tendências'}[telemetry.tab] }}</h2><p>{{ telemetry.tab === 'tendencias' ? 'Sensores ativos. Uma consulta não cria alertas ou ordens; a análise automática acontece na ingestão.' : telemetry.tab === 'sensores' ? 'Gerencie os dispositivos e seus limites operacionais.' : 'Medições mais recentes primeiro. Use os filtros para investigar um equipamento ou sensor.' }}</p></div><button v-if="telemetry.tab === 'tendencias' && isAdmin" class="btn btn-ghost btn-sm" @click="openTrendConfig(null, null)">Configuração global</button></div>
+            <form class="telemetry-filters" @submit.prevent="applyTelemetryFilters()">
+              <label>Equipamento<select class="filter-select" v-model="telemetry.equipment" @change="applyTelemetryFilters(true)"><option value="">Todos os equipamentos</option><option v-for="e in telemetry.equipments" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
+              <label v-if="telemetry.tab !== 'sensores'">Sensor<select class="filter-select" v-model="telemetry.sensor" @change="applyTelemetryFilters()"><option value="">Todos os sensores</option><option v-for="sensor in telemetrySensors" :key="sensor.id" :value="sensor.id">{{ sensor.nome }} · {{ sensor.equipamento_nome }}</option></select></label>
+              <template v-if="telemetry.tab === 'sensores'">
+                <label>Buscar sensor<input class="filter-input" v-model="telemetry.search" placeholder="Nome, descrição ou equipamento"></label>
+                <label>Tipo<select class="filter-select" v-model="telemetry.tipo" @change="applyTelemetryFilters()"><option value="">Todos os tipos</option><option v-for="tipo in ['temperatura','vibracao','pressao','corrente','umidade']" :value="tipo">{{ sensorTipoLabel(tipo) }}</option></select></label>
+                <label>Cadastro<select class="filter-select" v-model="telemetry.ativo" @change="applyTelemetryFilters()"><option value="">Ativos e inativos</option><option value="true">Ativos</option><option value="false">Inativos</option></select></label>
+              </template>
+              <label v-if="telemetry.tab === 'tendencias'">Condição<select class="filter-select" v-model="telemetry.condition" @change="applyTelemetryFilters()"><option value="">Todas as condições</option><option value="anomalous">Anomalia confirmada</option><option value="normal">Sem tendência anormal</option><option value="insufficient">Aguardando dados</option><option value="disabled">Análise desativada</option></select></label>
+              <div class="telemetry-actions"><button type="submit" class="btn btn-ghost btn-sm">Aplicar filtros</button><button type="button" class="btn btn-ghost btn-sm" @click="clearTelemetryFilters">Limpar</button></div>
+            </form>
+            <details v-if="telemetry.tab === 'leituras'" class="telemetry-advanced">
+              <summary>Filtrar por período e valor <span v-if="telemetry.min !== '' || telemetry.max !== '' || telemetry.from || telemetry.to">· filtros preenchidos</span></summary>
+              <form class="telemetry-filters" @submit.prevent="applyTelemetryFilters()"><label>De<input type="datetime-local" class="filter-input" v-model="telemetry.from"></label><label>Até<input type="datetime-local" class="filter-input" v-model="telemetry.to"></label><label>Valor mínimo<input type="number" step="any" class="filter-input" v-model="telemetry.min" placeholder="Sem mínimo"></label><label>Valor máximo<input type="number" step="any" class="filter-input" v-model="telemetry.max" placeholder="Sem máximo"></label><button class="btn btn-ghost btn-sm" type="submit">Aplicar período e valores</button></form><p>Datas no horário local. Valores usam a unidade do sensor; selecione um sensor para comparar a mesma grandeza.</p>
+            </details>
+            <div v-if="telemetry.optionsError" role="alert" class="telemetry-notice">{{ telemetry.optionsError }} <button class="btn btn-ghost btn-sm" @click="enterTelemetry">Tentar novamente</button></div>
+            <div class="telemetry-list-meta"><span v-if="telemetry.updatedAt">Consulta atualizada em {{ fmtDate(telemetry.updatedAt) }}</span><span v-else>Atualize para consultar os dados.</span><span>Atualização manual</span></div>
+            <div v-if="telemetry.error" role="alert" class="telemetry-notice">{{ telemetry.error }} <button class="btn btn-ghost btn-sm" @click="fetchTelemetria">Tentar novamente</button></div>
+            <div v-else-if="telemetry.busy" class="empty" role="status"><div class="spinner"></div>Consultando {{ telemetry.tab }}…</div>
+            <div v-else-if="!telemetryCount" class="empty"><div class="empty-icon">⬡</div><strong>Nenhum resultado neste contexto</strong><p>{{ telemetry.tab === 'tendencias' ? 'Verifique os filtros e se existem sensores ativos. Aguardando dados e análise desativada são condições próprias.' : 'Altere os filtros ou cadastre dados para iniciar o acompanhamento.' }}</p><button class="btn btn-ghost btn-sm" @click="clearTelemetryFilters">Limpar filtros</button></div>
+            <template v-else>
+              <div v-if="telemetry.tab === 'sensores'" class="telemetry-sensor-grid">
+                <article v-for="s in telemetryRows" :key="s.id" class="telemetry-sensor-card"><header><span class="badge" :class="s.ativo ? 'badge-green' : 'badge-gray'">{{ s.ativo ? 'Ativo' : 'Inativo' }}</span><small>{{ sensorTipoLabel(s.tipo) }}</small></header><h3>{{ s.nome }}</h3><p>{{ s.equipamento_nome }}</p><div class="telemetry-sensor-limit"><span>Limite superior</span><strong>{{ s.limite_alerta }} <small>{{ s.unidade_medida }}</small></strong></div><footer><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(s.equipamento)">Ver equipamento</button><button v-if="s.ativo" class="btn btn-ghost btn-sm" @click="showTelemetryTrends(s.equipamento,s.id)">Tendência</button><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="editItem('sensor',s)">Editar sensor</button><button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('telemetria/sensores',s.id)">Excluir</button></footer></article>
+              </div>
+              <div v-else class="table-wrap telemetry-table"><table><thead><tr v-if="telemetry.tab === 'leituras'"><th>Equipamento / sensor</th><th>Leitura</th><th>Data e hora</th><th v-if="isAdminOrGestor">Ações</th></tr><tr v-else><th>Equipamento / sensor</th><th>Condição</th><th>Direção</th><th>Último valor da amostra</th><th>Ações</th></tr></thead><tbody>
+                <tr v-for="row in telemetryRows" :key="telemetry.tab === 'leituras' ? row.id : row.sensor_id">
+                  <template v-if="telemetry.tab === 'leituras'"><td><strong>{{ row.equipamento_nome }}</strong><small>{{ row.sensor_nome }}</small></td><td class="telemetry-value">{{ row.valor }} <small>{{ row.unidade_medida }}</small></td><td>{{ fmtDate(row.timestamp) }}</td><td v-if="isAdminOrGestor"><button class="btn btn-ghost btn-sm" @click="editItem('leitura',row)">Editar</button><button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('telemetria/leituras',row.id)">Excluir</button></td></template>
+                  <template v-else><td><strong>{{ row.sensor_info.equipamento_nome }}</strong><small>{{ row.sensor_info.nome }} · {{ row.sensor_info.tipo_display }}</small></td><td><span :class="['telemetry-condition',trendCondition(row)]">{{ trendConditionLabel(row) }}</span><small v-if="row.is_anomalous">Risco {{ {baixo:'baixo',medio:'médio',alto:'alto',critico:'crítico'}[row.risk_level] }}</small></td><td>{{ trendDirection(row) }}</td><td>{{ row.current_value ?? '—' }} <small>{{ row.sensor_info.unidade_medida }}</small></td><td><button class="btn btn-ghost btn-sm" @click="openTelemetryTrend(row)">Ver análise</button><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="openTrendConfig(row.sensor_id,row.sensor_info.equipamento_id)">Configurar</button></td></template>
+                </tr>
+              </tbody></table></div>
+              <footer class="telemetry-pagination"><span>{{ telemetry.offset + 1 }}–{{ Math.min(telemetry.offset + telemetry.size,telemetryCount) }} de {{ telemetryCount }} {{ telemetry.tab === 'leituras' ? 'leituras' : 'sensores' }}</span><label>Por página <select class="filter-select" v-model.number="telemetry.size" @change="applyTelemetryFilters()"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label><div><button class="page-btn" :disabled="telemetry.offset === 0 || telemetry.busy" @click="changeTelemetryPage(-1)">← Anterior</button><button class="page-btn" :disabled="telemetry.offset + telemetry.size >= telemetryCount || telemetry.busy" @click="changeTelemetryPage(1)">Próxima →</button></div></footer>
+            </template>
+          </div>
+          <section v-if="telemetry.detail && telemetry.tab === 'tendencias'" id="telemetry-detail" class="telemetry-panel telemetry-detail">
+            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">DETALHE DA ANÁLISE</div><h2>{{ telemetry.detail.sensor_info.nome }}</h2><p>{{ telemetry.detail.sensor_info.equipamento_nome }} · {{ fmtDate(telemetry.detail.analyzed_at) }}</p></div><button class="btn btn-ghost btn-sm" @click="telemetry.detail = null">Fechar análise</button></div>
+            <span :class="['telemetry-condition',trendCondition(telemetry.detail)]">{{ trendConditionLabel(telemetry.detail) }}</span>
+            <p>{{ !telemetry.detail.analysis_enabled ? 'A configuração atual não permite novas análises. Alertas anteriores não são encerrados por desativação.' : telemetry.detail.insufficient_data ? 'Ainda faltam leituras válidas ou duração mínima para confirmar uma tendência.' : telemetry.detail.is_anomalous ? 'Movimento persistente no sentido configurado como anormal. Consulte os vínculos operacionais abaixo.' : 'A amostra não confirma uma tendência anormal conforme a configuração atual. Isso não substitui a verificação de limites operacionais.' }}</p>
+            <figure v-if="telemetry.detail.readings_summary.length" class="telemetry-chart"><figcaption>Leituras da amostra · {{ telemetry.detail.sensor_info.unidade_medida }} · mínimo {{ telemetryChart.min }} / máximo {{ telemetryChart.max }}</figcaption><svg viewBox="0 0 700 170" role="img" aria-label="Evolução das leituras ao longo do tempo"><line x1="30" y1="145" x2="670" y2="145" stroke="var(--edge)"/><polyline :points="telemetryChart.points" fill="none" stroke="var(--acid)" stroke-width="3"/><circle v-for="(point,index) in telemetryChart.points.split(' ')" :key="index" :cx="point.split(',')[0]" :cy="point.split(',')[1]" r="3" fill="var(--acid)"/></svg><div class="telemetry-chart-time"><span>{{ fmtDate(telemetryChart.from) }}</span><span>{{ fmtDate(telemetryChart.to) }}</span></div></figure>
+            <div class="telemetry-evidence"><div><span>Direção confirmada</span><strong>{{ trendDirection(telemetry.detail) }}</strong></div><div><span>Leituras válidas / mínimo</span><strong>{{ telemetry.detail.readings_count }} / {{ telemetry.detail.config_used.minimo_leituras }}</strong></div><div><span>Duração / mínimo</span><strong>{{ telemetry.detail.sample_duration_minutes }} / {{ telemetry.detail.config_used.duracao_minima_minutos }} min</strong></div><div><span>Estimativa até o limite superior</span><strong>{{ telemetry.detail.projected_breach_hours === null ? 'Não disponível' : telemetry.detail.projected_breach_hours + ' h' }}</strong></div></div>
+            <details class="telemetry-advanced"><summary>Como esta condição foi identificada</summary><p>Janela: {{ telemetry.detail.config_used.periodo_horas }} h. Persistência observada: {{ Math.round(telemetry.detail.persistence_ratio * 100) }}% (mínimo {{ Math.round(telemetry.detail.config_used.persistencia_minima * 100) }}%). R²: {{ telemetry.detail.r_squared ?? 'não calculado' }} (mínimo {{ telemetry.detail.config_used.r2_minimo }}). Inclinação: {{ telemetry.detail.slope_per_hour }} {{ telemetry.detail.sensor_info.unidade_medida }}/h.</p><p>Configuração {{ {sensor:'específica deste sensor',global:'global herdada',padrao:'padrão do sistema'}[telemetry.detail.config_used.source] }}. A projeção estima aproximação do limite, não uma data de quebra.</p></details>
+            <div class="telemetry-notice" v-if="telemetry.detail.active_alert_id">Alerta ativo #{{ telemetry.detail.active_alert_id }}<span v-if="telemetry.detail.predictive_work_order"> · OS preditiva #{{ telemetry.detail.predictive_work_order.id }} ({{ telemetry.detail.predictive_work_order.status }})</span><span v-else> · Sem OS vinculada nesta consulta</span></div>
+            <p v-if="telemetry.detail.is_anomalous && !telemetry.detail.active_alert_id">Ainda não há alerta ativo vinculado nesta consulta. A sincronização operacional ocorre na próxima leitura ou na rotina periódica.</p><div class="telemetry-actions"><button class="btn btn-ghost" @click="openEquipamentoDetails(telemetry.detail.sensor_info.equipamento_id)">Ver equipamento e ordens</button><button v-if="isAdminOrGestor" class="btn btn-primary" @click="openTrendConfig(telemetry.detail.sensor_id,telemetry.detail.sensor_info.equipamento_id)">Configurar análise</button></div>
+          </section>
+        </section>
 
         <!-- ══════════ LOCALIZAÇÕES ══════════ -->
         <div v-if="view==='localizacoes'">
@@ -1970,8 +1927,8 @@
               Tendência {{ trendDataCache[equipModal.selectedSensor].direction === 'increasing' ? 'Crescente' : trendDataCache[equipModal.selectedSensor].direction === 'decreasing' ? 'Decrescente' : 'Estável' }}
             </div>
             
-            <button class="btn btn-ghost btn-sm" @click="openTrendConfig(equipModal.selectedSensor, equipModal.equipamento.id)" title="Configurar Análise">
-              ⚙️
+            <button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="openTrendConfig(equipModal.selectedSensor, equipModal.equipamento.id)" title="Configurar Análise">
+              Configurar análise
             </button>
             <button class="btn btn-primary btn-sm" 
                     @click="analyzeSensorTrendAI(equipModal.selectedSensor)" 
@@ -2137,8 +2094,8 @@
     <div class="modal">
       <div class="modal-header">
         <div>
-          <div class="modal-title">⚙️ Análise de Tendência</div>
-          <div style="margin-top:4px;font-size:14px;color:var(--t2);">Configuração Preditiva</div>
+          <div class="modal-title">{{ trendConfigModal.sensorId ? "Configurar análise do sensor" : "Configuração global de tendências" }}</div>
+          <div style="margin-top:4px;font-size:14px;color:var(--t2);">{{ trendConfigModal.sensorId ? "Critérios usados nas próximas análises deste sensor" : "Afeta sensores de todas as empresas que herdam a configuração global" }}</div>
         </div>
         <button class="modal-close" @click="trendConfigModal.open = false">×</button>
       </div>
@@ -2180,6 +2137,7 @@
             </select>
             <div style="font-size:11px; color:var(--t4); margin-top:4px;">Cada condição confirmada gera um alerta e uma OS preditiva de inspeção. Reduções não têm projeção de limite inferior.</div>
           </div>
+          <details class="telemetry-advanced"><summary>Configurações avançadas de detecção</summary>
           <div class="field">
             <label>Persistência mínima (0,5 a 1)</label>
             <input type="number" v-model.number="trendConfigModal.form.persistencia_minima" required min="0.5" max="1" step="0.01">
@@ -2199,6 +2157,7 @@
             </select>
           </div>
           
+          </details>
           <div class="modal-actions" style="margin-top:24px;">
             <button type="button" class="btn btn-ghost" @click="trendConfigModal.open = false" :disabled="trendConfigModal.saving">Cancelar</button>
             <button type="submit" class="btn btn-primary" :disabled="trendConfigModal.saving">

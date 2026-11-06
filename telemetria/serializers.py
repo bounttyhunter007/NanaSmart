@@ -6,6 +6,7 @@ from .models import Sensor, Telemetria, TrendConfig
 from accounts.validation import validate_equipment_resource, validate_sensor_resource
 
 class SensorSerializer(serializers.ModelSerializer):
+    equipamento_nome = serializers.CharField(source='equipamento.nome', read_only=True)
     class Meta:
         model = Sensor
         fields = '__all__'
@@ -42,6 +43,9 @@ class SensorSerializer(serializers.ModelSerializer):
         return data
 
 class TelemetriaSerializer(serializers.ModelSerializer):
+    sensor_nome = serializers.CharField(source='sensor.nome', read_only=True)
+    equipamento_nome = serializers.CharField(source='sensor.equipamento.nome', read_only=True)
+    unidade_medida = serializers.CharField(source='sensor.unidade_medida', read_only=True)
     class Meta:
         model = Telemetria
         fields = '__all__'

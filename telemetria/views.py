@@ -16,13 +16,13 @@ class SensorViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['equipamento', 'equipamento__empresa', 'tipo', 'ativo']
-    search_fields = ['descricao']
+    search_fields = ['nome', 'descricao', 'equipamento__nome']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Sensor.objects.none()
         user = self.request.user
-        qs = Sensor.objects.select_related('equipamento')
+        qs = Sensor.objects.select_related('equipamento').order_by('nome', 'pk')
         if user.tipo_usuario != 'admin':
             if user.empresa:
                 qs = qs.filter(equipamento__empresa=user.empresa)
@@ -48,7 +48,7 @@ class TelemetriaFilter(df_filters.FilterSet):
 
     class Meta:
         model = Telemetria
-        fields = ['sensor', 'sensor__equipamento', 'valor_min', 'valor_max', 'timestamp_de', 'timestamp_ate']
+        fields = ['sensor', 'sensor__equipamento', 'sensor__equipamento__empresa', 'valor_min', 'valor_max', 'timestamp_de', 'timestamp_ate']
 
 class TelemetriaViewSet(viewsets.ModelViewSet):
     serializer_class = TelemetriaSerializer
@@ -60,7 +60,7 @@ class TelemetriaViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Telemetria.objects.none()
         user = self.request.user
-        qs = Telemetria.objects.select_related('sensor', 'sensor__equipamento').order_by('-timestamp')
+        qs = Telemetria.objects.select_related('sensor', 'sensor__equipamento').order_by('-timestamp', '-pk')
         if user.tipo_usuario != 'admin':
             if user.empresa:
                 qs = qs.filter(sensor__equipamento__empresa=user.empresa)
@@ -82,13 +82,13 @@ class TrendConfigViewSet(viewsets.ModelViewSet):
     serializer_class = TrendConfigSerializer
     permission_classes = [IsAuthenticatedNoDeleteForTecnico]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['sensor', 'ativo']
+    filterset_fields = {'sensor': ['exact', 'isnull'], 'ativo': ['exact']}
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return TrendConfig.objects.none()
         user = self.request.user
-        qs = TrendConfig.objects.select_related('sensor', 'sensor__equipamento')
+        qs = TrendConfig.objects.select_related('sensor', 'sensor__equipamento').order_by('-pk')
         if user.tipo_usuario != 'admin':
             if user.empresa:
                 qs = qs.filter(sensor__equipamento__empresa=user.empresa)
@@ -149,6 +149,7 @@ class TrendDashboardView(APIView):
         show_all = request.query_params.get('all', 'false').lower() == 'true'
         trends = get_all_sensor_trends(
             request.user,
-            only_atypical=not show_all
+            only_atypical=not show_all,
+            empresa_id=request.query_params.get('empresa_id'),
         )
         return Response(trends)

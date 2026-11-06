@@ -13,6 +13,8 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 
 As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
 
+A área **Telemetria** possui abas **Leituras**, **Sensores** e **Tendências**, com filtros por contexto, paginação e configuração de análise. O administrador também pode editar a configuração global. Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
+
 ## Requisitos
 
 - Python compatível com Django 5.2: 3.10 a 3.14; para novas instalações, prefira 3.13. Python 3.15 não é suportado por esta versão do Django.
@@ -123,6 +125,7 @@ python manage.py test accounts authentication ativos telemetria alertas manutenc
 python manage.py check --settings=app.test_settings
 python manage.py makemigrations --check --dry-run --settings=app.test_settings
 node --check FrontATT/app.js
+node --test FrontATT/telemetria.test.cjs
 ```
 
 As migrações do banco são versionadas. Antes de atualizar uma base já existente, consulte o procedimento de compatibilidade na [especificação de alertas e O.S.](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md#atualização-do-banco-e-compatibilidade). A descoberta padrão de testes pode omitir `gemini_api.tests`; o comando acima o inclui explicitamente.

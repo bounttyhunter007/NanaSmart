@@ -159,6 +159,8 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 
 ## Tendências de sensores
 
+Revisão de UX de 06/11/2026: sensores retornam `equipamento_nome`; leituras retornam `sensor_nome`, `equipamento_nome` e `unidade_medida` (todos somente leitura). Leituras aceitam `sensor__equipamento__empresa`; tendências aceitam `empresa_id`; configurações aceitam `sensor__isnull=true`, com ordenação pela mais recente. Os filtros sempre respeitam a visibilidade do usuário. Detalhes e testes: [Telemetria e tendências](TELEMETRIA_UX.md).
+
 Configurações: CRUD `/api/telemetria/trend-config/`. Consulta sem gravações: `GET /api/telemetria/tendencias/?sensor_id=1` ou lista com `?all=true`. A criação dos alertas e OS ocorre na ingestão ou por `python manage.py analisar_tendencias`.
 
 `TrendConfig` inclui `ativo`, `periodo_horas`, `num_leituras` (máximo), `minimo_leituras`, `duracao_minima_minutos`, `sensibilidade`, `persistencia_minima`, `r2_minimo` e `direcao_alerta` (`crescente`, `decrescente`, `ambas`). A configuração específica prevalece sobre a global, inclusive se inativa. Somente administrador gerencia a global; o acesso aos sensores respeita a empresa e o perfil existentes.

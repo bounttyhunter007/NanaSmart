@@ -152,12 +152,17 @@ def _calculate_risk_level(valor_atual, limite, direction, breach_hours, sensibil
     return 'baixo'
 
 
-def get_all_sensor_trends(user, only_atypical=False):
+def get_all_sensor_trends(user, only_atypical=False, empresa_id=None):
     sensors = Sensor.objects.filter(ativo=True).select_related('equipamento')
     if user.tipo_usuario != 'admin':
         if not user.empresa:
             return []
         sensors = sensors.filter(equipamento__empresa=user.empresa)
+    if empresa_id:
+        try:
+            sensors = sensors.filter(equipamento__empresa_id=int(empresa_id))
+        except (TypeError, ValueError):
+            return []
     results = []
     for sensor in sensors:
         trend = analyze_sensor_trend(sensor.id)

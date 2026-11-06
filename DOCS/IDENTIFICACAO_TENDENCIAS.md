@@ -82,6 +82,8 @@ O Gemini pode explicar os dados, mas não decide a criação do alerta nem da OS
 
 ## API e interface
 
+Revisão da interface: a área Telemetria agora reúne Leituras, Sensores e Tendências em abas, com evidências da análise, configuração por sensor e edição global para administrador. Navegação, filtros, paginação e limitações estão em [Telemetria: organização da interface](TELEMETRIA_UX.md).
+
 Configurações: CRUD `/api/telemetria/trend-config/`, incluindo filtro `?sensor=<id>`. Administrador pode gerenciar a global; gestores ficam limitados a sensores de sua empresa; técnicos continuam sujeitos às permissões existentes.
 
 Exemplo de criação específica:

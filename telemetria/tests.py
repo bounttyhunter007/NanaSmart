@@ -230,3 +230,60 @@ class TrendDashboardTests(APITestCase):
         response = self.client.get(self.url, {'sensor_id': 'invalid'})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_trend_company_filter_intersects_user_visibility(self):
+        response = self.client.get(self.url, {'all': 'true', 'empresa_id': self.outra_empresa.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+        self.gestor.tipo_usuario = 'admin'
+        self.gestor.save()
+        response = self.client.get(self.url, {'all': 'true', 'empresa_id': self.outra_empresa.pk})
+        self.assertEqual([row['sensor_id'] for row in response.data], [self.sensor_outra_empresa.pk])
+
+    def test_sensor_search_uses_name_and_equipment_and_is_stable(self):
+        url = reverse('sensores-list')
+        for search in ('Temperatura A', 'Motor A'):
+            response = self.client.get(url, {'search': search, 'limit': 1})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data['count'], 1)
+            self.assertEqual(response.data['results'][0]['id'], self.sensor.pk)
+            self.assertEqual(response.data['results'][0]['equipamento_nome'], 'Motor A')
+
+    def test_readings_company_filter_and_labels_are_server_side(self):
+        from unittest.mock import patch
+        with patch('telemetria.signals.sync_sensor_trend'):
+            Telemetria.objects.create(sensor=self.sensor, valor=0)
+            Telemetria.objects.create(sensor=self.sensor_outra_empresa, valor=0)
+        self.gestor.tipo_usuario = 'admin'
+        self.gestor.save()
+        response = self.client.get(reverse('leituras-list'), {
+            'sensor__equipamento__empresa': self.empresa.pk, 'valor_min': 0, 'valor_max': 0,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        row = response.data['results'][0]
+        self.assertEqual(row['sensor_nome'], self.sensor.nome)
+        self.assertEqual(row['equipamento_nome'], self.equipamento.nome)
+        self.assertEqual(row['unidade_medida'], self.sensor.unidade_medida)
+
+    def test_global_config_filter_excludes_specific_and_orders_latest_first(self):
+        from .models import TrendConfig
+        older = TrendConfig.objects.create()
+        newest = TrendConfig.objects.create()
+        TrendConfig.objects.create(sensor=self.sensor)
+        self.gestor.tipo_usuario = 'admin'
+        self.gestor.save()
+        response = self.client.get(reverse('trend-config-list'), {'sensor__isnull': 'true'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['id'] for row in response.data['results']], [newest.pk, older.pk])
+
+    def test_global_config_is_hidden_from_manager_and_technician_cannot_edit(self):
+        from .models import TrendConfig
+        TrendConfig.objects.create()
+        config = TrendConfig.objects.create(sensor=self.sensor)
+        response = self.client.get(reverse('trend-config-list'), {'sensor__isnull': 'true'})
+        self.assertEqual(response.data['count'], 0)
+        self.gestor.tipo_usuario = 'tecnico'
+        self.gestor.save()
+        response = self.client.patch(reverse('trend-config-detail', args=[config.pk]), {'ativo': False}, format='json')
+        self.assertEqual(response.status_code, 403)
