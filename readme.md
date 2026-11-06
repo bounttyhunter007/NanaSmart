@@ -15,7 +15,7 @@ As regras de tendências, configurações de persistência, geração antecipada
 
 ## Requisitos
 
-- Python 3.10 ou superior.
+- Python compatível com Django 5.2: 3.10 a 3.14; para novas instalações, prefira 3.13. Python 3.15 não é suportado por esta versão do Django.
 - PostgreSQL acessível localmente.
 - Node.js somente para a validação opcional de sintaxe JavaScript; o frontend não precisa de build.
 - Uma chave do Google Gemini somente para usar os recursos de IA.
@@ -25,10 +25,17 @@ As regras de tendências, configurações de persistência, geração antecipada
 No PowerShell, na pasta do projeto:
 
 ```powershell
-py -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
+
+O comando de criação pressupõe Python 3.13 instalado. Um `.venv` já existente com Python compatível pode ser reutilizado sem recriação. Confira `python --version` e `python -c "import sys; print(sys.executable)"` após ativar. Use `python -m pip` para instalar no mesmo interpretador da aplicação. A matriz de versões está na [documentação oficial do Django](https://docs.djangoproject.com/en/5.2/faq/install/#what-python-version-can-i-use-with-django).
+
+Se estiver no ambiente `venv` com Python 3.15 e já existir `.venv` compatível neste projeto, execute `deactivate` e depois `.\.venv\Scripts\Activate.ps1`. O ponto no nome distingue os dois ambientes. Não recrie um ambiente existente usando outra versão do Python; crie uma pasta nova ou reutilize a compatível.
+
+O `requirements.txt` mantém os pacotes usados diretamente pelo projeto e deixa o pip resolver suas dependências. O SDK Gemini usado é `google-genai`; a pilha legada `google-generativeai`/gRPC foi removida. O driver PostgreSQL é apenas `psycopg2-binary`, evitando a instalação simultânea de dois pacotes que fornecem o mesmo módulo. `FrontATT/requirements.txt` referencia a lista principal. Diagnóstico de instalação e validações: [Ambiente Python e dependências](DOCS/AMBIENTE_PYTHON.md).
 
 Configure um banco PostgreSQL chamado `manutencao`. As credenciais e o host do banco são definidos em `app/settings.py`; ajuste-os para o seu ambiente antes de executar o projeto.
 
