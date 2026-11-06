@@ -13,7 +13,7 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 
 As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
 
-A área **Telemetria** possui abas **Leituras**, **Sensores** e **Tendências**, com filtros por contexto, paginação e configuração de análise. O administrador também pode editar a configuração global. Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
+A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de equipamento/sensor, paginação e configuração de análise. O administrador também pode editar a configuração global. Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
 
 ## Requisitos
 

@@ -1,5 +1,5 @@
-const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
-const BASE = 'http://127.0.0.1:8000';
+const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
+const BASE = 'http://127.0.0.1:9000';
 const TELEMETRY_CHART_WIDTH = 320;
 const TELEMETRY_CHART_HEIGHT = 100;
 const TELEMETRY_CHART_LEFT_PAD = 45;
@@ -70,6 +70,23 @@ createApp({
       sensores: [], leituras: [], historico: [], empresas: [],
       usuarios: [], localizacoes: [], prompts: []
     });
+    const trendMonitor = reactive({ busy: false, updatedAt: null, error: '', newCount: 0 });
+    let trendPollTimer = null;
+    let trendMonitorRequest = 0;
+    let knownTrendConditions = null;
+    function resetTrendMonitoring() {
+      ++trendMonitorRequest; knownTrendConditions = null; trendAlerts.value = [];
+      Object.assign(trendMonitor, { busy: false, updatedAt: null, error: '', newCount: 0 });
+    }
+    function stopTrendPolling() {
+      if (trendPollTimer !== null) clearInterval(trendPollTimer);
+      trendPollTimer = null;
+    }
+    function startTrendPolling() {
+      stopTrendPolling();
+      if (!token.value) return;
+      trendPollTimer = setInterval(refreshTrendMonitoring, 30000);
+    }
     const trendAlerts = ref([]); // Painel de tendências de risco
     const trendDataCache = reactive({}); // sensor_id -> dados de tendência + ai_analysis
     const trendAILoading = reactive({}); // sensor_id -> booleano
@@ -175,7 +192,7 @@ createApp({
     const userInitial = computed(() => (me.value?.username || 'U')[0].toUpperCase());
     const viewTitle = computed(() => ({
       dashboard: 'Dashboard', equipamentos: 'Equipamentos', alertas: 'Alertas',
-      ordens: 'Ordens de Serviço', telemetria: 'Telemetria',
+      ordens: 'Ordens de Serviço', telemetria: 'Telemetria', tendencias: 'Tendências',
       historico: 'Histórico de Manutenção', empresas: 'Empresas',
       usuarios: 'Usuários', localizacoes: 'Localizações',
       perfil: 'Meu Perfil', prompts: 'Configurações de Prompts da IA'
@@ -910,7 +927,9 @@ createApp({
           localStorage.setItem('sentinel_refresh', data.refresh);
         }
         await fetchMe();
+        resetTrendMonitoring();
         navigate('dashboard');
+        startTrendPolling();
       } catch (e) { loginError.value = e.message; }
       finally { loginLoading.value = false; }
     }
@@ -920,6 +939,10 @@ createApp({
     }
 
     function logout() {
+      stopTrendPolling(); resetTrendMonitoring();
+      ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      Object.assign(telemetry, { rows: [], equipments: [], sensors: [], count: 0, busy: false, updatedAt: null });
+      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
       token.value = ''; refreshTk.value = ''; me.value = null;
       localStorage.removeItem('sentinel_token');
       localStorage.removeItem('sentinel_refresh');
@@ -932,6 +955,7 @@ createApp({
       alertas: () => fetchAlertas(),
       ordens: () => fetchOrdens(),
       telemetria: () => enterTelemetry(),
+      tendencias: () => fetchTrends(),
       historico: () => fetchHistorico(),
       empresas: () => fetchEmpresas(),
       usuarios: () => fetchUsuarios(),
@@ -1116,9 +1140,7 @@ createApp({
           };
         }
 
-        if (!isTecnico.value) {
-          await fetchTrendAlerts();
-        }
+        await fetchTrendAlerts();
 
         // Busca localizações para filtro de setor no custo
         api('/api/localizacao/?limit=999').then(d => { if (d) lists.localizacoes = normList(d); }).catch(() => { });
@@ -1126,15 +1148,59 @@ createApp({
       } catch { toast('Erro ao carregar dashboard', 'error'); }
     }
 
-    async function fetchTrendAlerts() {
-      try {
-        const data = await api('/api/telemetria/tendencias/' + (globalEmpresa.value ? '?empresa_id=' + globalEmpresa.value : ''));
-        if (Array.isArray(data)) {
-          trendAlerts.value = data.filter(trend => trend.is_anomalous);
+    function acceptTrendSnapshot(data) {
+      const anomalies = data.filter(trend => trend.is_anomalous && trend.analysis_enabled && !trend.insufficient_data);
+      const current = new Map(anomalies.map(trend => [`${trend.sensor_id}:${trend.direction}`, trend.active_alert_id]));
+      if (knownTrendConditions !== null) {
+        for (const [key, alertId] of current) {
+          const previous = knownTrendConditions.get(key);
+          if (!knownTrendConditions.has(key) || (previous != null && alertId != null && previous !== alertId))
+            trendMonitor.newCount++;
         }
-      } catch (err) {
-        console.error('Erro ao buscar tendências:', err);
       }
+      knownTrendConditions = current;
+      trendAlerts.value = anomalies;
+      trendMonitor.updatedAt = new Date().toISOString();
+      trendMonitor.error = '';
+    }
+    async function refreshTrendMonitoring() {
+      if (!token.value || document.hidden || trendMonitor.busy ||
+          (view.value === 'tendencias' && trendPage.busy)) return;
+      const request = ++trendMonitorRequest;
+      const company = globalEmpresa.value, session = token.value;
+      const showAll = view.value === 'tendencias';
+      const pageVersion = trendPageRequest;
+      trendMonitor.busy = true;
+      try {
+        const query = new URLSearchParams();
+        if (showAll) query.set('all', 'true');
+        if (company) query.set('empresa_id', company);
+        const data = await api('/api/telemetria/tendencias/?' + query);
+        if (request !== trendMonitorRequest || company !== globalEmpresa.value || !token.value || session !== token.value) return;
+        if (!Array.isArray(data)) throw new Error('Resposta de tendências indisponível.');
+        acceptTrendSnapshot(data);
+        if (showAll && view.value === 'tendencias' &&
+            pageVersion === trendPageRequest && !trendPage.busy) {
+          trendPage.rows = data;
+          const total = filteredTrends.value.length;
+          if (trendPage.offset >= total) trendPage.offset = total ? Math.floor((total - 1) / trendPage.size) * trendPage.size : 0;
+          if (trendPage.detail) trendPage.detail = data.find(t => t.sensor_id === trendPage.detail.sensor_id) || null;
+          trendPage.updatedAt = trendMonitor.updatedAt;
+          trendPage.error = '';
+        }
+      } catch {
+        if (request === trendMonitorRequest) trendMonitor.error = 'Não foi possível atualizar as tendências. Exibindo a última consulta disponível; nova tentativa em até 30 segundos.';
+      } finally {
+        if (request === trendMonitorRequest) trendMonitor.busy = false;
+      }
+    }
+    async function fetchTrendAlerts() {
+      await refreshTrendMonitoring();
+    }
+    function reviewNewTrends() {
+      trendMonitor.newCount = 0;
+      showTrends();
+      trendPage.condition = 'anomalous';
     }
 
     async function analyzeSensorTrendAI(sensorId) {
@@ -1241,7 +1307,7 @@ createApp({
         toast('Configuração de tendência salva', 'success');
         trendConfigModal.open = false;
         
-        if (view.value === 'telemetria') await fetchTelemetria();
+        if (view.value === 'tendencias') await fetchTrends();
         // Refresh trend data if open
         if (equipModal.open) {
           fetchTrendForSensor(trendConfigModal.sensorId);
@@ -1313,11 +1379,21 @@ createApp({
 
     const telemetry = reactive({
       tab: 'leituras', busy: false, error: '', updatedAt: null,
-      equipment: '', sensor: '', search: '', tipo: '', ativo: '', condition: '',
+      equipment: '', sensor: '', search: '', tipo: '', ativo: '',
       min: '', max: '', from: '', to: '', size: 20, offset: 0,
-      rows: [], count: 0, trends: [], equipments: [], sensors: [], optionsError: '',
-      detail: null,
+      rows: [], count: 0, equipments: [], sensors: [], optionsError: '',
     });
+    const trendPage = reactive({
+      equipment: '', sensor: '', condition: '', size: 20, offset: 0,
+      rows: [], busy: false, error: '', updatedAt: null, detail: null,
+    });
+    let trendPageRequest = 0;
+    const trendEquipments = computed(() => [...new Map(trendPage.rows.map(trend =>
+      [trend.sensor_info.equipamento_id, { id: trend.sensor_info.equipamento_id, nome: trend.sensor_info.equipamento_nome }])).values()]
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
+    const trendSensors = computed(() => trendPage.rows.filter(trend => !trendPage.equipment ||
+      Number(trend.sensor_info.equipamento_id) === Number(trendPage.equipment))
+      .map(trend => trend.sensor_info).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
     let telemetryRequest = 0;
     let telemetryOptionsRequest = 0;
     const telemetrySensors = computed(() => telemetry.sensors.filter(sensor =>
@@ -1335,22 +1411,23 @@ createApp({
       if (['disabled', 'insufficient'].includes(trendCondition(trend))) return '—';
       return { increasing: 'Crescente', decreasing: 'Decrescente', stable: 'Estável' }[trend.direction] || '—';
     }
-    const scopedTrends = computed(() => telemetry.trends.filter(trend =>
-      (!telemetry.equipment || Number(trend.sensor_info.equipamento_id) === Number(telemetry.equipment)) &&
-      (!telemetry.sensor || trend.sensor_id === Number(telemetry.sensor))));
+    const scopedTrends = computed(() => trendPage.rows.filter(trend =>
+      (!trendPage.equipment || Number(trend.sensor_info.equipamento_id) === Number(trendPage.equipment)) &&
+      (!trendPage.sensor || trend.sensor_id === Number(trendPage.sensor))));
     const filteredTrends = computed(() => scopedTrends.value.filter(trend =>
-      !telemetry.condition || trendCondition(trend) === telemetry.condition));
-    const telemetryCount = computed(() => telemetry.tab === 'tendencias' ? filteredTrends.value.length : telemetry.count);
-    const telemetryRows = computed(() => telemetry.tab === 'tendencias'
-      ? filteredTrends.value.slice(telemetry.offset, telemetry.offset + telemetry.size) : telemetry.rows);
-    const telemetrySummary = computed(() => ({
+      !trendPage.condition || trendCondition(trend) === trendPage.condition));
+    const telemetryCount = computed(() => telemetry.count);
+    const telemetryRows = computed(() => telemetry.rows);
+    const trendCount = computed(() => filteredTrends.value.length);
+    const trendRows = computed(() => filteredTrends.value.slice(trendPage.offset, trendPage.offset + trendPage.size));
+    const trendSummary = computed(() => ({
       anomalous: scopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
       normal: scopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
       insufficient: scopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
       disabled: scopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
     }));
-    const telemetryChart = computed(() => {
-      const rows = telemetry.detail?.readings_summary || [];
+    const trendChart = computed(() => {
+      const rows = trendPage.detail?.readings_summary || [];
       if (!rows.length) return { points: '', min: 0, max: 0, from: '', to: '' };
       const values = rows.map(row => row.valor);
       const min = Math.min(...values), max = Math.max(...values);
@@ -1398,10 +1475,7 @@ createApp({
         }
         const query = new URLSearchParams({ limit: telemetry.size, offset: telemetry.offset });
         let endpoint;
-        if (tab === 'tendencias') {
-          endpoint = '/api/telemetria/tendencias/?all=true';
-          if (globalEmpresa.value) endpoint += '&empresa_id=' + globalEmpresa.value;
-        } else if (tab === 'sensores') {
+        if (tab === 'sensores') {
           endpoint = '/api/telemetria/sensores/';
           if (globalEmpresa.value) query.set('equipamento__empresa', globalEmpresa.value);
           if (telemetry.equipment) query.set('equipamento', telemetry.equipment);
@@ -1418,27 +1492,20 @@ createApp({
           if (telemetry.from) query.set('timestamp_de', new Date(telemetry.from).toISOString());
           if (telemetry.to) query.set('timestamp_ate', new Date(telemetry.to).toISOString());
         }
-        const data = await api(endpoint + (tab === 'tendencias' ? '' : '?' + query));
+        const data = await api(endpoint + '?' + query);
         if (!data) throw new Error('Não foi possível carregar a telemetria. Entre novamente.');
         if (request !== telemetryRequest) return;
-        if (tab === 'tendencias') {
-          if (!Array.isArray(data)) throw new Error('Resposta de tendências indisponível. Tente atualizar.');
-          telemetry.trends = data;
-          if (telemetry.offset >= filteredTrends.value.length) telemetry.offset = 0;
-          if (telemetry.detail) telemetry.detail = data.find(t => t.sensor_id === telemetry.detail.sensor_id) || null;
-        } else {
-          telemetry.rows = normList(data);
-          telemetry.count = data.count ?? telemetry.rows.length;
-          if (telemetry.count > 0 && telemetry.offset >= telemetry.count) {
-            telemetry.offset = Math.floor((telemetry.count - 1) / telemetry.size) * telemetry.size;
-            await fetchTelemetria(); return;
-          }
+        telemetry.rows = normList(data);
+        telemetry.count = data.count ?? telemetry.rows.length;
+        if (telemetry.count > 0 && telemetry.offset >= telemetry.count) {
+          telemetry.offset = Math.floor((telemetry.count - 1) / telemetry.size) * telemetry.size;
+          await fetchTelemetria(); return;
         }
         telemetry.updatedAt = new Date().toISOString();
       } catch (err) {
         if (request === telemetryRequest) {
           telemetry.error = err.fieldErrors ? Object.values(err.fieldErrors).flat().join(' ') : err.message || 'Erro ao carregar telemetria.';
-          telemetry.rows = []; telemetry.count = 0; telemetry.trends = []; telemetry.detail = null;
+          telemetry.rows = []; telemetry.count = 0;
         }
       } finally {
         if (request === telemetryRequest) telemetry.busy = false;
@@ -1448,31 +1515,66 @@ createApp({
       await Promise.all([loadTelemetryOptions(), fetchTelemetria()]);
     }
     function setTelemetryTab(tab) {
-      if (telemetry.tab === tab) return;
+      if (!['leituras', 'sensores'].includes(tab) || telemetry.tab === tab) return;
       telemetry.tab = tab; telemetry.offset = 0; telemetry.rows = []; telemetry.count = 0;
-      telemetry.detail = null;
       fetchTelemetria();
     }
     function applyTelemetryFilters(equipmentChanged = false) {
-      telemetry.offset = 0; telemetry.detail = null;
+      telemetry.offset = 0;
       if (equipmentChanged) telemetry.sensor = '';
-      if (telemetry.tab !== 'tendencias') fetchTelemetria();
+      return fetchTelemetria();
     }
     function clearTelemetryFilters() {
       Object.assign(telemetry, { equipment: '', sensor: '', search: '', tipo: '', ativo: '',
-        condition: '', min: '', max: '', from: '', to: '', offset: 0 });
+        min: '', max: '', from: '', to: '', offset: 0 });
       fetchTelemetria();
     }
     function changeTelemetryPage(delta) {
       telemetry.offset = Math.max(0, telemetry.offset + delta * telemetry.size);
-      if (telemetry.tab !== 'tendencias') fetchTelemetria();
+      return fetchTelemetria();
     }
     function sensorTipoLabel(tipo) { return {temperatura:'Temperatura', vibracao:'Vibração', pressao:'Pressão', corrente:'Corrente elétrica', umidade:'Umidade'}[tipo] || tipo; }
-    function openTelemetryTrend(trend) { telemetry.detail = trend; nextTick(() => document.getElementById('telemetry-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
-    function showTelemetryTrends(equipment = '', sensor = '') {
-      telemetry.tab = 'tendencias'; telemetry.equipment = equipment; telemetry.sensor = sensor;
-      telemetry.condition = ''; telemetry.offset = 0; telemetry.detail = null;
-      view.value = 'telemetria'; closeEquipModal(); enterTelemetry();
+    async function fetchTrends() {
+      const request = ++trendPageRequest;
+      const company = globalEmpresa.value;
+      trendPage.busy = true; trendPage.error = '';
+      try {
+        const data = await api('/api/telemetria/tendencias/?all=true' + (company ? '&empresa_id=' + company : ''));
+        if (request !== trendPageRequest || company !== globalEmpresa.value) return;
+        if (!Array.isArray(data)) throw new Error('Não foi possível carregar as tendências. Tente atualizar.');
+        ++trendMonitorRequest; trendMonitor.busy = false;
+        acceptTrendSnapshot(data);
+        trendPage.rows = data;
+        clampTrendPage();
+        if (trendPage.detail) trendPage.detail = data.find(trend => trend.sensor_id === trendPage.detail.sensor_id) || null;
+        trendPage.updatedAt = new Date().toISOString();
+      } catch (error) {
+        if (request === trendPageRequest) trendPage.error = error.message || 'Não foi possível carregar as tendências.';
+      } finally {
+        if (request === trendPageRequest) trendPage.busy = false;
+      }
+    }
+    function clampTrendPage() {
+      if (trendPage.offset >= trendCount.value) trendPage.offset = trendCount.value
+        ? Math.floor((trendCount.value - 1) / trendPage.size) * trendPage.size : 0;
+    }
+    function applyTrendFilters(equipmentChanged = false) {
+      if (equipmentChanged) trendPage.sensor = '';
+      trendPage.offset = 0; trendPage.detail = null;
+    }
+    function clearTrendFilters() {
+      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', offset: 0, detail: null });
+    }
+    function changeTrendPage(delta) {
+      trendPage.offset = Math.max(0, trendPage.offset + delta * trendPage.size);
+    }
+    function openTrendDetail(trend) {
+      trendPage.detail = trend;
+      nextTick(() => document.getElementById('trend-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    function showTrends(equipment = '', sensor = '') {
+      Object.assign(trendPage, { equipment, sensor, condition: '', offset: 0, detail: null });
+      view.value = 'tendencias'; closeEquipModal(); return fetchTrends();
     }
 
     async function fetchHistorico() {
@@ -2397,9 +2499,10 @@ createApp({
     });
 
     function onGlobalEmpresaChange() {
-      if (view.value === 'telemetria') {
-        Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, detail: null, rows: [], trends: [], equipments: [], sensors: [] });
-      }
+      resetTrendMonitoring();
+      ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, rows: [], equipments: [], sensors: [], busy: false });
+      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
       // Recarrega a aba atual ao mudar o filtro global
       // Também recarrega o dashboard se estiver nele
       const currentView = view.value;
@@ -2407,6 +2510,7 @@ createApp({
         fetchDashboard();
       } else {
         fetchers[currentView]?.();
+        if (currentView !== 'tendencias') fetchTrendAlerts();
       }
     }
 
@@ -2416,7 +2520,7 @@ createApp({
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           if (trendConfigModal.open) trendConfigModal.open = false;
-          else if (telemetry.detail && view.value === 'telemetria') telemetry.detail = null;
+          else if (trendPage.detail && view.value === 'tendencias') trendPage.detail = null;
           else if (modal.open) modal.open = false;
           else if (equipModal.open) closeEquipModal();
           else if (chatOpen.value) chatOpen.value = false;
@@ -2428,7 +2532,9 @@ createApp({
         // Carrega lista de empresas para o filtro global do admin
         await fetchEmpresasAll();
         navigate('dashboard');
+        startTrendPolling();
       }
+      document.addEventListener('visibilitychange', onTrendVisibilityChange);
 
       // ─── ATUALIZAÇÃO AUTOMÁTICA SILENCIOSA (OTIMIZADA) ───
       setInterval(async () => {
@@ -2507,6 +2613,14 @@ createApp({
           }
         }
       }, 10000); // 10 segundos — sincroniza em tempo real sem sobrecarregar
+    });
+
+    function onTrendVisibilityChange() {
+      if (!document.hidden) refreshTrendMonitoring();
+    }
+    onUnmounted(() => {
+      stopTrendPolling(); ++trendMonitorRequest;
+      document.removeEventListener('visibilitychange', onTrendVisibilityChange);
     });
 
     // ─ Chat AI (NanaSmart AI) ────────────────────────
@@ -2767,9 +2881,10 @@ createApp({
       modal, fd, formErrors, globalEmpresa,
       isAdmin, isAdminOrGestor, isTecnico, userInitial, viewTitle, osSemTecnicoCount,
       doLogin, logout, navigate, debouncedFetch,
-      telemetry, telemetrySensors, telemetryCount, telemetryRows, telemetrySummary, telemetryChart,
+      telemetry, telemetrySensors, telemetryCount, telemetryRows, trendSummary, trendChart, trendPage, trendCount, trendRows, trendEquipments, trendSensors,
+      fetchTrends, applyTrendFilters, clearTrendFilters, changeTrendPage, openTrendDetail, showTrends,
       sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,
-      clearTelemetryFilters, changeTelemetryPage, openTelemetryTrend, showTelemetryTrends, enterTelemetry,
+      clearTelemetryFilters, changeTelemetryPage, enterTelemetry,
       fetchEquipamentos, fetchAlertas, fetchOrdens, fetchTelemetria,
       fetchHistorico, fetchEmpresas, fetchUsuarios, fetchLocalizacoes, fetchPrompts, fetchPage, fetchDashboard,
       openModal, editItem, saveItem, deleteItem, exportData, assumirOS, iniciarAtendimento, openEncerrarOS, assumirOSFromAlerta,
@@ -2787,6 +2902,7 @@ createApp({
       leiturasHoje, leiturasTodayCount, leiturasTotalCount, dashTelemetriaEquip, dashTelemetriaSensor,
       dashTelemetriaSensoresFiltrados, dashCustoSetor,
       dashSetor, dashEquipamento, explainerCollapsed, dashboardMetrics, dashboardEquipmentOptions, availableDashboardSectors, dashboardKpisLoading, dashboardKpisError,
+      trendMonitor, refreshTrendMonitoring, reviewNewTrends, startTrendPolling,
       trendAlerts, trendDataCache, trendAILoading, trendConfigModal,
       analyzeSensorTrendAI, openTrendConfig, saveTrendConfig,
       equipModal, selectedSensorLabel, selectedSensorThresholds, sensorModalThresholds, equipModalChart, equipModalStats, equipModalFilteredOrdens,

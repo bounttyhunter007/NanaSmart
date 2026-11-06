@@ -4276,3 +4276,44 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .telemetry-detail { scroll-margin-top: 80px; }
 @media(max-width:1000px) { .telemetry-summary, .telemetry-evidence { grid-template-columns: repeat(2,minmax(0,1fr)); } .telemetry-heading { align-items: start; flex-direction: column; } }
 @media(max-width:600px) { .telemetry-panel { padding: 16px; } .telemetry-tabs button { padding: 14px 10px; } .telemetry-tabs button span { display: none; } .telemetry-section-head { align-items: start; flex-direction: column; } .telemetry-filters label { flex-basis: 100%; } .telemetry-pagination { align-items: start; flex-direction: column; } .telemetry-summary { gap: 8px; } .telemetry-stat { padding: 12px; } }
+
+/* Ajuda contextual de tendências: recolhida por padrão pelo elemento details. */
+.telemetry-guide { background: var(--s2); border: 1px solid var(--edge); border-left: 3px solid var(--ice); border-radius: 12px; }
+.telemetry-guide > summary { display: flex; align-items: center; gap: 14px; padding: 20px 24px; cursor: pointer; list-style: none; }
+.telemetry-guide > summary::-webkit-details-marker { display: none; }
+.telemetry-guide > summary:focus-visible { outline: 2px solid var(--ice); outline-offset: 4px; border-radius: 10px; }
+.telemetry-guide-icon { color: var(--ice); font-size: 24px; flex-shrink: 0; }
+.telemetry-guide > summary strong { display: block; color: var(--t1); font-size: 15px; }
+.telemetry-guide > summary small { display: block; color: var(--t3); font-size: 12px; line-height: 1.6; margin-top: 5px; }
+.telemetry-guide-toggle { margin-left: auto; color: var(--ice); font-size: 24px; }
+.telemetry-guide-toggle::before { content: '+'; }
+.telemetry-guide[open] .telemetry-guide-toggle::before { content: '−'; }
+.telemetry-guide[open] > summary { border-bottom: 1px solid var(--edge); }
+.telemetry-guide-body { padding: 0 24px 24px; }
+.telemetry-guide-body section { padding-top: 24px; }
+.telemetry-guide-body section + section { border-top: 1px solid var(--edge); margin-top: 24px; }
+.telemetry-guide-body h3 { color: var(--t1); font-size: 15px; margin-bottom: 12px; }
+.telemetry-guide-body ol, .telemetry-guide-body ul { padding-left: 22px; color: var(--t3); font-size: 13px; line-height: 1.8; }
+.telemetry-guide-body li + li { margin-top: 8px; }
+.telemetry-guide-body strong { color: var(--t2); }
+.telemetry-guide-table { overflow-x: auto; margin: 16px 0; border: 1px solid var(--edge); border-radius: 8px; }
+.telemetry-guide-table table { width: 100%; min-width: 580px; }
+.telemetry-guide-table td { white-space: normal; vertical-align: top; font-size: 12px; line-height: 1.7; }
+.telemetry-guide-table td:first-child { font-weight: 600; color: var(--t2); width: 22%; }
+.telemetry-guide-table td:last-child { width: 18%; }
+.telemetry-guide-examples { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-top: 16px; }
+.telemetry-guide-examples article { padding: 18px; border: 1px solid var(--edge); border-radius: 10px; background: var(--s3); }
+.telemetry-guide-examples h4 { font-size: 13px; color: var(--ice); margin-bottom: 10px; }
+@media(max-width:700px) { .telemetry-guide > summary { padding: 16px; gap: 10px; } .telemetry-guide-body { padding: 0 16px 16px; } .telemetry-guide-examples { grid-template-columns: 1fr; } }
+
+/* Novas condições são sinalizadas sem mudar a navegação automaticamente. */
+.trend-update-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 20px; margin-bottom: 24px; border: 1px solid var(--warn); border-radius: 10px; background: var(--s2); }
+.trend-update-notice > div { flex: 1 1 260px; }
+.trend-update-notice strong { color: var(--warn); font-size: 13px; }
+.trend-update-notice p { margin-top: 6px; color: var(--t3); font-size: 12px; line-height: 1.6; }
+
+/* Fórmulas em texto: legíveis sem bibliotecas matemáticas externas. */
+.telemetry-formula { margin: 14px 0; padding: 16px; background: var(--s3); border: 1px solid var(--edge); border-radius: 8px; font-family: var(--mono); font-size: 12px; line-height: 2; color: var(--t2); overflow-wrap: anywhere; }
+.telemetry-formula strong { color: var(--ice); }
+.telemetry-guide-callout { padding: 18px; margin: 16px 0; border-left: 3px solid var(--ice); background: var(--s3); border-radius: 8px; font-size: 13px; line-height: 1.8; }
+.telemetry-guide-callout > strong { color: var(--ice); }

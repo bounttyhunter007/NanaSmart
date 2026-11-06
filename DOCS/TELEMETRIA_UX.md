@@ -1,6 +1,8 @@
 # Telemetria: organização da interface e tendências
 
-Revisão: 06/11/2026. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md). Não modifica o algoritmo de detecção ou a regra de geração automática de OS.
+Revisão: 06/11/2026.
+
+**Organização vigente:** Tendências é uma página própria no menu lateral. Telemetria contém somente Leituras e Sensores. As decisões anteriores abaixo registram a evolução inicial; a seção “Página independente de Tendências” ao final substitui a proposta de três abas e o compartilhamento de filtros. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md). Não modifica o algoritmo de detecção ou a regra de geração automática de OS.
 
 ## Diagnóstico e decisões
 
@@ -10,7 +12,7 @@ Revisão: 06/11/2026. Complementa [Identificação de tendências](IDENTIFICACAO
 | Tabela mostrava apenas 30 itens mesmo recebendo uma página maior | Exibe a página inteira, com total real, intervalo e seletor de 20/50/100 |
 | Busca de sensores prometia buscar nomes mas usava só descrição | Busca no servidor por nome, descrição e equipamento |
 | Filtros por valor e data expostos numa faixa muito densa | Equipamento e sensor em primeiro plano; período e valores em seção expansível |
-| Atualização silenciosa substituía leituras ignorando data e página | Atualização manual explícita, preservando o contexto e mostrando horário da consulta |
+| Atualização silenciosa substituía leituras ignorando data e página | Leituras e Sensores têm atualização manual; Tendências atualiza silenciosamente a cada 30 segundos, preservando contexto e página |
 | Identificação de sensor/equipamento dependia de listas parciais carregadas por outras telas | Nomes e unidade retornados na própria API de leituras; cadastro informa equipamento |
 | Controles técnicos apareciam para quem não podia salvar | Técnico consulta; gestor/admin recebem ações de escrita; global exclusiva de admin |
 | Direção estável aparecia como decrescente no dashboard | Rótulo com três direções; painel resumido mostra apenas anomalias confirmadas |
@@ -48,7 +50,7 @@ Administrador dispõe de **Configuração global** na aba Tendências. O formul�
 - Cada aba busca apenas sua coleção. Atualizar também recarrega opções de filtro; opções percorrem todas as páginas da API em vez de supor que `limit=999` sempre devolve tudo.
 - A mudança de empresa limpa equipamento/sensor, opções, resultados e detalhe anteriores. Empresa é filtrada no servidor, sempre intersectando as permissões do usuário. Respostas antigas de resultados/opções são descartadas por identificador de requisição.
 - Carregamento, falha e ausência de resultados têm mensagens distintas. Erro de opções é separado do erro da coleção. Exclusão do último item de uma página retorna à última página válida.
-- Não há marcador de tempo real na nova área: a atualização é manual. O detalhe antigo do equipamento mantém seu polling existente, agora também consultando a tendência.
+- Leituras e Sensores têm atualização manual. Tendências informa atualização automática a cada 30 segundos e horário da consulta. O detalhe antigo do equipamento mantém seu polling existente, também consultando a tendência.
 - Estilos usam as cores existentes, grade de cards adaptável e tabela com rolagem horizontal em telas estreitas. Controles têm rótulos, foco visível e botões com estado pressionado nas abas/cards. Escape fecha primeiro configuração, depois o detalhe da análise.
 
 ## API e compatibilidade
@@ -82,3 +84,54 @@ python manage.py makemigrations --check --dry-run --settings=app.test_settings
 Conferência manual restante: abrir o frontend com a API atualizada; navegar pelas três abas como gestor/admin e técnico; testar tema claro/escuro, largura de celular, mais de uma página, limpeza de filtros, ausência de dados e edição de configuração. Não executar geração de dados destrutiva para essa conferência.
 
 Limitação conhecida: tendências ainda calcula e devolve todas as análises visíveis antes da paginação local; para volumes elevados, a evolução adequada é paginação/cálculo em lote no backend. Esta entrega não introduz processamento em background ou dados simulados.
+
+## Ajuda expansível na aba Tendências
+
+Adicionada uma caixa informativa **Como funcionam as tendências?**, antes dos cards de resumo. Usa `details`/`summary` nativos: inicia fechada, abre/fecha por clique ou teclado e volta fechada ao sair e retornar à aba. O conteúdo é estático e sua abertura não consulta a API nem altera configurações.
+
+O guia cobre o fluxo automático, seleção de amostra, quantidade e duração mínimas, sensibilidade com limiares reais, persistência, R², sentidos anormais, todos os campos de configuração e seus defaults, prioridade entre específica/global/padrão e permissões. Explica os quatro estados, projeção e risco, vínculos e ciclo do episódio/OS, e apresenta quatro exemplos: aumento consistente, redução configurada, amostra curta e pico isolado. Diferencia consulta de processamento operacional e tendência de alerta por limite.
+
+A caixa usa cores do tema existente, tabela com rolagem horizontal, exemplos em duas colunas no desktop e uma em telas menores, foco visível e sinal de expandir/recolher. Nesta alteração não foram modificados algoritmo, API ou dados. Verificação: compilação do template completo com Vue 3.4.21 e checagem de whitespace; sem nova validação visual em navegador.
+
+
+## Atualização automática e visibilidade de novas anomalias
+
+Revisão adicional de 06/11/2026:
+
+- Um único timer de 30 segundos acompanha tendências enquanto houver sessão autenticada. O ciclo não consulta com a página oculta nem sobrepõe outra consulta de monitoramento; ao voltar à página, tenta atualizar imediatamente. Timer é encerrado no logout/desmontagem e reiniciado, sem acumular, no login.
+- Com Telemetria → Tendências aberta, consulta `all=true` e atualiza lista, resumo e detalhe silenciosamente. Preserva equipamento, sensor, condição, tamanho e página. Se o número de resultados diminuir e invalidar a página, usa a última página existente. Não fecha a ajuda, não dispara loading da lista e não reabre o detalhe.
+- Nas outras telas, consulta apenas a lista de tendências atípicas e extrai anomalias confirmadas para o resumo do dashboard e contador da navegação. O contador representa a empresa selecionada inteira, independentemente do filtro de equipamento/sensor dentro de Telemetria. Também fica disponível para técnicos, com a mesma visibilidade de dados da API.
+- A primeira consulta de uma sessão/empresa é a referência e não dispara aviso retroativo. Novos sensores/sentidos anormais ou um novo episódio identificado por outro alerta ativo geram um aviso discreto na área de conteúdo. Leituras repetidas da mesma condição não repetem o aviso; a passagem de uma análise ainda sem alerta para o mesmo episódio já vinculado não é uma nova condição.
+- O aviso acumula novas condições observadas desde a referência/última dispensa, podendo incluir condições que já recuperaram. O texto identifica esse período. **Ver anomalias** é uma ação explícita: abre Tendências, limpa filtros de equipamento/sensor, filtra anomalias atuais e dispensa o aviso. **Dispensar** apenas esconde o aviso. Não existe navegação automática, modal espontâneo, som ou notificação do sistema.
+- Falhas de atualização preservam a última lista, contador e horário, com aviso de que a informação pode estar desatualizada, botão de nova tentativa e repetição no próximo ciclo. Sucesso limpa esse erro.
+- Logout e troca de empresa limpam referência/aviso/contador. Respostas antigas são rejeitadas por contexto de sessão/empresa e versão da requisição. Uma consulta manual mais recente prevalece sobre polling pendente. Resultado de polling não substitui resultados de uma aba para a qual o usuário acabou de navegar.
+- O backend não foi alterado: a detecção e os efeitos operacionais continuam automáticos na ingestão/rotina; o timer só consulta resultados. O intervalo é de até 30 segundos em condições normais, acrescido do tempo de resposta; não é streaming nem garantia de atualização em segundo plano.
+
+Validação adicional: 14 testes de frontend aprovados (sete anteriores e sete novos), incluindo cadência/limpeza de timers, preservação de página e detalhe, deduplicação de avisos, falha e recuperação, sobreposição e página oculta, logout, troca de empresa e corrida com atualização manual. Template completo compilado com Vue 3.4.21; sintaxe JavaScript e whitespace verificados. Sem mudanças de banco ou API e sem nova conferência visual no navegador.
+
+
+## Informativo em linguagem simples e fórmulas explicadas
+
+Revisão de 06/11/2026: reescrito o guia expansível para pessoas sem conhecimento de estatística, mantendo-o fechado por padrão. O texto começa pela diferença entre valor atual e direção da mudança. Explica alerta, ordem de inspeção, sensibilidade, persistência e R² com palavras do cotidiano. A descrição inicial da aba e as explicações dos estados no detalhe também foram simplificadas.
+
+O exemplo central usa temperatura de 60 °C às 13h, 70 °C às 14h e 80 °C às 15h, com limite ilustrativo de 100 °C. Mostra as contas `(80 − 60) ÷ 2 = 10 °C/h` e `(100 − 80) ÷ 10 = 2 h`, chegando à estimativa condicional de 17h. O texto distingue a conta intuitiva entre extremos, válida para esse exemplo regular, da regressão real sobre todas as leituras. Explica que 2 horas recebe risco crítico pela regra vigente, sem afirmar certeza ou probabilidade de falha.
+
+Exemplos adicionais mostram temperatura constante, perda de pressão, pico com persistência de 25% e três leituras em somente dois minutos. A configuração sugere um exemplo coerente de 7 leituras a cada 10 minutos cobrindo uma hora. As fórmulas exatas da inclinação/regressão, projeção e R² ficam em uma segunda seção expansível, com legenda para tempo, valor, médias e símbolo de soma. Não são necessários MathJax, imagens ou serviços externos. R² de 0,8 é explicitamente diferenciado de 80% de chance de quebra.
+
+Mantidos os critérios reais: suficiência por quantidade e duração, limiar por sensibilidade, persistência, ajuste e sentido configurado; projeção só para limite superior em crescimento; efeitos automáticos na ingestão/rotina; consultas automáticas da tela a cada 30 segundos. A alteração é de conteúdo/apresentação, sem mudar algoritmo, API ou banco. Validação: template completo compilado com Vue 3.4.21 e `git diff --check`, sem erros; sem nova validação visual no navegador.
+
+
+## Página independente de Tendências
+
+Revisão solicitada em 06/11/2026. A organização vigente substitui a incorporação de Tendências à Telemetria:
+
+- Menu lateral **Telemetria** abre apenas Leituras/Sensores. Menu lateral **Tendências** abre a nova página, com título e contexto próprios. O contador de anomalias foi movido para Tendências.
+- Estado `trendPage` separado de `telemetry`: equipamento, sensor, condição, tamanho/página, resultados, carga, erros, horário e detalhe não são compartilhados. O seletor de equipamento da Telemetria não restringe nem inicializa a página de Tendências; a seleção da nova página também não altera a Telemetria. Cada uma preserva seus próprios filtros ao navegar.
+- No topo de Tendências, uma caixa compacta concentra **Equipamento**, **Sensor** e **Limpar seleção**. O padrão é acompanhar todos, sem exigir seleção. Ao escolher equipamento, limpar apenas o sensor da página e restringir suas opções aos sensores ativos desse equipamento. Opções são derivadas da resposta completa de tendências e ordenadas pelo nome, sem requisições adicionais de cadastro. Se uma seleção deixar de existir nos dados, ela continua explicitamente identificada como indisponível, sem parecer que “Todos” está selecionado.
+- Os quatro cards já existentes filtram condição, evitando um terceiro seletor redundante. O card ativo informa como removê-lo e há botão **Mostrar todas as condições**. A lista mantém paginação própria de 20/50/100 itens.
+- Gráfico, evidências, configurações por sensor/global e guia expansível em linguagem simples foram movidos integralmente para a nova página. A ajuda fica após a lista/detalhe, fechada por padrão, deixando a seleção e os resultados em primeiro plano.
+- Atualização automática de 30 segundos passou a consultar todos os resultados quando `view=tendencias` e atualizar apenas o estado dessa página. O resumo do dashboard e avisos continuam funcionando em outras telas. Uma consulta de Telemetria em andamento não substitui ou bloqueia a consulta da página de Tendências. A atualização preserva seus filtros, página e detalhe.
+- Atalhos explícitos (card do dashboard e botão Tendência do sensor) abrem a página já no equipamento/sensor clicado. Esse contexto só é transferido pela ação explícita, sem alterar os filtros salvos em Telemetria. **Ver anomalias** no aviso abre a página com equipamento/sensor livres e condição anormal selecionada.
+- Trocar empresa limpa os contextos das duas páginas e invalida suas consultas pendentes separadamente. Logout limpa os dois estados. A configuração global continua exclusiva de administrador e o técnico continua somente consultando.
+
+Sem mudança de API, algoritmo ou banco. Não é necessária nova migração. Validação: **18 testes de frontend aprovados**, incluindo quatro regressões adicionais para independência entre páginas, opções de sensor por equipamento, atalhos intencionais e acesso pelo menu sem a antiga aba. Template completo compilado com Vue 3.4.21, sintaxe JavaScript e whitespace sem erros. Sem nova validação visual no navegador.
