@@ -126,53 +126,52 @@
       </div>
 
       <div class="sidebar-group-label">Principal</div>
-      <div class="nav-item" :class="{active:view==='dashboard'}" @click="navigate('dashboard')">
-        <span class="nav-icon">◈</span> Dashboard
+      <div class="nav-item" :class="{active:view==='dashboard'}" role="button" tabindex="0" :aria-label="'Dashboard'" @keydown.enter="navigate('dashboard')" @keydown.space.prevent="navigate('dashboard')" @click="navigate('dashboard')">
+        <span class="nav-icon">◈</span> <span class="nav-label">Dashboard</span>
       </div>
 
       <div class="sidebar-group-label">Operações</div>
-      <div class="nav-item" :class="{active:view==='equipamentos'}" @click="navigate('equipamentos')">
-        <span class="nav-icon">⚙</span> Equipamentos
+      <div class="nav-item" :class="{active:view==='equipamentos'}" role="button" tabindex="0" :aria-label="'Equipamentos'" @keydown.enter="navigate('equipamentos')" @keydown.space.prevent="navigate('equipamentos')" @click="navigate('equipamentos')">
+        <span class="nav-icon">⚙</span> <span class="nav-label">Equipamentos</span>
       </div>
-      <div class="nav-item" :class="{active:view==='alertas'}" @click="navigate('alertas')">
-        <span class="nav-icon">◉</span> Alertas
-        <span v-if="alertCount>0" class="nav-count">{{ alertCount }}</span>
+      <div class="nav-item" :class="{active:view==='alertas'}" role="button" tabindex="0" :aria-label="'Histórico de alertas'" @keydown.enter="navigate('alertas')" @keydown.space.prevent="navigate('alertas')" @click="navigate('alertas')">
+        <span class="nav-icon">◉</span> <span class="nav-label">Histórico de alertas</span>
       </div>
-      <div class="nav-item" :class="{active:view==='ordens'}" @click="navigate('ordens')">
-        <span class="nav-icon">✦</span> Ordens de Serviço
+      <div class="nav-item" :class="{active:view==='ordens'}" role="button" tabindex="0" :aria-label="'Ordens de Serviço'" @keydown.enter="navigate('ordens')" @keydown.space.prevent="navigate('ordens')" @click="navigate('ordens')">
+        <span class="nav-icon">✦</span> <span class="nav-label">Ordens de Serviço</span>
         <span v-if="osSemTecnicoCount>0" class="nav-count">{{ osSemTecnicoCount }}</span>
       </div>
-      <div class="nav-item" :class="{active:view==='telemetria'}" @click="navigate('telemetria')">
-        <span class="nav-icon">⬡</span> Telemetria
+      <div class="nav-item" :class="{active:view==='telemetria'}" role="button" tabindex="0" :aria-label="'Telemetria'" @keydown.enter="navigate('telemetria')" @keydown.space.prevent="navigate('telemetria')" @click="navigate('telemetria')">
+        <span class="nav-icon">⬡</span> <span class="nav-label">Telemetria</span>
       </div>
-      <div class="nav-item" :class="{active:view==='tendencias'}" @click="navigate('tendencias')">
-        <span class="nav-icon">↗</span> Tendências
+      <div class="nav-item" :class="{active:view==='tendencias'}" role="button" tabindex="0" :aria-label="'Tendências'" @keydown.enter="navigate('tendencias')" @keydown.space.prevent="navigate('tendencias')" @click="navigate('tendencias')">
+        <span class="nav-icon">↗</span> <span class="nav-label">Tendências</span>
         <span v-if="trendMonitor.updatedAt" class="nav-count" :title="trendMonitor.error || 'Tendências anormais na empresa selecionada: ' + trendAlerts.length">{{ trendAlerts.length }}</span>
       </div>
 
-      <div class="nav-item" :class="{active:view==='localizacoes'}" @click="navigate('localizacoes')">
-        <span class="nav-icon">◎</span> Localizações
+      <div class="nav-item" :class="{active:view==='localizacoes'}" role="button" tabindex="0" :aria-label="'Localizações'" @keydown.enter="navigate('localizacoes')" @keydown.space.prevent="navigate('localizacoes')" @click="navigate('localizacoes')">
+        <span class="nav-icon">◎</span> <span class="nav-label">Localizações</span>
       </div>
 
       <template v-if="isAdmin">
         <div class="sidebar-group-label">Administração</div>
-        <div class="nav-item" :class="{active:view==='empresas'}" @click="navigate('empresas')">
-          <span class="nav-icon">▣</span> Empresas
+        <div class="nav-item" :class="{active:view==='empresas'}" role="button" tabindex="0" :aria-label="'Empresas'" @keydown.enter="navigate('empresas')" @keydown.space.prevent="navigate('empresas')" @click="navigate('empresas')">
+          <span class="nav-icon">▣</span> <span class="nav-label">Empresas</span>
         </div>
-        <div class="nav-item" :class="{active:view==='usuarios'}" @click="navigate('usuarios')">
-          <span class="nav-icon">◎</span> Usuários
+        <div class="nav-item" :class="{active:view==='usuarios'}" role="button" tabindex="0" :aria-label="'Usuários'" @keydown.enter="navigate('usuarios')" @keydown.space.prevent="navigate('usuarios')" @click="navigate('usuarios')">
+          <span class="nav-icon">◎</span> <span class="nav-label">Usuários</span>
         </div>
-        <div class="nav-item" :class="{active:view==='prompts'}" @click="navigate('prompts')">
-          <span class="nav-icon">🤖</span> Config. Prompts
+        <div class="nav-item" :class="{active:view==='prompts'}" role="button" tabindex="0" :aria-label="'Config. Prompts'" @keydown.enter="navigate('prompts')" @keydown.space.prevent="navigate('prompts')" @click="navigate('prompts')">
+          <span class="nav-icon">🤖</span> <span class="nav-label">Config. Prompts</span>
         </div>
       </template>
 
       <div class="sidebar-group-label">Conta</div>
-      <div class="nav-item" :class="{active:view==='perfil'}" @click="navigate('perfil')">
+      <div class="nav-item" :class="{active:view==='perfil'}" role="button" tabindex="0" :aria-label="'Meu Perfil'" @keydown.enter="navigate('perfil')" @keydown.space.prevent="navigate('perfil')" @click="navigate('perfil')">
         <span class="nav-icon" style="overflow: hidden; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; vertical-align: middle;">
           <img v-if="me?.foto_perfil" :src="me.foto_perfil" alt="Foto" style="width:20px; height:20px; object-fit:cover; border-radius:50%;" />
           <span v-else>👤</span>
-        </span> Meu Perfil
+        </span> <span class="nav-label">Meu Perfil</span>
       </div>
 
       <div class="sidebar-footer">
@@ -208,18 +207,11 @@
             </div>
           </template>
           <div class="topbar-meta">
-            <template v-if="view==='dashboard' && isAdminOrGestor">
-              <div class="export-btns" style="margin-left:0; margin-right:12px; padding:4px 8px;">
-                <span class="export-label">Exportar Dash:</span>
-                <button class="btn-export pdf" @click="exportData('dashboard', 'pdf')" title="Baixar PDF">📄 PDF</button>
-                <button class="btn-export excel" @click="exportData('dashboard', 'excel')" title="Baixar Excel">📊 Excel</button>
-              </div>
-            </template>
+
             <div class="theme-toggle" :class="{'is-light': !darkMode}" @click="toggleTheme" :title="darkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'">
               <div class="theme-toggle-knob">{{ darkMode ? '🌙' : '☀️' }}</div>
             </div>
-            <span class="topbar-chip">API v1.0</span>
-            <span class="live-dot"></span>
+
           </div>
         </div>
       </div>
@@ -233,495 +225,58 @@
         <div v-if="trendMonitor.error" class="telemetry-notice" role="status">{{ trendMonitor.error }} <span v-if="trendMonitor.updatedAt">Última consulta: {{ fmtDate(trendMonitor.updatedAt) }}.</span><button class="btn btn-ghost btn-sm" :disabled="trendMonitor.busy" @click="refreshTrendMonitoring">Tentar novamente</button></div>
 
 
-        <!-- ══════════ DASHBOARD ══════════ -->
-        <div v-if="view==='dashboard'">
-
-          <!-- KPI Row -->
-          <div class="dash-section-label" v-if="kpis">Indicadores Principais</div>
-          <div class="dash-grid" style="margin-bottom:16px" v-if="kpis">
-            <template v-if="isTecnico">
-              <div class="kpi-mega col-3" style="--kpi-color:var(--warn)">
-                <div class="kpi-mega-icon">⚡</div>
-                <div class="kpi-mega-label">Ordens Abertas</div>
-                <div class="kpi-mega-val">{{ kpis.ordens_abertas ?? '—' }}</div>
-                <div class="kpi-mega-foot">para resolver</div>
-              </div>
-              <div class="kpi-mega col-3 kpi-clickable" style="--kpi-color:var(--acid)" @click="navigateMinhasOrdens">
-                <div class="kpi-mega-icon">👤</div>
-                <div class="kpi-mega-label">Minhas Ordens</div>
-                <div class="kpi-mega-val">{{ kpis.minhas_ordens ?? '—' }}</div>
-                <div class="kpi-mega-foot">atribuídas a mim · clique para ver</div>
-              </div>
-              <div class="kpi-mega col-3 kpi-clickable" style="--kpi-color:var(--danger)" @click="navigateOsSemTecnico">
-                <div class="kpi-mega-icon">⚠</div>
-                <div class="kpi-mega-label">O.S. Aguardando Técnico</div>
-                <div class="kpi-mega-val">{{ kpis.ordens_sem_tecnico ?? '—' }}</div>
-                <div class="kpi-mega-foot">aguardam atribuição · clique para ver</div>
-              </div>
-              <div class="kpi-mega col-3" style="--kpi-color:var(--ice)">
-                <div class="kpi-mega-icon">⚙</div>
-                <div class="kpi-mega-label">Equipamentos</div>
-                <div class="kpi-mega-val">{{ kpis.total_equipamentos ?? '—' }}</div>
-                <div class="kpi-mega-foot">da empresa</div>
-              </div>
-            </template>
+        <!-- Dashboard: priorities first; optional detail never starts hidden polling. -->
+        <section v-if="view==='dashboard'" class="dashboard-home">
+          <header class="dashboard-heading">
+            <div><p class="dashboard-eyebrow">{{ dashboardAdminOverview ? 'ADMINISTRAÇÃO' : isTecnico ? 'MEU TRABALHO' : 'OPERAÇÃO' }}</p><h1>{{ dashboardAdminOverview ? 'Visão das empresas' : isTecnico ? 'Seu próximo atendimento' : 'Prioridades da manutenção' }}</h1><p>{{ dashboardAdminOverview ? 'Compare as empresas e identifique onde sua atenção é necessária.' : isTecnico ? 'Acompanhe seus atendimentos e encontre ordens disponíveis.' : 'Veja o que precisa de atenção e organize os próximos passos.' }}</p></div>
+            <div class="dashboard-heading-actions"><button v-if="isAdmin && !dashboardAdminOverview" class="btn btn-ghost btn-sm" @click="dashboardCompany()">← Voltar às empresas</button><button class="btn btn-ghost btn-sm" :disabled="dashboardKpisLoading" @click="fetchDashboard()">{{ dashboardKpisLoading ? 'Atualizando…' : 'Atualizar' }}</button><details v-if="isAdminOrGestor" class="dashboard-export"><summary class="btn btn-ghost btn-sm">Exportar</summary><div><button class="btn btn-ghost btn-sm" @click="exportData('dashboard','pdf')">PDF</button><button class="btn btn-ghost btn-sm" @click="exportData('dashboard','excel')">Excel</button></div></details></div>
+          </header>
+          <div class="dashboard-sync"><span>{{ dashboardUpdatedAt ? 'Última atualização: ' + fmtDate(dashboardUpdatedAt) : 'Aguardando primeira consulta' }}</span><span>Resumo automático · 30 s</span></div>
+          <div v-if="dashboardKpisError" role="alert" class="telemetry-notice">{{ dashboardKpisError }} <button class="btn btn-ghost btn-sm" :disabled="dashboardKpisLoading" @click="fetchDashboard()">Tentar novamente</button></div>
+          <div v-if="!dashboardAdminOverview && !isTecnico" class="dashboard-filters">
+            <label>Setor<select v-model="dashSetor" @change="applyDashboardFilters"><option value="">Todos os setores</option><option v-for="setor in availableDashboardSectors" :key="setor" :value="setor">{{ setor }}</option></select></label>
+            <label>Equipamento<select v-model="dashEquipamento" @change="applyDashboardFilters"><option value="">Todos os equipamentos</option><option v-for="eq in dashboardEquipmentOptions" :key="eq.id" :value="eq.id">{{ eq.nome }}</option></select></label>
+            <button v-if="dashSetor || dashEquipamento" class="btn btn-ghost btn-sm" @click="dashSetor='';dashEquipamento='';fetchDashboard()">Limpar filtros</button>
+          </div>
+          <div v-if="dashboardKpisLoading && !dashboardSummary" class="dashboard-skeleton" role="status">Carregando prioridades…</div>
+          <template v-if="dashboardSummary">
+            <div class="dashboard-stats" :class="{'three':isTecnico}">
+              <component :is="card.action ? 'button' : 'article'" v-for="card in dashboardCards" :key="card.label" class="dashboard-stat" :class="{'needs-attention':card.critical && card.value > 0, actionable:card.action}" @click="dashboardAction(card.action)"><span>{{ card.label }}</span><strong>{{ card.value ?? '—' }}</strong><small v-if="card.action">Ver detalhes →</small></component>
+            </div>
+            <section v-if="dashboardAdminOverview" class="dashboard-panel">
+              <div class="dashboard-panel-head"><div><h2>Situação por empresa</h2><p>Alertas críticos e ordens sem responsável aparecem primeiro.</p></div><label class="dashboard-company-search">Buscar empresa<input v-model="companySearch" type="search" placeholder="Nome da empresa"></label></div>
+              <div class="dashboard-company-list"><table><thead><tr><th>Empresa</th><th>Em manutenção / total</th><th>Alertas críticos ativos</th><th>Ordens abertas</th><th>Sem responsável</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody><tr v-for="company in dashboardCompanies" :key="company.id"><td data-label="Empresa"><strong>{{ company.nome }}</strong></td><td data-label="Em manutenção / total">{{ company.em_manutencao }} / {{ company.equipamentos }}</td><td data-label="Alertas críticos ativos"><span :class="{'dashboard-danger':company.alertas_criticos > 0}">{{ company.alertas_criticos }}</span></td><td data-label="Ordens abertas">{{ company.ordens_abertas }}</td><td data-label="Sem responsável">{{ company.sem_responsavel }}</td><td><button class="btn btn-ghost btn-sm" @click="dashboardCompany(company.id)">Ver empresa →</button></td></tr></tbody></table></div>
+              <div v-if="!dashboardCompanies.length" class="live-placeholder">{{ companySearch ? 'Nenhuma empresa corresponde à busca.' : 'Nenhuma empresa cadastrada.' }}</div>
+            </section>
             <template v-else>
-              <div class="kpi-mega col-3" style="--kpi-color:var(--ice)">
-                <div class="kpi-mega-icon">⚙</div>
-                <div class="kpi-mega-label">Equipamentos</div>
-                <div class="kpi-mega-val">{{ kpis.total_equipamentos ?? '—' }}</div>
-                <div class="kpi-mega-foot">total cadastrado</div>
+              <div class="dashboard-priorities" :class="{'technician':isTecnico}">
+                <section class="dashboard-panel">
+                  <div class="dashboard-panel-head"><div><h2>{{ isTecnico ? 'Ordens de serviço' : 'Ordens prioritárias' }}</h2><p>{{ isTecnico ? 'Retome um atendimento ou consulte as oportunidades.' : 'Ordens abertas por prioridade e antiguidade.' }}</p></div><button class="btn btn-ghost btn-sm" @click="openDashboardOrders(isTecnico && dashboardTab==='disponiveis' ? 'livres' : '')">Ver todas →</button></div>
+                  <div v-if="isTecnico" class="dashboard-tabs" role="group" aria-label="Ordens exibidas"><button :aria-pressed="dashboardTab==='minhas'" @click="dashboardTab='minhas'">Minhas ordens</button><button :aria-pressed="dashboardTab==='disponiveis'" @click="dashboardTab='disponiveis'">Disponíveis</button></div>
+                  <div class="dashboard-rows"><article v-for="order in dashboardOrders" :key="order.id" class="dashboard-order"><div><div class="dashboard-row-label"><span>#{{ order.id }}</span><span class="badge" :class="prioridadeBadge(order.prioridade)">{{ prioridadeLabel(order.prioridade) }}</span><span class="badge" :class="ordemStatusBadge(order.status)">{{ order.status==='andamento' ? 'Em andamento' : 'Pendente' }}</span></div><h3>{{ order.titulo }}</h3><p>{{ order.equipamento_nome }} · {{ order.responsavel_nome || 'Sem responsável' }}</p><small>Aberta em {{ fmtDate(order.data_abertura) }}</small></div><button class="btn btn-ghost btn-sm" @click="openDashboardOrder(order)">Abrir ordem →</button></article></div>
+                  <div v-if="!dashboardOrders.length" class="live-placeholder">{{ isTecnico && dashboardTab==='minhas' ? 'Você não tem atendimentos abertos.' : isTecnico ? 'Nenhuma ordem disponível para assumir.' : 'Nenhuma ordem aberta neste contexto.' }}</div>
+                </section>
+                <section v-if="!isTecnico" class="dashboard-panel">
+                  <div class="dashboard-panel-head"><div><h2>Alertas que precisam de atenção</h2><p>Ocorrências ativas, incluindo as de dias anteriores.</p></div><button class="btn btn-ghost btn-sm" @click="dashboardAllAlerts">Ver todos →</button></div>
+                  <div class="dashboard-rows"><article v-for="alert in dashboardSummary.alertas_prioritarios" :key="alert.id" class="dashboard-alert"><div><div class="dashboard-row-label"><span class="badge" :class="nivelBadge(alert.nivel)">{{ alert.nivel==='critico' ? 'Crítico' : alert.nivel==='medio' ? 'Médio' : 'Baixo' }}</span><span>{{ alert.origem==='tendencia' ? 'Tendência preditiva' : alert.origem==='limite' ? 'Limite operacional' : 'Manual' }}</span></div><h3>{{ alert.tipo_alerta }}</h3><p>{{ alert.equipamento_nome }} · {{ alert.sensor_nome || 'Sem sensor' }}</p><small>{{ fmtDate(alert.data_alerta) }}</small></div><div class="dashboard-row-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails(alert)">Ver alerta →</button><button v-if="alert.origem==='tendencia' && alert.sensor" class="btn btn-ghost btn-sm" @click="showTrends(alert.equipamento,alert.sensor)">Ver análise</button></div></article></div>
+                  <div v-if="!dashboardSummary.alertas_prioritarios?.length" class="live-placeholder">Nenhum alerta ativo neste contexto.</div>
+                </section>
               </div>
-              <div class="kpi-mega col-3" style="--kpi-color:var(--danger)">
-                <div class="kpi-mega-icon">◉</div>
-                <div class="kpi-mega-label">Alertas Ativos</div>
-                <div class="kpi-mega-val">{{ kpis.alertas_ativos ?? dashAlerts.length }}</div>
-                <div class="kpi-mega-foot">requerem atenção</div>
-              </div>
-              <div class="kpi-mega col-3" style="--kpi-color:var(--warn)">
-                <div class="kpi-mega-icon">✦</div>
-                <div class="kpi-mega-label">Ordens Abertas</div>
-                <div class="kpi-mega-val">{{ kpis.ordens_abertas ?? '—' }}</div>
-                <div class="kpi-mega-foot">em andamento</div>
-              </div>
-              <div class="kpi-mega col-3" style="--kpi-color:var(--acid)">
-                <div class="kpi-mega-icon">⬡</div>
-                <div class="kpi-mega-label">Leituras (Hoje / Total)</div>
-                <div class="kpi-mega-val kpi-mega-val-split">
-                  {{ formatNumber(leiturasTodayCount) }}
-                  <span class="kpi-val-divider">/</span>
-                  <span class="kpi-mega-val-secondary">{{ formatNumber(leiturasTotalCount) }}</span>
+              <details v-if="!isTecnico" class="dashboard-panel dashboard-disclosure" :open="performanceOpen" @toggle="togglePerformance">
+                <summary><span><strong>Desempenho da manutenção</strong><small>Custos e indicadores · histórico completo do contexto selecionado</small></span><span class="dashboard-disclosure-icon" aria-hidden="true">+</span></summary>
+                <div v-if="performanceOpen" class="dashboard-disclosure-body">
+                  <div v-if="dashboardKpisLoading && !dashboardSummary.desempenho" class="live-placeholder">Carregando desempenho…</div>
+                  <template v-if="dashboardSummary.desempenho"><div class="dashboard-performance"><article><span>Tempo médio até conclusão (MTTR)</span><strong>{{ metric(dashboardMetrics.mttr,' h') }}</strong></article><article><span>Tempo médio entre intervenções (MTBF)</span><strong>{{ metric(dashboardMetrics.mtbf,' h') }}</strong></article><article><span>Disponibilidade estimada</span><strong>{{ metric(dashboardMetrics.disponibilidade,' %') }}</strong></article><article><span>Custo registrado</span><strong>{{ metric(dashboardMetrics.custo,'') === 'Sem histórico suficiente' ? '—' : 'R$ ' + metric(dashboardMetrics.custo) }}</strong></article></div><p class="dashboard-help">Indicadores calculados a partir das ordens concluídas. A disponibilidade é uma estimativa do histórico, sem medição direta de tempo de operação.</p>
+                  <div v-if="dashboardCostChart.points.length" class="dashboard-cost-chart"><h3>Custos por dia de execução</h3><svg viewBox="0 0 900 285" role="img" aria-label="Custos registrados em reais por dia de execução"><g v-for="tick in dashboardCostChart.ticks" :key="tick.y"><line x1="72" :y1="tick.y" x2="722" :y2="tick.y" class="live-grid"/><text x="62" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g><text x="72" y="18" class="live-axis">R$</text><path :d="dashboardCostChart.path" fill="none" stroke="var(--ice)" stroke-width="2.5"/><circle v-for="point in dashboardCostChart.points" :key="point.id" :cx="point.x" :cy="point.y" r="4" fill="var(--ice)"><title>{{ fmtDate(point.timestamp).split(' ')[0] }} · R$ {{ metric(point.valor) }}</title></circle><text v-for="(time,i) in dashboardCostChart.times" :key="i" :x="time.x" y="260" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text></svg></div><p v-else class="live-placeholder">Nenhum custo registrado neste contexto.</p></template>
                 </div>
-                <div class="kpi-mega-foot">pontos de telemetria</div>
-              </div>
+              </details>
+              <details class="dashboard-panel dashboard-disclosure" :open="liveOpen" @toggle="liveOpen=$event.target.open">
+                <summary><span><strong>Acompanhamento ao vivo</strong><small>Escolha um sensor · consulta a cada 5 segundos</small></span><span class="dashboard-disclosure-icon" aria-hidden="true">+</span></summary>
+                <div v-if="liveOpen" class="dashboard-disclosure-body"><live-chart :api="api" :empresa="globalEmpresa" :equipamentos="dashboardEquipamentos"></live-chart></div>
+              </details>
             </template>
-          </div>
-          <div v-else-if="!kpis" class="loading" style="height:120px"><div class="spinner"></div></div>
-
-          <div v-if="!isTecnico" style="margin-bottom:20px;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--edge);border-radius:12px">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--t4);letter-spacing:1px;text-transform:uppercase;white-space:nowrap">⚙ Filtro</span>
-            <select class="chart-filter-select" v-model="dashSetor" style="flex:1">
-              <option value="">Todos os setores</option>
-              <option v-for="setor in availableDashboardSectors" :key="setor" :value="setor">{{ setor }}</option>
-            </select>
-            <select class="chart-filter-select" v-model="dashEquipamento" style="flex:1">
-              <option value="">Todos os equipamentos</option>
-              <option v-for="eq in dashboardEquipmentOptions" :key="eq.id" :value="eq.id">{{ eq.nome }}</option>
-            </select>
-          </div>
-
-          <div v-if="!isTecnico" class="dash-section-label" style="margin-top:8px">Métricas de Manutenção</div>
-          <div v-if="!isTecnico" class="dash-grid" style="margin-bottom:20px">
-            <div class="kpi-mega col-4" style="--kpi-color:var(--ice)">
-              <div class="kpi-mega-icon">⏱</div>
-              <div class="kpi-mega-label">MTTR médio <span class="kpi-info" title="MTTR = média(data_conclusao - data_abertura) das ordens concluídas. Menor é melhor.">?</span></div>
-              <div class="kpi-mega-val">{{ dashboardMetrics.mttr !== '—' ? dashboardMetrics.mttr + 'h' : '—' }}</div>
-              <div class="kpi-mega-foot">Tempo médio de reparo · Menor é melhor</div>
-            </div>
-            <div class="kpi-mega col-4" style="--kpi-color:var(--acid)">
-              <div class="kpi-mega-icon">⚡</div>
-              <div class="kpi-mega-label">MTBF médio <span class="kpi-info" title="MTBF = média entre falhas. Maior é melhor.">?</span></div>
-              <div class="kpi-mega-val">{{ dashboardMetrics.mtbf !== '—' ? dashboardMetrics.mtbf + 'h' : '—' }}</div>
-              <div class="kpi-mega-foot">Tempo médio entre falhas · Maior é melhor</div>
-            </div>
-            <div class="kpi-mega col-4" style="--kpi-color:var(--warn)">
-              <div class="kpi-mega-icon">✅</div>
-              <div class="kpi-mega-label">Disponibilidade <span class="kpi-info" title="MTBF / (MTBF + MTTR) × 100">?</span></div>
-              <div class="kpi-mega-val">{{ dashboardMetrics.disponibilidade !== '—' ? dashboardMetrics.disponibilidade + '%' : '—' }}</div>
-              <div class="kpi-mega-foot">Uptime estimado · Quanto mais perto de 100%, melhor</div>
-            </div>
-          </div>
-          <div v-if="dashboardKpisError" class="chart-error" style="margin-bottom:16px; color:#ffb3b3; font-size:13px;">{{ dashboardKpisError }}</div>
-
-          <div v-if="!isTecnico" class="chart-card col-12 explainer-card" :class="{collapsed: explainerCollapsed}" style="margin-bottom:16px">
-            <button class="chart-head chart-head-button" @click="explainerCollapsed = !explainerCollapsed" type="button">
-              <div>
-                <div class="chart-title">Como interpretar essas métricas</div>
-                <div class="chart-sub">Visão rápida para gestores e admin</div>
-              </div>
-              <div class="chart-expand-indicator">{{ explainerCollapsed ? '+' : '−' }}</div>
-            </button>
-            <div class="chart-body" v-show="!explainerCollapsed" style="font-size:12px; line-height:1.6; color:var(--t1);">
-              <p><strong>MTTR</strong> indica quanto tempo, em média, uma ordem de serviço leva para ser concluída. Fórmula: <strong>MTTR = média(data_conclusao - data_abertura)</strong>. Ex: <strong>40,2h</strong> significa cerca de 40 horas de trabalho. Para este indicador, <strong>menor é melhor</strong>.</p>
-              <p><strong>MTBF</strong> indica quanto tempo, em média, passa entre a conclusão de uma falha e a próxima falha registrada. Fórmula: <strong>MTBF = média(data_abertura_da_os_seguinte - data_conclusao_da_os_anterior)</strong>. Isso mede o tempo em que o equipamento permanece funcionando antes da próxima falha. Ex: <strong>40,2h</strong> significa cerca de 40 horas entre problemas. Aqui, <strong>maior é melhor</strong>.</p>
-              <p><strong>Disponibilidade</strong> é a proporção do tempo em que o equipamento está operacional. Matemática: se o ativo funciona por MTBF horas e depois fica parado por MTTR horas, o ciclo total é <strong>MTBF + MTTR</strong>. Assim, a disponibilidade é a parte do tempo em funcionamento dentro do ciclo total:
-                <strong>Disponibilidade = MTBF / (MTBF + MTTR) × 100</strong>.
-              </p>
-              <p>Essa fórmula faz sentido porque o ativo só está disponível enquanto não falha. Se MTBF for alto e MTTR for baixo, o denominador cresce menos que o numerador, gerando um percentual próximo de 100%. Se MTTR sobe muito, a disponibilidade cai porque o tempo de paralisação pesa mais no ciclo.</p>
-              <p style="margin-top:10px; font-size:11px; color:var(--t2);">Não existe um limite global único: o que é bom depende do tipo de equipamento, setor e contexto da empresa. Use essas métricas como referência interna para comparar equipamentos, setores e evolução ao longo do tempo.</p>
-              <ul style="margin-top:10px; padding-left:18px; color:var(--t2); font-size:11px;">
-                <li><strong>MTTR</strong>: valor baixo é desejável porque significa reparos mais rápidos.</li>
-                <li><strong>MTBF</strong>: valor alto é desejável porque significa menos falhas em intervalos maiores.</li>
-                <li><strong>Disponibilidade</strong>: quanto mais próximo de 100%, melhor.</li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Painel de Tendências -->
-          <div v-if="!isTecnico && trendAlerts.length > 0" class="dash-section-label" style="margin-top:24px; color:var(--warn)">
-            <span style="font-size:16px; margin-right:6px">⚠️</span> Tendências anormais confirmadas
-          </div>
-          <div v-if="!isTecnico && trendAlerts.length > 0" class="dash-grid" style="margin-bottom:20px">
-            <div v-for="trend in trendAlerts" :key="trend.sensor_id" 
-                 class="chart-card trend-card kpi-clickable" 
-                 :class="'risk-' + trend.risk_level"
-                 @click="showTrends(trend.sensor_info.equipamento_id,trend.sensor_id)">
-              <div class="trend-card-header">
-                <div class="trend-sensor-name">{{ trend.sensor_info.nome }} ({{ trend.sensor_info.tipo_display }})</div>
-                <div class="trend-risk-badge">{{ trend.risk_level.toUpperCase() }}</div>
-              </div>
-              <div class="trend-card-body">
-                <div class="trend-eq-name">{{ trend.sensor_info.equipamento_nome }}</div>
-                <div class="trend-direction">
-                  <span class="trend-dir-icon" v-if="trend.direction === 'increasing'">📈</span>
-                  <span class="trend-dir-icon" v-if="trend.direction === 'decreasing'">📉</span>
-                  Tendência {{ trendDirection(trend) }}
-                </div>
-                <div class="trend-projection" v-if="trend.projected_breach_hours !== null">
-                  <span v-if="trend.projected_breach_hours === 0" style="color:var(--danger); font-weight:600">Limite ultrapassado!</span>
-                  <span v-else>Projeção: limite em <strong>{{ trend.projected_breach_hours }}h</strong></span>
-                </div>
-                <div v-if="trend.predictive_work_order" class="trend-projection">
-                  OS preditiva #{{ trend.predictive_work_order.id }} — {{ trend.predictive_work_order.status }}
-                </div>
-                <div v-else-if="trend.intervention_recommended" class="trend-projection">
-                  Intervenção preditiva recomendada
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Charts Row 1 -->
-          <div class="dash-section-label" style="margin-top:8px">Visão Geral</div>
-          <div class="dash-grid" style="margin-bottom:20px">
-            <div class="chart-card col-4">
-              <div class="chart-head">
-                <div class="chart-title">Status Equipamentos</div>
-                <div class="chart-sub">por condição</div>
-              </div>
-              <div class="chart-body">
-                <div v-if="chartEquipStatus.length" class="donut-wrap">
-                  <svg class="donut-svg" width="128" height="128" viewBox="0 0 128 128">
-                    <circle cx="64" cy="64" r="52" fill="none" stroke="var(--s4)" stroke-width="1"/>
-                    <path v-for="arc in donutArcs(chartEquipStatus)" :key="arc.label"
-                          :d="arc.d" :fill="arc.color" opacity=".9"/>
-                    <circle cx="64" cy="64" r="34" fill="var(--s2)"/>
-                    <text x="64" y="60" text-anchor="middle" fill="var(--t1)"
-                          font-family="Unbounded,sans-serif" font-size="18" font-weight="700">
-                      {{ chartEquipStatus.reduce((s,i)=>s+i.value,0) }}
-                    </text>
-                    <text x="64" y="74" text-anchor="middle" fill="var(--t4)"
-                          font-family="IBM Plex Mono,monospace" font-size="8" letter-spacing="1">
-                      TOTAL
-                    </text>
-                  </svg>
-                  <div class="donut-legend">
-                    <div v-for="seg in donutArcs(chartEquipStatus)" :key="seg.label" class="donut-legend-item">
-                      <div class="donut-dot" :style="{background:seg.color}"></div>
-                      <div class="donut-label">{{ seg.label }}</div>
-                      <div class="donut-pct" :style="{color:seg.color}">{{ seg.value }}</div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="donut-empty">Sem dados</div>
-              </div>
-            </div>
-
-            <div class="chart-card col-4">
-              <div class="chart-head">
-                <div class="chart-title">Alertas por Nível</div>
-                <div class="chart-sub">ativos agora</div>
-              </div>
-              <div class="chart-body">
-                <div class="bar-list">
-                  <div v-for="b in chartAlertNivel" :key="b.label" class="bar-item">
-                    <div class="bar-meta">
-                      <span class="bar-label">{{ b.label }}</span>
-                      <span class="bar-val" :style="{color:b.color}">{{ b.value }}</span>
-                    </div>
-                    <div class="bar-track">
-                      <div class="bar-fill" :style="{width: b.pct+'%', background: b.color}"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="chart-card col-4">
-              <div class="chart-head">
-                <div class="chart-title">Ordens de Serviço</div>
-                <div class="chart-sub">por status</div>
-              </div>
-              <div class="chart-body">
-                <div class="bar-list">
-                  <div v-for="b in chartOrdens" :key="b.label" class="bar-item">
-                    <div class="bar-meta">
-                      <span class="bar-label">{{ b.label }}</span>
-                      <span class="bar-val" :style="{color:b.color}">{{ b.value }}</span>
-                    </div>
-                    <div class="bar-track">
-                      <div class="bar-fill" :style="{width: b.pct+'%', background: b.color}"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Charts Row 2 -->
-          <div class="dash-section-label" style="margin-top:8px">Telemetria & Custos</div>
-          <div class="dash-grid" style="margin-bottom:20px">
-            <div class="chart-card" :class="isTecnico ? 'col-12' : 'col-6'">
-              <div class="chart-head">
-                <div class="chart-title">Telemetria <span class="live-dot" style="margin-left:6px"></span></div>
-                <div class="chart-filter-row">
-                  <select class="chart-filter-select" v-model="dashTelemetriaEquip">
-                    <option disabled value="">Selecione equipamento</option>
-                    <option v-for="eq in dashboardEquipamentos" :key="eq.id" :value="eq.id">{{ eq.nome }}</option>
-                  </select>
-                  <select class="chart-filter-select" v-model="dashTelemetriaSensor">
-                    <option disabled value="">Selecione sensor</option>
-                    <option v-for="s in dashTelemetriaSensoresFiltrados" :key="s.id" :value="s.id">{{ s.nome }} ({{ s.tipo }})</option>
-                  </select>
-                  <button v-if="isAdmin" class="btn btn-ghost btn-sm" @click="toggleTesterMode" style="margin-left:8px">
-                    {{ testerMode ? 'Modo Tester: ON' : 'Modo Tester: OFF' }}
-                  </button>
-                  <button v-if="isAdmin && testerMode" class="btn btn-primary btn-sm" @click="openModal('leitura', { sensor: dashTelemetriaSensor })" style="margin-left:8px">
-                    Injetar leitura
-                  </button>
-                </div>
-              </div>
-              <div class="chart-body">
-                <div v-if="displayedChartTelemetria?.path" class="spark-wrap">
-                  <svg width="100%" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid meet" style="overflow:visible">
-                    <defs>
-                      <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="var(--acid)" stop-opacity=".25"/>
-                        <stop offset="100%" stop-color="var(--acid)" stop-opacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    <line x1="45" y1="10" x2="320" y2="10" stroke="var(--edge)" stroke-width="0.5"/>
-                    <line x1="45" y1="50" x2="320" y2="50" stroke="var(--edge)" stroke-width="0.5"/>
-                    <line x1="45" y1="90" x2="320" y2="90" stroke="var(--edge)" stroke-width="0.5"/>
-                    <line v-for="t in displayedChartTelemetria.thresholds" :key="t.name" x1="45" :y1="t.y" x2="320" :y2="t.y"
-                          :stroke="t.color" stroke-width="1.2" stroke-linecap="round" stroke-opacity=".75" :stroke-dasharray="t.dash" />
-                    <g :transform="`translate(${telemetrySlideOffset}, 0)`">
-                      <path :d="displayedChartTelemetria.area" fill="url(#spark-grad)"/>
-                      <path class="spark-line" :d="displayedChartTelemetria.path" fill="none" stroke="var(--acid)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <circle v-for="(dot,i) in displayedChartTelemetria.dots" :key="dot.timestamp || i"
-                              :cx="dot.x" :cy="dot.y" r="3"
-                              fill="var(--bg)" stroke="var(--acid)" stroke-width="1.5"
-                              style="cursor:pointer">
-                        <title>{{ `${dot.label}: ${dot.v.toFixed(2)} ${dot.unit || ''} — ${dot.timestamp ? dot.timestamp.slice(0,16).replace('T',' ') : ''}` }}</title>
-                      </circle>
-                      <circle v-if="telemetryMovingDot.visible"
-                              :cx="telemetryMovingDot.x" :cy="telemetryMovingDot.y"
-                              r="5" fill="var(--acid)" fill-opacity="0.95"
-                              stroke="var(--bg)" stroke-width="1.5"
-                              class="telemetry-moving-dot"/>
-                    </g>
-                    <g class="spark-axis-labels">
-                      <g v-for="tick in displayedChartTelemetria.yTicks" :key="tick.label">
-                        <text x="40" :y="tick.y - 4" class="spark-axis-text" text-anchor="end">{{ tick.label }}</text>
-                      </g>
-                      <g v-for="label in displayedChartTelemetria.xLabels" :key="label.label">
-                        <text :x="label.x" y="115" class="spark-axis-text" :text-anchor="label.x <= 45 ? 'start' : label.x >= 320 ? 'end' : 'middle'">{{ label.label }}</text>
-                      </g>
-                    </g>
-                  </svg>
-                  <div class="spark-labels">
-                    <span>min {{ displayedChartTelemetria.min }}</span>
-                    <span>{{ displayedChartTelemetria.count }} pontos</span>
-                    <span>max {{ displayedChartTelemetria.max }}</span>
-                  </div>
-                  <div class="spark-threshold-legend" v-if="displayedChartTelemetria.thresholds?.length">
-                    <span class="spark-threshold-chip" v-for="t in displayedChartTelemetria.thresholds" :key="t.name">
-                      <span class="spark-threshold-line" :style="{background: t.color}"></span>
-                      {{ t.name }} ({{ t.pct }}%) {{ t.display }} {{ t.unit }}
-                    </span>
-                  </div>
-                  <div class="spark-summary">
-                    <div class="spark-summary-item">
-                      <span>Última leitura</span>
-                      <strong>{{ telemetriaSummary.latest }} {{ telemetriaSummary.unit }}</strong>
-                    </div>
-                    <div class="spark-summary-item">
-                      <span>Sensor</span>
-                      <strong>{{ telemetriaSummary.latest_sensor }}</strong>
-                    </div>
-                    <div class="spark-summary-item">
-                      <span>Equipamento</span>
-                      <strong>{{ telemetriaSummary.latest_equip }}</strong>
-                    </div>
-                    <div class="spark-summary-item">
-                      <span>Registros Crítico / Alerta</span>
-                      <strong>{{ telemetriaSummary.criticos }} / {{ telemetriaSummary.acima_alerta }}</strong>
-                    </div>
-                    <div class="spark-summary-item" v-if="telemetriaSummary.limit !== '—'">
-                      <span>Limite Crítico</span>
-                      <strong>{{ telemetriaSummary.limit }} {{ telemetriaSummary.unit }}</strong>
-                    </div>
-                    <div class="spark-summary-item" v-if="telemetriaSummary.open_orders !== undefined">
-                      <span>O.S. abertas</span>
-                      <strong>{{ telemetriaSummary.open_orders }}</strong>
-                    </div>
-                    <div class="spark-summary-item" v-if="telemetriaSummary.thresholds">
-                      <span>Alerta Baixo ({{ telemetriaSummary.lowPct }}%)</span>
-                      <strong>{{ telemetriaSummary.lowValue }} {{ telemetriaSummary.unit }}</strong>
-                    </div>
-                    <div class="spark-summary-item" v-if="telemetriaSummary.thresholds">
-                      <span>Alerta Médio ({{ telemetriaSummary.medPct }}%)</span>
-                      <strong>{{ telemetriaSummary.medValue }} {{ telemetriaSummary.unit }}</strong>
-                    </div>
-                    <div class="spark-summary-item" v-if="telemetriaSummary.thresholds">
-                      <span>Alerta Crítico ({{ telemetriaSummary.critPct }}%)</span>
-                      <strong>{{ telemetriaSummary.critValue }} {{ telemetriaSummary.unit }}</strong>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="spark-no-data">Sem leituras de telemetria</div>
-              </div>
-            </div>
-
-            <div class="chart-card col-6" v-if="!isTecnico">
-              <div class="chart-head">
-                <div class="chart-title">Evolução de Custos</div>
-                <div class="chart-filter-row">
-                  <select class="chart-filter-select" v-model="dashCustoSetor">
-                    <option value="">Setor (Geral)</option>
-                    <option v-for="s in availableSectors" :key="s" :value="s">{{ s }}</option>
-                  </select>
-                </div>
-              </div>
-              <div class="chart-body">
-                <div v-if="chartCustoEvolucao.path" class="spark-wrap" style="min-height: 120px;">
-                  <svg width="100%" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid meet" style="overflow:visible">
-                    <defs>
-                      <linearGradient id="cost-grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="var(--ice)" stop-opacity=".25"/>
-                        <stop offset="100%" stop-color="var(--ice)" stop-opacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    <line x1="45" y1="10" x2="320" y2="10" stroke="var(--edge)" stroke-width="0.5"/>
-                    <line x1="45" y1="50" x2="320" y2="50" stroke="var(--edge)" stroke-width="0.5"/>
-                    <line x1="45" y1="90" x2="320" y2="90" stroke="var(--edge)" stroke-width="0.5"/>
-                    <path :d="chartCustoEvolucao.area" fill="url(#cost-grad)"/>
-                    <path :d="chartCustoEvolucao.path" fill="none" stroke="var(--ice)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <g class="spark-axis-labels">
-                      <g v-for="tick in chartCustoEvolucao.yTicks" :key="tick.label">
-                        <text x="40" :y="tick.y - 4" class="spark-axis-text" text-anchor="end">{{ tick.label }}</text>
-                      </g>
-                      <g v-for="label in chartCustoEvolucao.xLabels" :key="label.label">
-                        <text :x="label.x" y="115" class="spark-axis-text" :text-anchor="label.x <= 45 ? 'start' : label.x >= 320 ? 'end' : 'middle'">{{ label.label }}</text>
-                      </g>
-                    </g>
-                    <circle v-for="(dot,i) in chartCustoEvolucao.dots" :key="i"
-                            :cx="dot.x" :cy="dot.y" r="3"
-                            fill="var(--bg)" stroke="var(--ice)" stroke-width="1.5"
-                            style="cursor:pointer">
-                      <title>{{ `${dot.label}: R$ ${dot.v.toFixed(2)}` }}</title>
-                    </circle>
-                  </svg>
-                  <div class="spark-labels" style="justify-content: space-between;" v-if="chartCustoEvolucao.summary">
-                    <span>O.S. Faturadas: <strong>{{ chartCustoEvolucao.summary.osCount }}</strong></span>
-                    <span>Custo Total: <strong>R$ {{ chartCustoEvolucao.total }}</strong></span>
-                  </div>
-                  <div class="spark-summary" v-if="chartCustoEvolucao.summary">
-                    <div class="spark-summary-col">
-                      <div class="spark-summary-item">
-                        <span>Gasto c/ Peças</span>
-                        <strong style="color: var(--teal)">R$ {{ chartCustoEvolucao.summary.totalPecas }}</strong>
-                      </div>
-                      <div class="spark-summary-item">
-                        <span>Mão de Obra</span>
-                        <strong style="color: var(--blue)">R$ {{ chartCustoEvolucao.summary.totalMaoDeObra }}</strong>
-                      </div>
-                    </div>
-                    <div class="spark-summary-col">
-                      <div class="spark-summary-item">
-                        <span>Média por O.S.</span>
-                        <strong>R$ {{ chartCustoEvolucao.summary.avgCost }}</strong>
-                      </div>
-                      <div class="spark-summary-item">
-                        <span>Pico Diário</span>
-                        <strong style="color: var(--warn)">R$ {{ chartCustoEvolucao.summary.highestCost }}</strong>
-                      </div>
-                    </div>
-                    <div class="spark-summary-col">
-                      <div class="spark-summary-item">
-                        <span>Data do Pico</span>
-                        <strong>{{ chartCustoEvolucao.summary.highestCostDate || '—' }}</strong>
-                      </div>
-                      <div class="spark-summary-item">
-                        <span>Status Geral</span>
-                        <strong :style="{ color: chartCustoEvolucao.summary.avgCost > 500 ? 'var(--warn)' : 'var(--teal)' }">
-                          {{ chartCustoEvolucao.summary.avgCost > 500 ? 'Atenção' : 'Estável' }}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="spark-no-data">Sem histórico de manutenção suficiente</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="dash-grid dash-bottom-section">
-            <div class="dash-stream-card col-6">
-              <div class="dash-stream-header" @click="dashAlertsCollapsed = !dashAlertsCollapsed">
-                <div class="dash-stream-title">Alertas Ativos <span v-if="dashAlerts.length" style="font-size:10px;color:var(--t4);font-weight:400;letter-spacing:0">({{ dashAlerts.length }})</span></div>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <button class="btn btn-ghost btn-sm" @click.stop="navigate('alertas')" style="font-size:10px">Ver todos →</button>
-                  <div class="dash-stream-toggle">{{ dashAlertsCollapsed ? '+' : '−' }}</div>
-                </div>
-              </div>
-              <div class="dash-stream-body" :class="{collapsed: dashAlertsCollapsed}">
-                <div v-if="dashAlerts.length">
-                  <div v-for="a in dashAlerts.slice(0,6)" :key="a.id" class="dash-alert-mini" :style="{'--alert-color': nivelColor(a.nivel)}">
-                    <span class="badge" :class="nivelBadge(a.nivel)" style="font-size:9px;flex-shrink:0">{{ a.nivel }}</span>
-                    <div class="dash-alert-mini-info">
-                      <div class="dash-alert-mini-tipo">{{ a.tipo_alerta }}</div>
-                      <div class="dash-alert-mini-equip">⚙ {{ eqNome(a.equipamento) }} · {{ fmtDate(a.data_alerta).split(' ')[0] }}</div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="empty" style="padding:24px 0">
-                  <div class="empty-icon" style="font-size:24px">◉</div>
-                  Nenhum alerta ativo
-                </div>
-              </div>
-            </div>
-
-            <div class="dash-stream-card col-6">
-              <div class="dash-stream-header" @click="dashOrdensCollapsed = !dashOrdensCollapsed">
-                <div class="dash-stream-title">Ordens Recentes <span v-if="lists.ordens.length" style="font-size:10px;color:var(--t4);font-weight:400;letter-spacing:0">({{ lists.ordens.length }})</span></div>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <button class="btn btn-ghost btn-sm" @click.stop="navigate('ordens')" style="font-size:10px">Ver todas →</button>
-                  <div class="dash-stream-toggle">{{ dashOrdensCollapsed ? '+' : '−' }}</div>
-                </div>
-              </div>
-              <div class="dash-stream-body" :class="{collapsed: dashOrdensCollapsed}">
-                <div v-if="lists.ordens.length">
-                  <div v-for="o in lists.ordens.slice(0,5)" :key="o.id" class="dash-os-mini" @click="openEquipamentoDetails(o.equipamento, o)">
-                    <div class="dash-os-mini-dot" :style="{background: o.status==='concluida'?'var(--mint)':o.status==='cancelada'?'var(--t4)':o.prioridade==='critico'?'var(--danger)':'var(--acid)'}"></div>
-                    <div class="dash-os-mini-info">
-                      <div class="dash-os-mini-title">{{ o.titulo }}</div>
-                      <div class="dash-os-mini-meta">
-                        <span class="badge" :class="ordemStatusBadge(o.status)" style="font-size:8px">{{ o.status }}</span>
-                        <span>⚙ {{ eqNome(o.equipamento) }}</span>
-                        <span>{{ fmtDate(o.data_abertura || o.criado_em).split(' ')[0] }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-else class="empty" style="padding:24px 0">
-                  <div class="empty-icon" style="font-size:24px">✦</div>
-                  Nenhuma ordem
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          </template>
+        </section>
         <!-- /DASHBOARD -->
 
         <!-- ══════════ EQUIPAMENTOS ══════════ -->
@@ -742,6 +297,7 @@
               <option value="">Todas as Empresas</option>
               <option v-for="emp in lists.empresas" :key="emp.id" :value="emp.id">{{ emp.nome }}</option>
             </select>
+            <button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openCriteria()">Critérios ABC da empresa</button>
             <button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal('equipamento')">+ Novo</button>
             <div class="export-btns">
               <span class="export-label">Exportar:</span>
@@ -780,7 +336,7 @@
                 </div>
                 <div class="equip-card-field">
                   <span class="equip-card-label">Criticidade</span>
-                  <span class="equip-card-value">{{ e.criticidade ? e.criticidade + ' — ' + ({A:'Crítica',B:'Alta',C:'Moderada',D:'Baixa'}[e.criticidade]) : 'Não avaliada' }}</span>
+                  <span class="equip-card-value">{{ criticidadeLabel(e.criticidade) }}</span>
                 </div>
               </div>
               
@@ -804,168 +360,84 @@
 
         </div>
 
-        <!-- ══════════ ALERTAS ══════════ -->
-        <div v-if="view==='alertas'">
-          <div class="filter-bar">
-            <input class="filter-input" v-model="filters.alertas.search" placeholder="Buscar alerta..." @input="debouncedFetch('al',fetchAlertas)" />
-            <select class="filter-select" v-model="filters.alertas.nivel" @change="fetchAlertas">
-              <option value="">Todos os níveis</option>
-              <option value="baixo">Baixo</option>
-              <option value="medio">Médio</option>
-              <option value="critico">Crítico</option>
-            </select>
-            <select class="filter-select" v-model="filters.alertas.status" @change="fetchAlertas">
-              <option value="">Todos os status</option>
-              <option value="ativo">Ativo</option>
-              <option value="resolvido">Resolvido</option>
-              <option value="ignorado">Ignorado</option>
-            </select>
-            <button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal('alerta')">+ Novo</button>
-            <div class="export-btns" v-if="isAdminOrGestor">
-              <span class="export-label">Exportar:</span>
-              <button class="btn-export pdf" @click="exportData('alertas', 'pdf')">📄 PDF</button>
-              <button class="btn-export excel" @click="exportData('alertas', 'excel')">📊 Excel</button>
-              <button class="btn-export csv" @click="exportData('alertas', 'csv')">📝 CSV</button>
-            </div>
+        <!-- ══════════ HISTÓRICO DE ALERTAS ══════════ -->
+        <section v-if="view==='alertas'" class="alert-history">
+          <div class="telemetry-heading"><div><h1>Histórico de alertas</h1><p>O que o monitoramento detectou e quais evidências originaram cada ocorrência. O atendimento é realizado na O.S.</p></div><button class="btn btn-primary" :disabled="alertHistory.busy" @click="fetchAlertas(alertHistory.url || null)">↻ Atualizar</button></div>
+          <form class="filter-bar alert-history-filters" @submit.prevent="fetchAlertas()">
+            <label>Busca<input class="filter-input" v-model="filters.alertas.search" placeholder="Tipo ou descrição" /></label>
+            <label>Equipamento<select class="filter-select" v-model="filters.alertas.equipamento" @change="filters.alertas.sensor=''"><option value="">Todos</option><option v-if="filters.alertas.equipamento && !telemetry.equipments.some(e => Number(e.id) === Number(filters.alertas.equipamento))" :value="filters.alertas.equipamento">Equipamento #{{ filters.alertas.equipamento }}</option><option v-for="e in telemetry.equipments" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
+            <label>Sensor<select class="filter-select" v-model="filters.alertas.sensor"><option value="">Todos</option><option v-for="sensor in alertSensors" :key="sensor.id" :value="sensor.id">{{ sensor.nome }} · {{ sensor.equipamento_nome }}</option></select></label>
+            <label>Origem<select class="filter-select" v-model="filters.alertas.origem"><option value="">Todas</option><option value="limite">Limite operacional</option><option value="tendencia">Tendência preditiva</option><option value="manual">Manual · legado</option></select></label>
+            <label>Nível máximo<select class="filter-select" v-model="filters.alertas.nivel"><option value="">Todos</option><option value="baixo">Baixo</option><option value="medio">Médio</option><option value="critico">Crítico</option></select></label>
+            <label>De<input class="filter-input" type="datetime-local" v-model="filters.alertas.from" /></label>
+            <label>Até<input class="filter-input" type="datetime-local" v-model="filters.alertas.to" /></label>
+            <button class="btn btn-primary" type="submit">Aplicar filtros</button>
+            <button class="btn btn-ghost" type="button" @click="Object.assign(filters.alertas,{search:'',nivel:'',origem:'',equipamento:'',sensor:'',from:'',to:''});fetchAlertas()">Limpar filtros</button>
+          </form>
+          <p class="alert-history-note">Datas no horário local. A normalização é detectada pelas leituras e não encerra a O.S.</p>
+          <div class="export-btns" v-if="isAdminOrGestor"><span class="export-label">Exportar histórico filtrado:</span><button class="btn-export pdf" @click="exportData('alertas','pdf')">PDF</button><button class="btn-export excel" @click="exportData('alertas','excel')">Excel</button><button class="btn-export csv" @click="exportData('alertas','csv')">CSV</button></div>
+          <div v-if="telemetry.optionsError" class="telemetry-notice" role="alert">{{ telemetry.optionsError }} <button class="btn btn-ghost btn-sm" @click="enterAlertHistory">Tentar novamente</button></div>
+          <div v-if="filters.alertas.status || filters.alertas.setor" class="dashboard-filter-note"><span>{{ filters.alertas.status==='ativo' ? 'Somente alertas ativos' : '' }}{{ filters.alertas.setor ? ' · Setor: ' + filters.alertas.setor : '' }}</span><button class="btn btn-ghost btn-sm" @click="filters.alertas.status='';filters.alertas.setor='';fetchAlertas()">Remover recorte do dashboard</button></div>
+          <div v-if="alertHistory.error" class="telemetry-notice" role="alert">{{ alertHistory.error }}</div>
+          <div v-if="alertHistory.busy" class="loading" role="status"><div class="spinner"></div>Consultando histórico…</div>
+          <div v-else-if="!lists.alertas.length && !alertHistory.error" class="empty">Nenhuma ocorrência encontrada para os filtros selecionados.</div>
+          <div v-else-if="!alertHistory.error" class="table-wrap alert-history-list" role="region" aria-label="Lista de alertas por gravidade; deslize para ver todas as colunas" tabindex="0">
+            <table class="alert-history-table">
+              <caption>Mais graves primeiro: crítico → médio → baixo. Dentro de cada nível, os mais recentes aparecem acima.</caption>
+              <thead><tr><th scope="col">Maior nível</th><th scope="col">Ocorrência e motivo</th><th scope="col">Equipamento / sensor</th><th scope="col">Registrado em</th><th scope="col">Normalização detectada</th><th scope="col">O.S. vinculada</th><th scope="col">Consulta</th></tr></thead>
+              <tbody>
+                <tr v-for="a in lists.alertas" :key="a.id" :style="{'--alerta-nivel-color':nivelColor(a.nivel)}">
+                  <td class="alert-history-severity"><span class="badge" :class="nivelBadge(a.nivel)">{{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.nivel] || a.nivel }}</span><small>Inicial: {{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.dados_deteccao?.nivel] || 'não disponível' }}</small></td>
+                  <td class="alert-history-occurrence"><strong>#{{ a.id }} · {{ a.dados_deteccao?.tipo_alerta || a.tipo_alerta }}</strong><small>{{ a.origem === 'limite' ? 'Limite operacional' : a.origem === 'tendencia' ? 'Tendência preditiva' : 'Manual · legado' }}</small>
+                    <details v-if="(a.dados_deteccao?.descricao || a.descricao || '').length > 140" class="alert-history-reason"><summary>{{ (a.dados_deteccao?.descricao || a.descricao).slice(0,140) }}… <span>Ver motivo completo</span></summary><p>{{ a.dados_deteccao?.descricao || a.descricao }}</p></details>
+                    <p v-else class="alert-history-reason">{{ a.dados_deteccao?.descricao || a.descricao || 'Motivo não disponível.' }}</p>
+                    <small v-if="a.legado" class="alert-history-legacy">Legado · evidência inicial indisponível</small>
+                  </td>
+                  <td class="alert-history-equipment"><strong>{{ a.dados_deteccao?.equipamento_nome || a.equipamento_nome || eqNome(a.equipamento) }}</strong><small>{{ a.dados_deteccao?.sensor_nome || a.sensor_nome || 'Sem sensor identificado' }}</small></td>
+                  <td class="alert-history-date"><time :datetime="a.data_alerta">{{ fmtDate(a.data_alerta) }}</time></td>
+                  <td class="alert-history-date"><time v-if="a.data_normalizacao" :datetime="a.data_normalizacao">{{ fmtDate(a.data_normalizacao) }}</time><span v-else class="alert-history-note">Sem registro</span></td>
+                  <td><button v-if="a.ordem_servico_id" class="btn btn-ghost btn-sm" @click="openAlertaOS(a)" :aria-label="'Abrir O.S. #' + a.ordem_servico_id + ' do alerta #' + a.id">#{{ a.ordem_servico_id }} ↗</button><span v-else class="alert-history-note">Sem vínculo</span></td>
+                  <td><div class="alert-history-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails(a)" :aria-label="'Ver detalhes e leituras do alerta #' + a.id">Detalhes e leituras</button><button v-if="a.sensor" class="btn btn-ghost btn-sm" @click="openAlertaSensor(a)" :aria-label="'Acompanhar sensor do alerta #' + a.id">Acompanhar sensor</button></div></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          <div class="pagination"><button class="page-btn" :disabled="!pages.alertas.prev || alertHistory.busy" @click="fetchPage('alertas',pages.alertas.prev)">← Anterior</button><span class="page-info">{{ alertHistory.count }} ocorrências · {{ lists.alertas.length }} nesta página</span><button class="page-btn" :disabled="!pages.alertas.next || alertHistory.busy" @click="fetchPage('alertas',pages.alertas.next)">Próxima →</button></div>
+        </section>
 
-          <div v-if="loading" class="loading"><div class="spinner"></div>Carregando...</div>
-          <div v-else-if="lists.alertas.length===0" class="empty"><div class="empty-icon">🎉</div>Oba! Nenhum alerta ativo no momento.</div>
-
-          <!-- ALERTA CARDS GRID -->
-          <div v-else class="alerta-cards-grid">
-            <div v-for="a in lists.alertas" :key="a.id"
-                 class="alerta-card"
-                 :style="{'--alerta-nivel-color': nivelColor(a.nivel)}">
-              <div class="alerta-card-header">
-                <div class="alerta-card-tipo">{{ a.tipo_alerta }}</div>
-                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                  <span class="badge" :class="nivelBadge(a.nivel)">{{ a.nivel }}</span>
-                  <span class="badge" :class="statusBadge(a.status)" style="font-size:9px">{{ a.status }}</span>
-                </div>
-              </div>
-              <div class="alerta-card-body" v-if="a.descricao">{{ a.descricao }}</div>
-              <div class="alerta-card-body" style="color:var(--warn)">
-                O.S. vinculada: {{ a.ordem_servico_id ? '#' + a.ordem_servico_id : 'sem vínculo' }}
-                <span v-if="a.origem === 'limite' && a.dados_analise?.nivel_atual"> · Condição atual: {{ a.dados_analise.nivel_atual }} · Pico: {{ a.nivel }}</span>
-              </div>
-              <div class="alerta-card-footer">
-                <div class="alerta-card-equip">⚙ {{ eqNome(a.equipamento) }}</div>
-                <div class="alerta-card-date">{{ fmtDate(a.data_alerta) }}</div>
-              </div>
-              <div class="alerta-card-actions" style="padding-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-                <button v-if="isTecnico && a.ordem_servico_id && !a._assumindo_os" class="btn btn-primary btn-sm" @click="assumirOSFromAlerta(a)">Assumir O.S.</button>
-                <button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="editItem('alerta',a)">Editar</button>
-                <button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('alertas',a.id)">✕</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="pagination">
-            <button class="page-btn" :disabled="!pages.alertas.prev" @click="fetchPage('alertas',pages.alertas.prev)">← Anterior</button>
-            <span class="page-info">{{ lists.alertas.length }} registros</span>
-            <button class="page-btn" :disabled="!pages.alertas.next" @click="fetchPage('alertas',pages.alertas.next)">Próxima →</button>
-          </div>
-        </div>
-
-        <!-- ══════════ ORDENS ══════════ -->
-        <div v-if="view==='ordens'">
-          <div class="os-priority-tabs">
-            <button class="os-priority-tab" :class="{active: filtroFilaPrioridade==='todas'}" @click="filtroFilaPrioridade='todas'">Fila Completa</button>
-            <button class="os-priority-tab" :class="{active: filtroFilaPrioridade==='baixa'}" @click="filtroFilaPrioridade='baixa'"><span class="tab-dot" style="background:var(--mint)"></span>Baixa</button>
-            <button class="os-priority-tab" :class="{active: filtroFilaPrioridade==='media'}" @click="filtroFilaPrioridade='media'"><span class="tab-dot" style="background:var(--warn)"></span>Média</button>
-            <button class="os-priority-tab" :class="{active: filtroFilaPrioridade==='alta'}" @click="filtroFilaPrioridade='alta'"><span class="tab-dot" style="background:var(--acid)"></span>Alta</button>
-            <button class="os-priority-tab" :class="{active: filtroFilaPrioridade==='critica'}" @click="filtroFilaPrioridade='critica'"><span class="tab-dot" style="background:var(--danger)"></span>Crítica</button>
+        <!-- Ordens: uma única fila filtrada e ordenada pelo servidor. -->
+        <section v-if="view==='ordens'" class="abc-orders">
+          <header class="abc-heading"><div><p class="dashboard-eyebrow">PLANEJAMENTO DA MANUTENÇÃO</p><h1>Ordens de serviço</h1><p>Prioridade A, B e C, da mais alta à mais baixa. Dentro de cada classe, as mais antigas aparecem primeiro.</p></div><button class="btn btn-primary" @click="openModal('ordem')">+ Nova OS</button></header>
+          <div class="os-priority-tabs" role="group" aria-label="Filtrar prioridade da OS">
+            <button v-for="p in [{value:'',label:'Todas'},{value:'A',label:'A — Alta'},{value:'B',label:'B — Média'},{value:'C',label:'C — Baixa'},{value:'a_definir',label:'A definir'}]" :key="p.value" class="os-priority-tab" :class="{active: filters.ordens.prioridade===p.value}" :aria-pressed="filters.ordens.prioridade===p.value" @click="selectOrderPriority(p.value)">{{ p.label }}</button>
           </div>
           <div class="filter-bar">
-            <input class="filter-input" v-model="filters.ordens.search" placeholder="Buscar ordem..." @input="debouncedFetch('or',fetchOrdens)" />
-            <select class="filter-select" v-model="filters.ordens.status" @change="fetchOrdens">
-              <option value="">Todos os status</option>
-              <option value="pendente">Pendente</option>
-              <option value="andamento">Em Andamento</option>
-              <option value="concluida">Concluída</option>
-              <option value="cancelada">Cancelada</option>
-            </select>
-            <select class="filter-select" v-model="filters.ordens.prioridade" @change="fetchOrdens">
-              <option value="">Todas as prioridades</option>
-              <option value="baixa">Baixa</option>
-              <option value="media">Média</option>
-              <option value="alta">Alta</option>
-              <option value="critica">Crítica</option>
-            </select>
-            <select class="filter-select" v-model="filters.ordens.tipo_os" @change="fetchOrdens">
-              <option value="">Todos os tipos</option>
-              <option value="preventiva">Preventiva</option>
-              <option value="corretiva">Corretiva</option>
-              <option value="preditiva">Preditiva</option>
-            </select>
-            <button class="btn btn-primary" @click="openModal('ordem')">+ Nova Ordem</button>
-            <div class="export-btns" v-if="isAdminOrGestor">
-              <span class="export-label">Exportar:</span>
-              <button class="btn-export pdf" @click="exportData('ordens-servico', 'pdf')">📄 PDF</button>
-              <button class="btn-export excel" @click="exportData('ordens-servico', 'excel')">📊 Excel</button>
-              <button class="btn-export csv" @click="exportData('ordens-servico', 'csv')">📝 CSV</button>
+            <input class="filter-input" v-model="filters.ordens.search" aria-label="Buscar OS" placeholder="Buscar título ou descrição…" @input="debouncedFetch('or',fetchOrdens)" />
+            <select class="filter-select" v-model="filters.ordens.status" aria-label="Status da OS" @change="fetchOrdens()"><option value="abertas">Abertas</option><option value="">Todos os status</option><option value="pendente">Pendentes</option><option value="andamento">Em andamento</option><option value="concluida">Concluídas</option><option value="cancelada">Canceladas</option></select>
+            <select class="filter-select" v-model="filters.ordens.tipo_os" aria-label="Tipo de OS" @change="fetchOrdens()"><option value="">Todos os tipos</option><option value="preventiva">Preventiva</option><option value="corretiva">Corretiva</option><option value="preditiva">Preditiva</option></select>
+            <select class="filter-select" v-model="filters.ordens.responsavel_escopo" aria-label="Responsável pela OS" @change="fetchOrdens()"><option value="">Todos os responsáveis</option><option value="minhas">Minhas OS</option><option value="livres">Sem responsável</option></select>
+            <button class="btn btn-ghost btn-sm" @click="clearOrderFilters">Limpar filtros</button>
+            <div class="export-btns" v-if="isAdminOrGestor"><span class="export-label">Exportar fila filtrada:</span><button class="btn-export pdf" @click="exportData('ordens-servico','pdf')">PDF</button><button class="btn-export excel" @click="exportData('ordens-servico','excel')">Excel</button><button class="btn-export csv" @click="exportData('ordens-servico','csv')">CSV</button></div>
+          </div>
+          <p v-if="filters.ordens.equipamento || filters.ordens.setor" class="abc-note">Recorte atual: {{ filters.ordens.equipamento ? 'equipamento #' + filters.ordens.equipamento : '' }} {{ filters.ordens.setor }}. Use Limpar filtros para consultar os demais.</p>
+          <p v-if="orderState.triage && !orderState.busy" class="abc-notice" role="status">{{ orderState.triage }} OS {{ orderState.triage===1 ? 'aguarda' : 'aguardam' }} definição de prioridade nos filtros atuais. A ausência de classe requer revisão do gestor.</p>
+          <div v-if="orderState.error" class="abc-error" role="alert">{{ orderState.error }} <button class="btn btn-ghost btn-sm" @click="fetchOrdens()">Tentar novamente</button></div>
+          <div v-else-if="orderState.busy" class="loading" role="status">Carregando ordens de serviço…</div>
+          <div v-else-if="!lists.ordens.length" class="empty"><p>{{ orderState.total===0 ? 'Nenhuma OS cadastrada.' : 'Nenhuma OS corresponde a estes filtros.' }}</p><button v-if="orderState.total" class="btn btn-ghost" @click="clearOrderFilters">Limpar filtros</button></div>
+          <template v-else>
+            <div class="table-wrap abc-orders-table"><table><thead><tr><th>Prioridade da OS</th><th>Ordem / equipamento</th><th>Criticidade atual</th><th>Status / responsável</th><th>Abertura</th><th>Ações</th></tr></thead><tbody>
+              <tr v-for="o in lists.ordens" :key="o.id"><td><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span><small>{{ priorityOrigin(o.prioridade_origem) }}</small></td><td><button class="abc-text-button" @click="openEquipamentoDetails(o.equipamento,o)">#{{ o.id }} — {{ o.titulo }}</button><small>{{ o.equipamento_nome }} · {{ o.tipo_os }}</small><small v-if="o.risco_seguranca" class="abc-risk">Risco de segurança informado</small><small v-if="o.gravidade_condicao==='critica'" class="abc-risk">Condição crítica informada</small></td><td>{{ criticidadeLabel(o.criticidade_atual) }}</td><td>{{ ({pendente:'Pendente',andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'}[o.status]) }}<small>{{ o.responsavel_nome || 'Sem responsável' }}</small></td><td class="abc-nowrap">{{ fmtDate(o.data_abertura) }}</td><td><div class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openPriority(o)">Prioridade e histórico</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento,o)">Ver OS</button><button v-if="!o.responsavel && ['pendente','andamento'].includes(o.status)" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="assumirOS(o)">Assumir</button><button v-if="o.responsavel===me?.id && o.status==='pendente'" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="iniciarAtendimento(o)">Iniciar</button><button v-if="o.responsavel===me?.id && o.status==='andamento'" class="btn btn-success btn-sm" @click="openEncerrarOS(o)">Encerrar</button></div></td></tr>
+            </tbody></table></div>
+            <div class="abc-orders-mobile">
+              <article v-for="o in lists.ordens" :key="o.id" class="os-card"><header class="os-card-header"><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span><span>#{{ o.id }}</span></header><h2>{{ o.titulo }}</h2><p>{{ o.equipamento_nome }}</p><p>Criticidade atual: {{ criticidadeLabel(o.criticidade_atual) }}</p><p>{{ priorityOrigin(o.prioridade_origem) }} · {{ ({pendente:'Pendente',andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'}[o.status]) }}</p><p>{{ o.responsavel_nome || 'Sem responsável' }} · {{ fmtDate(o.data_abertura) }}</p><p v-if="o.risco_seguranca || o.gravidade_condicao==='critica'" class="abc-risk">{{ o.risco_seguranca ? 'Risco de segurança informado' : 'Condição crítica informada' }}</p><footer class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openPriority(o)">Prioridade e histórico</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento,o)">Ver OS</button><button v-if="!o.responsavel && ['pendente','andamento'].includes(o.status)" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="assumirOS(o)">Assumir</button><button v-if="o.responsavel===me?.id && o.status==='pendente'" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="iniciarAtendimento(o)">Iniciar</button><button v-if="o.responsavel===me?.id && o.status==='andamento'" class="btn btn-success btn-sm" @click="openEncerrarOS(o)">Encerrar</button></footer></article>
             </div>
-          </div>
-
-          <div v-if="loading" class="loading"><div class="spinner"></div>Carregando...</div>
-          <div v-else-if="lists.ordens.length===0" class="empty"><div class="empty-icon">🙌</div>Caixa de entrada limpa! Nenhuma ordem pendente.</div>
-
-          <!-- OS CARDS GRID -->
-          <div v-else class="os-cards-grid">
-            <div v-for="o in ordensFilaPrioridade" :key="o.id"
-                 class="os-card"
-                 :class="'priority-' + o.prioridade"
-                 :style="{'--os-priority-color': o.prioridade==='critica'?'var(--danger)':o.prioridade==='alta'?'var(--acid)':o.prioridade==='media'?'var(--warn)':'var(--mint)'}"
-                 @click="openEquipamentoDetails(o.equipamento, o)">
-              <div class="os-card-header">
-                <div class="os-card-title">
-                  {{ prioridadeIcon(o.prioridade) }} {{ o.titulo }}
-                </div>
-                <div class="os-card-id">#{{ o.id }}</div>
-              </div>
-              <div class="os-card-meta">
-                <div class="os-card-meta-item equip">
-                  <span class="meta-icon">⚙</span> {{ eqNome(o.equipamento) }}
-                  <span v-if="getEquipamentoInfo(o.equipamento)?.criticidade === 'alta'" class="criticidade-badge">ALTA CRITICIDADE</span>
-                </div>
-                <div class="os-card-meta-item" v-if="locSetor(o.equipamento) !== '—'">
-                  <span class="meta-icon">📍</span> {{ locSetor(o.equipamento) }}
-                </div>
-              </div>
-              <div class="os-card-badges">
-                <span class="badge" :class="ordemStatusBadge(o.status)"><span class="badge-dot"></span>{{ o.status || '—' }}</span>
-                <span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span>
-                <span v-if="o.tipo_os" class="badge badge-gray" style="font-size:9px">{{ o.tipo_os }}</span>
-              </div>
-              <div class="os-card-meta">
-                <div class="os-card-meta-item responsavel" :class="o.responsavel ? 'atribuido' : 'aguardando'">
-                  <span class="meta-icon">👤</span>
-                  {{ usuarioNome(o.responsavel) || 'AGUARDANDO TÉCNICO' }}
-                </div>
-              </div>
-              <div class="os-card-footer">
-                <div class="os-card-date">{{ fmtDate(o.data_abertura || o.criado_em) }}</div>
-                <div class="os-card-actions" @click.stop>
-                  <button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click.stop="editItem('ordem',o)">Editar</button>
-                  <button v-if="!o.responsavel" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click.stop="assumirOS(o)">{{ o._assumindo ? '...' : 'Assumir OS' }}</button>
-                  <button v-if="o.responsavel === me?.id && o.status === 'pendente'" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click.stop="iniciarAtendimento(o)">{{ o._assumindo ? '...' : 'Iniciar Atendimento' }}</button>
-                  <button v-if="o.responsavel === me?.id && o.status === 'andamento'" class="btn btn-success btn-sm" @click.stop="openEncerrarOS(o)">Encerrar</button>
-                  <button v-if="isAdmin" class="btn btn-danger btn-sm" @click.stop="deleteItem('ordens-servico',o.id)">✕</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pagination">
-            <button class="page-btn" :disabled="!pages.ordens.prev" @click="fetchPage('ordens',pages.ordens.prev)">← Anterior</button>
-            <span class="page-info">{{ lists.ordens.length }} registros</span>
-            <button class="page-btn" :disabled="!pages.ordens.next" @click="fetchPage('ordens',pages.ordens.next)">Próxima →</button>
-          </div>
-        </div>
+            <div class="pagination"><button class="page-btn" :disabled="!pages.ordens.prev || orderState.busy" @click="fetchOrdens(pages.ordens.prev)">← Anterior</button><span class="page-info">{{ orderState.count }} OS · {{ lists.ordens.length }} nesta página</span><button class="page-btn" :disabled="!pages.ordens.next || orderState.busy" @click="fetchOrdens(pages.ordens.next)">Próxima →</button></div>
+          </template>
+        </section>
 
         <!-- Telemetria: histórico de leituras e cadastro de sensores. -->
         <section v-if="view==='telemetria'" class="telemetry-workspace">
+          <details class="dashboard-panel dashboard-disclosure" @toggle="telemetryLiveOpen=$event.target.open"><summary><span><strong>Acompanhamento ao vivo</strong><small>Um sensor por vez · histórico e seleção independentes da tabela abaixo</small></span><span class="dashboard-disclosure-icon" aria-hidden="true">+</span></summary><div v-if="telemetryLiveOpen" class="dashboard-disclosure-body"><live-chart :api="api" :empresa="globalEmpresa"></live-chart></div></details>
           <header class="telemetry-heading"><div><div class="telemetry-eyebrow">MEDIÇÕES E DISPOSITIVOS</div><h1>Telemetria</h1><p>Consulte o histórico de leituras e gerencie seus sensores.</p></div><div class="telemetry-actions"><button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal(telemetry.tab === 'sensores' ? 'sensor' : 'leitura')">{{ telemetry.tab === 'sensores' ? '+ Cadastrar sensor' : '+ Registrar leitura' }}</button><button class="btn btn-ghost" :disabled="telemetry.busy" @click="enterTelemetry">↻ Atualizar</button></div></header>
           <nav class="telemetry-tabs" aria-label="Áreas da telemetria"><button v-for="tab in [{id:'leituras',label:'Leituras',hint:'Histórico de medições'},{id:'sensores',label:'Sensores',hint:'Cadastro e limites'}]" :key="tab.id" :aria-pressed="telemetry.tab === tab.id" :class="{active:telemetry.tab === tab.id}" @click="setTelemetryTab(tab.id)"><strong>{{ tab.label }}</strong><span>{{ tab.hint }}</span></button></nav>
           <div class="telemetry-panel">
@@ -1008,6 +480,46 @@
               <button class="btn btn-ghost btn-sm" type="button" @click="clearTrendFilters">Limpar seleção</button>
             </form>
           </div>
+          <section v-if="trendPage.equipment && !selectedTrend" class="telemetry-panel"><h2>Escolha o sensor para ver o gráfico</h2><p>Um equipamento pode medir temperatura, pressão e outras grandezas. Selecione um sensor acima para acompanhar um único gráfico com a unidade correta.</p></section>
+          <section v-if="selectedTrend" id="trend-live-monitor" class="telemetry-panel trend-live-panel">
+            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">EVOLUÇÃO DO SENSOR SELECIONADO</div><h2>{{ selectedTrend.sensor_info.nome }} · {{ selectedTrend.sensor_info.equipamento_nome }}</h2><p>Compare as leituras reais com a tendência calculada sobre a mesma amostra. O limite superior permanece como referência horizontal.</p></div><button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openTrendConfig(selectedTrend.sensor_id,selectedTrend.sensor_info.equipamento_id)">Ajustar tempo e critérios</button></div>
+            <span :class="['telemetry-condition',trendCondition(selectedTrend)]">{{ trendConditionLabel(selectedTrend) }}</span><span v-if="trendDemo.session && trendDemo.session.sensor_id === selectedTrend.sensor_id" class="telemetry-condition">[DEMO] Leitura {{ trendDemo.session.passo }} / {{ trendDemo.session.total_passos }}</span>
+            <measurement-sample v-if="selectedTrend.readings_summary.length" :readings="selectedTrend.readings_summary" :sensor="selectedTrend.sensor_info" :analysis="selectedTrend"></measurement-sample><p v-else>A configuração está desativada ou não há amostra disponível para desenhar. O gráfico aparece com as primeiras leituras; a confirmação de tendência pode acontecer depois.</p>
+            <div class="telemetry-evidence trend-sample-evidence"><div><span>Leituras disponíveis / mínimo</span><strong>{{ selectedTrend.readings_count }} / {{ selectedTrend.config_used.minimo_leituras }}</strong></div><div><span>Tempo observado / mínimo</span><strong>{{ Number(selectedTrend.sample_duration_minutes).toFixed(2) }} / {{ selectedTrend.config_used.duracao_minima_minutos }} min</strong></div><div><span>Ritmo medido</span><strong>{{ selectedTrend.insufficient_data || !selectedTrend.analysis_enabled ? 'Aguardando amostra' : Number(selectedTrend.slope_per_hour / 60).toFixed(2) + ' ' + selectedTrend.sensor_info.unidade_medida + '/min' }}</strong></div></div>
+            <div class="telemetry-guide-callout"><strong>Preciso esperar 30 minutos?</strong><p>Não é um cronômetro iniciado ao abrir a página. É a distância mínima entre a primeira e a última leitura da amostra. Se já houver histórico suficiente, a análise pode ser imediata. Se o sensor acabou de começar, o gráfico já mostra suas leituras, mas o alerta de tendência aguarda quantidade e tempo suficientes.</p><p>Este sensor pede <strong>{{ selectedTrend.config_used.duracao_minima_minutos }} minuto(s)</strong>. Você pode ajustar esse tempo no botão acima. Para a apresentação, o teste usa um minuto só no sensor [DEMO]. As leituras por limite continuam sendo avaliadas independentemente.</p></div>
+            <div class="trend-checks"><span v-for="check in selectedTrend.checks || []" :key="check.label" :class="{passed:check.passed}">{{ check.passed ? '✓' : '○' }} {{ check.label }}</span></div>
+            <p v-if="selectedTrend.insufficient_data">Os demais critérios serão calculados quando a amostra atingir os mínimos acima. O ritmo exibido antes disso não é uma tendência confirmada.</p>
+            <p v-else-if="selectedTrend.is_anomalous"><strong>Por que preocupa?</strong> A amostra tem quantidade e duração suficientes; o ritmo superou {{ selectedTrend.threshold_per_hour }} {{ selectedTrend.sensor_info.unidade_medida }}/h, o movimento atende à persistência e ao R² configurados e segue o sentido considerado anormal.</p>
+            <p v-if="selectedTrend.projected_breach_minutes !== null && selectedTrend.projected_breach_minutes !== undefined" class="telemetry-formula">Tempo até o limite = máximo entre 0 e ({{ selectedTrend.sensor_info.limite_alerta }} − {{ selectedTrend.current_value }}) ÷ ritmo por minuto ≈ {{ selectedTrend.projected_breach_minutes }} minuto(s), se o ritmo continuar.<span v-if="selectedTrend.current_value >= selectedTrend.sensor_info.limite_alerta"> O limite já foi atingido; a estimativa fica em zero.</span></p>
+            <div v-if="selectedTrend.active_alert_id" class="telemetry-notice" role="status">Alerta de tendência #{{ selectedTrend.active_alert_id }}<span v-if="selectedTrend.predictive_work_order"> · OS preditiva #{{ selectedTrend.predictive_work_order.id }} ({{ selectedTrend.predictive_work_order.status }})</span></div><p><strong>Método:</strong> regressão linear, persistência e regras configuráveis calculadas no backend. A regra é determinística: os mesmos dados e critérios levam ao mesmo resultado. A detecção não usa um modelo de IA treinado para prever falhas. A IA opcional só ajuda a explicar os dados; atingir o limite não garante uma quebra.</p>
+          </section>
+          <details v-if="isAdmin" class="telemetry-guide trend-demo-panel">
+            <summary><span class="telemetry-guide-icon" aria-hidden="true">▶</span><span><strong>Apresentação guiada · teste de tendência</strong><small>Veja a temperatura subir e acompanhe o motivo do alerta e a OS gerada.</small></span><span class="telemetry-guide-toggle" aria-hidden="true"></span></summary>
+            <div class="telemetry-guide-body">
+              <section><h3>Uma demonstração real em cerca de um minuto</h3><p>Cria um equipamento e um sensor <strong>[DEMO]</strong> na empresa escolhida. Os valores do cenário são programados para ensinar. O alerta não é forçado: os dados passam pela mesma análise matemática, alertas e ordens da aplicação. Nenhum sensor real tem sua configuração alterada. O histórico do teste fica no banco para consulta.</p>
+                <button class="btn btn-ghost" @click="toggleTrendTestMode">{{ testerMode ? 'Desativar modo de teste' : 'Ativar modo de teste (administrador)' }}</button>
+              </section>
+              <section v-if="testerMode">
+                <div class="telemetry-filters">
+                  <label v-if="!globalEmpresa">Empresa do teste<select class="filter-select" v-model="trendDemo.company"><option value="">Selecione uma empresa</option><option v-for="empresa in lists.empresas" :key="empresa.id" :value="empresa.id">{{ empresa.nome }}</option></select></label>
+                  <label>Cenário inicial<select class="filter-select" v-model="trendDemo.scenario"><option value="aumento">Aumento gradual · gera alerta antes do limite</option><option value="estavel">Estável · não deve gerar tendência</option><option value="pico">Pico isolado · não deve gerar tendência</option></select></label>
+                  <button class="btn btn-primary" :disabled="trendDemo.busy" @click="runTrendDemo('criar')">{{ trendDemo.session ? 'Criar nova demonstração' : 'Iniciar demonstração' }}</button>
+                  <button class="btn btn-ghost" :disabled="trendDemo.busy" @click="runTrendDemo('retomar')">Retomar último teste</button>
+                </div>
+                <p><strong>Roteiro:</strong> 1. Inicie o aumento gradual. 2. Observe 40 → 42 → 44 → 46 → 48 → 50 → 52 °C. 3. Após sete leituras cobrindo pelo menos um minuto, confira o alerta e a OS. 4. Depois, teste ultrapassagem e recuperação.</p>
+                <p>Uma nova leitura é permitida pelo servidor a cada dez segundos. O gráfico é consultado a cada dois segundos durante o teste. Mantenha esta página visível; ao sair ou ocultar a página, a alimentação pausa. A duração usa o relógio real, sem inventar datas. O teste expira após 30 minutos.</p>
+                <div v-if="trendDemo.error" class="telemetry-notice" role="alert">{{ trendDemo.error }}</div>
+                <template v-if="trendDemo.session">
+                  <div class="telemetry-guide-callout" role="status"><strong>{{ {aumento:'Aumento gradual',limite:'Ultrapassagem do limite',recuperacao:'Recuperação',estavel:'Valores estáveis',pico:'Pico isolado'}[trendDemo.session.cenario] }} · leitura {{ trendDemo.session.passo }} de {{ trendDemo.session.total_passos }}</strong><p>{{ {executando:'Em execução: aguarde as próximas medições. Dados insuficientes no começo são esperados.',concluido:'Fase concluída. Confira abaixo o que o algoritmo identificou.',parado:'Teste parado. Os registros já gerados continuam disponíveis.'}[trendDemo.session.status] }}</p><p><strong>Perfil deste teste:</strong> sete leituras, máximo de sete, duração mínima de um minuto, limite superior 100 °C. Não altera o padrão global de 30 minutos.</p></div>
+                  <div class="telemetry-actions"><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status !== 'executando'" @click="runTrendDemo('parar')">Parar teste</button><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status === 'executando'" @click="runTrendDemo('fase','limite')">Próxima fase: ultrapassar 100 °C</button><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status === 'executando'" @click="runTrendDemo('fase','recuperacao')">Próxima fase: recuperar e estabilizar</button></div>
+                  <h3 class="trend-demo-title">O que gerou alerta neste teste?</h3>
+                  <p v-if="!trendDemo.session.alertas.length">Nenhum alerta gerado até agora. O algoritmo ainda precisa de evidências suficientes.</p>
+                  <article v-for="alerta in trendDemo.session.alertas" :key="alerta.id" class="telemetry-notice"><strong>Alerta #{{ alerta.id }} · {{ alerta.origem === 'tendencia' ? 'Tendência persistente (preditivo)' : 'Valor na faixa de limite operacional' }}</strong><p>{{ alerta.descricao }}</p><p v-if="alerta.data_normalizacao">Normalização detectada em {{ fmtDate(alerta.data_normalizacao) }}</p><button class="btn btn-ghost btn-sm" @click="openAlertaDetails(alerta)">Ver registro</button><button v-if="alerta.ordem_servico_id" class="btn btn-ghost btn-sm" @click="openAlertaOS(alerta)">Abrir O.S. #{{ alerta.ordem_servico_id }}</button></article>
+                  <div v-if="trendDemo.session.ordens.length" class="telemetry-guide-table"><table><thead><tr><th>Ordem gerada</th><th>Tipo</th><th>Estado</th></tr></thead><tbody><tr v-for="ordem in trendDemo.session.ordens" :key="ordem.id"><td>#{{ ordem.id }} · {{ ordem.titulo }}</td><td>{{ ordem.tipo_os }}</td><td>{{ ordem.status }}</td></tr></tbody></table></div>
+                </template>
+              </section>
+            </div>
+          </details>
           <div class="telemetry-summary" aria-label="Filtrar tendências pela condição">
             <button v-for="card in [{id:'anomalous',label:'Anomalias confirmadas'},{id:'normal',label:'Sem tendência anormal'},{id:'insufficient',label:'Aguardando dados'},{id:'disabled',label:'Análise desativada'}]" :key="card.id" :class="['telemetry-stat',card.id,{selected:trendPage.condition === card.id}]" :aria-pressed="trendPage.condition === card.id" @click="trendPage.condition = trendPage.condition === card.id ? '' : card.id; applyTrendFilters()"><span>{{ card.label }}</span><strong>{{ trendPage.busy || trendPage.error ? '—' : trendSummary[card.id] }}</strong><small>{{ trendPage.condition === card.id ? 'Filtro ativo · clique para remover' : 'Filtrar sensores →' }}</small></button>
           </div>
@@ -1026,8 +538,8 @@
             <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">DETALHE DA ANÁLISE</div><h2>{{ trendPage.detail.sensor_info.nome }}</h2><p>{{ trendPage.detail.sensor_info.equipamento_nome }} · {{ fmtDate(trendPage.detail.analyzed_at) }}</p></div><button class="btn btn-ghost btn-sm" @click="trendPage.detail = null">Fechar análise</button></div>
             <span :class="['telemetry-condition',trendCondition(trendPage.detail)]">{{ trendConditionLabel(trendPage.detail) }}</span>
             <p>{{ !trendPage.detail.analysis_enabled ? 'A configuração atual não permite novas análises. Alertas anteriores não são encerrados por desativação.' : trendPage.detail.insufficient_data ? 'Ainda faltam medições ou tempo de observação. O sistema precisa dos dois para confirmar uma mudança persistente.' : trendPage.detail.is_anomalous ? 'As leituras estão mudando de forma persistente no sentido que foi configurado como preocupante. Confira os dados, o alerta e a ordem de inspeção abaixo.' : 'As leituras disponíveis não confirmam a mudança preocupante definida na configuração. Mesmo assim, uma leitura pode exigir atenção por estar próxima ou acima do limite.' }}</p>
-            <figure v-if="trendPage.detail.readings_summary.length" class="telemetry-chart"><figcaption>Leituras da amostra · {{ trendPage.detail.sensor_info.unidade_medida }} · mínimo {{ trendChart.min }} / máximo {{ trendChart.max }}</figcaption><svg viewBox="0 0 700 170" role="img" aria-label="Evolução das leituras ao longo do tempo"><line x1="30" y1="145" x2="670" y2="145" stroke="var(--edge)"/><polyline :points="trendChart.points" fill="none" stroke="var(--acid)" stroke-width="3"/><circle v-for="(point,index) in trendChart.points.split(' ')" :key="index" :cx="point.split(',')[0]" :cy="point.split(',')[1]" r="3" fill="var(--acid)"/></svg><div class="telemetry-chart-time"><span>{{ fmtDate(trendChart.from) }}</span><span>{{ fmtDate(trendChart.to) }}</span></div></figure>
-            <div class="telemetry-evidence"><div><span>Direção confirmada</span><strong>{{ trendDirection(trendPage.detail) }}</strong></div><div><span>Leituras válidas / mínimo</span><strong>{{ trendPage.detail.readings_count }} / {{ trendPage.detail.config_used.minimo_leituras }}</strong></div><div><span>Duração / mínimo</span><strong>{{ trendPage.detail.sample_duration_minutes }} / {{ trendPage.detail.config_used.duracao_minima_minutos }} min</strong></div><div><span>Estimativa até o limite superior</span><strong>{{ trendPage.detail.projected_breach_hours === null ? 'Não disponível' : trendPage.detail.projected_breach_hours + ' h' }}</strong></div></div>
+            <measurement-sample v-if="trendPage.detail.readings_summary.length && (!selectedTrend || selectedTrend.sensor_id !== trendPage.detail.sensor_id)" :readings="trendPage.detail.readings_summary" :sensor="trendPage.detail.sensor_info" :analysis="trendPage.detail"></measurement-sample>
+            <div class="telemetry-evidence trend-sample-evidence"><div><span>Direção confirmada</span><strong>{{ trendDirection(trendPage.detail) }}</strong></div><div><span>Leituras válidas / mínimo</span><strong>{{ trendPage.detail.readings_count }} / {{ trendPage.detail.config_used.minimo_leituras }}</strong></div><div><span>Duração / mínimo</span><strong>{{ trendPage.detail.sample_duration_minutes }} / {{ trendPage.detail.config_used.duracao_minima_minutos }} min</strong></div></div>
             <details class="telemetry-advanced"><summary>Como esta condição foi identificada</summary><p>Janela: {{ trendPage.detail.config_used.periodo_horas }} h. Persistência observada: {{ Math.round(trendPage.detail.persistence_ratio * 100) }}% (mínimo {{ Math.round(trendPage.detail.config_used.persistencia_minima * 100) }}%). R²: {{ trendPage.detail.r_squared ?? 'não calculado' }} (mínimo {{ trendPage.detail.config_used.r2_minimo }}). Inclinação: {{ trendPage.detail.slope_per_hour }} {{ trendPage.detail.sensor_info.unidade_medida }}/h.</p><p>Configuração {{ {sensor:'específica deste sensor',global:'global herdada',padrao:'padrão do sistema'}[trendPage.detail.config_used.source] }}. A projeção estima aproximação do limite, não uma data de quebra.</p></details>
             <div class="telemetry-notice" v-if="trendPage.detail.active_alert_id">Alerta ativo #{{ trendPage.detail.active_alert_id }}<span v-if="trendPage.detail.predictive_work_order"> · OS preditiva #{{ trendPage.detail.predictive_work_order.id }} ({{ trendPage.detail.predictive_work_order.status }})</span><span v-else> · Sem OS vinculada nesta consulta</span></div>
             <p v-if="trendPage.detail.is_anomalous && !trendPage.detail.active_alert_id">Ainda não há alerta ativo vinculado nesta consulta. A sincronização operacional ocorre na próxima leitura ou na rotina periódica.</p><div class="telemetry-actions"><button class="btn btn-ghost" @click="openEquipamentoDetails(trendPage.detail.sensor_info.equipamento_id)">Ver equipamento e ordens</button><button v-if="isAdminOrGestor" class="btn btn-primary" @click="openTrendConfig(trendPage.detail.sensor_id,trendPage.detail.sensor_info.equipamento_id)">Configurar análise</button></div>
@@ -1113,7 +625,7 @@
                 <p>O R² compara o erro da linha com a variação total das leituras. Se a linha passa exatamente pelos pontos do exemplo, o erro é zero e o R² vale 1. Uma série constante também tem R² igual a 1 nesta implementação, mas seu ritmo zero impede confirmar tendência.</p>
                 <div class="telemetry-formula">R² = 1 − [Σ(valor medido − valor da linha)² ÷ Σ(valor medido − média dos valores)²]</div>
                 <p><strong>Limiar de sensibilidade:</strong> com limite superior 100, o ritmo precisa superar 0,5 unidade/h na sensibilidade alta, 2 unidades/h na média ou 5 unidades/h na baixa. São, respectivamente, 0,5%, 2% e 5% do valor absoluto do limite por hora. Na redução, compara-se a mesma intensidade no sentido negativo. Se o limite for zero, os limiares são 0,005, 0,02 e 0,05 unidade/h.</p>
-                <p><strong>Regras de risco:</strong> limite já atingido ou projeção de até 2 horas: crítico; até 8 horas: alto; até 24 horas: médio. Fora dessas faixas, para limites positivos, valor a partir de 85% do limite é alto e a partir de 70% é médio. Anomalia confirmada tem pelo menos risco médio. A prioridade da OS também considera a criticidade cadastrada do equipamento.</p>
+                <p><strong>Regras de risco:</strong> limite já atingido ou projeção de até 2 horas: crítico; até 8 horas: alto; até 24 horas: médio. Fora dessas faixas, para limites positivos, valor a partir de 85% do limite é alto e a partir de 70% é médio. Anomalia confirmada tem pelo menos risco médio. A nova OS copia a classe ABC do equipamento na abertura; o risco permanece como informação da ocorrência. Revisões de prioridade exigem justificativa do gestor.</p>
                 <p><strong>Regras de amostra e configuração:</strong> a busca considera apenas a janela configurada, descarta valores não finitos e datas futuras e conta uma leitura válida por horário. O período deve ser de pelo menos 1 hora; máximo de 3 a 500 leituras; mínimo de 3 até o máximo; duração mínima de 1 minuto até o tamanho da janela; persistência e R² mínimos entre 0,5 e 1.</p>
               </details>
             </div>
@@ -1394,16 +906,20 @@
             </div>
             <div class="field" :class="{hasError:formErrors.criticidade}">
               <label>Criticidade</label>
-              <select v-model="fd.criticidade">
+              <select v-model="fd.criticidade" :disabled="equipmentGuide.busy || !equipmentGuide.current?.revisao" @change="fd.aceitar_sugestao=false">
                 <option :value="null">Não avaliada</option>
-                <option value="A">A — Crítica</option>
-                <option value="B">B — Alta</option>
-                <option value="C">C — Moderada</option>
-                <option value="D">D — Baixa</option>
+                <option value="A">A — Alta criticidade</option>
+                <option value="B">B — Média criticidade</option>
+                <option value="C">C — Baixa criticidade</option>
               </select>
               <span v-if="formErrors.criticidade" class="field-error">{{ formErrors.criticidade }}</span>
             </div>
           </div>
+          <div class="abc-guide">
+            <p v-if="!fd.empresa">Selecione a empresa para consultar os critérios ABC.</p><p v-else-if="equipmentGuide.busy" role="status">Carregando critérios…</p><p v-else-if="equipmentGuide.error" class="abc-error" role="alert">{{ equipmentGuide.error }} <button type="button" class="btn btn-ghost btn-sm" @click="loadEquipmentGuide">Tentar novamente</button></p>
+            <template v-else-if="equipmentGuide.current"><p><strong>{{ equipmentGuide.current.revisao ? 'Critérios validados · revisão ' + equipmentGuide.current.revisao : 'Sugestão de critérios — pendente de validação' }}</strong></p><details><summary>Consultar critérios A/B/C</summary><p><strong>A:</strong> {{ equipmentGuide.current.criterio_a }}</p><p><strong>B:</strong> {{ equipmentGuide.current.criterio_b }}</p><p><strong>C:</strong> {{ equipmentGuide.current.criterio_c }}</p><p v-if="equipmentGuide.current.revisao">Validados por {{ equipmentGuide.current.representante_manutencao }} em {{ equipmentGuide.current.data_validacao }}.</p></details><p v-if="!equipmentGuide.current.revisao">Registre a validação da manutenção para classificar. O equipamento pode ser salvo como não avaliado.</p><button type="button" class="btn btn-ghost btn-sm" @click="openCriteria(fd.empresa)">Gerenciar critérios da empresa</button></template>
+          </div>
+          <div v-if="equipmentGuide.types.length" class="field"><label>Tipo do catálogo (opcional)</label><select v-model.number="fd.tipo_equipamento" @change="fd.aceitar_sugestao=false"><option :value="null">Sem tipo do catálogo</option><option v-for="t in equipmentGuide.types" :key="t.id" :value="t.id">{{ t.nome }}{{ t.criticidade_padrao ? ' · sugestão ' + t.criticidade_padrao : '' }}</option></select><button v-if="equipmentGuide.types.some(t=>t.id===fd.tipo_equipamento && t.criticidade_padrao)" type="button" class="btn btn-ghost btn-sm" :disabled="!equipmentGuide.current?.revisao" @click="acceptEquipmentSuggestion">Aceitar classe sugerida</button><small>A sugestão só é aplicada ao aceitar e justificar a avaliação.</small></div>
           <div class="field" :class="{hasError:formErrors.justificativa_criticidade}">
             <label>Justificativa da criticidade</label>
             <textarea v-model="fd.justificativa_criticidade" placeholder="Segurança, meio ambiente, produção, redundância, qualidade e recuperação."></textarea>
@@ -1412,7 +928,7 @@
           <div class="field-row">
             <div class="field" :class="{hasError:formErrors.empresa}">
               <label>Empresa *</label>
-              <select v-model.number="fd.empresa">
+              <select v-model.number="fd.empresa" :disabled="!!modal.editId || !isAdmin" @change="fd.tipo_equipamento=null;fd.aceitar_sugestao=false;loadEquipmentGuide()">
                 <option :value="null">— Selecione —</option>
                 <option v-for="e in lists.empresas" :key="e.id" :value="e.id">{{ e.nome }}</option>
               </select>
@@ -1420,45 +936,6 @@
             </div>
             <div class="field"></div>
           </div>
-        </template>
-
-        <!-- ALERTA -->
-        <template v-if="modal.type==='alerta'">
-          <div class="field-row">
-            <div class="field" :class="{hasError:formErrors.tipo_alerta}">
-              <label>Tipo de Alerta *</label><input v-model="fd.tipo_alerta" :disabled="modal.editId && fd.origem !== 'manual'" placeholder="Ex: Alta Temperatura" />
-              <span v-if="formErrors.tipo_alerta" class="field-error">{{ formErrors.tipo_alerta }}</span>
-            </div>
-            <div class="field" :class="{hasError:formErrors.equipamento}">
-              <label>Equipamento *</label>
-              <select v-model.number="fd.equipamento" :disabled="modal.editId && (fd.origem !== 'manual' || fd.ordem_servico_id)">
-                <option :value="null">— Selecione —</option>
-                <option v-for="e in lists.equipamentos" :key="e.id" :value="e.id">{{ e.nome }} (#{{ e.id }})</option>
-              </select>
-              <span v-if="formErrors.equipamento" class="field-error">{{ formErrors.equipamento }}</span>
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Nível</label>
-              <select v-model="fd.nivel" :disabled="modal.editId && fd.origem !== 'manual'">
-                <option value="baixo">Baixo</option>
-                <option value="medio">Médio</option>
-                <option value="critico">Crítico</option>
-              </select>
-            </div>
-            <div class="field"><label>Status</label>
-              <select v-model="fd.status" :disabled="modal.editId && fd.origem === 'limite' && modal.oldStatus !== 'ativo'">
-                <option value="ativo" :disabled="modal.editId && modal.oldStatus !== 'ativo'">Ativo</option>
-                <option value="resolvido" :disabled="fd.origem === 'limite'">Resolvido</option>
-                <option value="ignorado">Ignorado</option>
-              </select>
-            </div>
-          </div>
-          <div class="field" :class="{hasError:formErrors.descricao}">
-            <label>Descrição *</label><textarea v-model="fd.descricao" :disabled="modal.editId && fd.origem !== 'manual'" rows="3" placeholder="Descreva o alerta..."></textarea>
-            <span v-if="formErrors.descricao" class="field-error">{{ formErrors.descricao }}</span>
-          </div>
-          <p v-if="fd.origem === 'limite'">A recuperação é confirmada após duas leituras normais consecutivas. Ignorar o alerta não encerra a O.S.</p>
         </template>
 
         <!-- ORDEM -->
@@ -1480,9 +957,9 @@
             </div>
             <div class="field" :class="{hasError:formErrors.equipamento}">
               <label>Equipamento *</label>
-              <select v-model.number="fd.equipamento">
+              <select v-model.number="fd.equipamento" :disabled="!!modal.editId">
                 <option :value="null">— Selecione —</option>
-                <option v-for="e in lists.equipamentos" :key="e.id" :value="e.id">{{ e.nome }} (#{{ e.id }})</option>
+                <option v-for="e in orderEquipmentOptions" :key="e.id" :value="e.id">{{ e.nome }} (#{{ e.id }})</option>
               </select>
               <span v-if="formErrors.equipamento" class="field-error">{{ formErrors.equipamento }}</span>
             </div>
@@ -1503,16 +980,7 @@
             </div>
           </div>
           <div class="field-row">
-            <div class="field" :class="{hasError:formErrors.prioridade}">
-              <label>Prioridade</label>
-              <select v-model="fd.prioridade">
-                <option value="baixa">Baixa</option>
-                <option value="media">Média</option>
-                <option value="alta">Alta</option>
-                <option value="critica">Crítica</option>
-              </select>
-              <span v-if="formErrors.prioridade" class="field-error">{{ formErrors.prioridade }}</span>
-            </div>
+            <div class="field"><label>Prioridade da OS</label><p class="abc-notice">{{ modal.editId ? prioridadeLabel(fd.prioridade) : prioridadeLabel(orderEquipmentOptions.find(e=>e.id===fd.equipamento)?.criticidade) }}</p><small>{{ modal.editId ? 'A prioridade é alterada em Prioridade e histórico, com justificativa.' : 'A OS copiará a criticidade vigente do equipamento ao salvar.' }}</small></div>
             <div class="field" :class="{hasError:formErrors.status}">
               <label>Status</label>
               <select v-model="fd.status">
@@ -1944,6 +1412,10 @@
     </div>
   </div>
 
+  <div v-if="criteriaModal.open" class="modal-backdrop abc-modal-backdrop" @click.self="!criteriaModal.saving && (criteriaModal.open=false)"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="abc-criteria-title"><header class="modal-header"><h2 id="abc-criteria-title">Critérios ABC da empresa</h2><button class="modal-close" aria-label="Fechar critérios" :disabled="criteriaModal.saving" @click="criteriaModal.open=false">×</button></header><form @submit.prevent="saveCriteria"><div class="modal-body"><div class="field"><label for="abc-company">Empresa</label><select id="abc-company" v-model="criteriaModal.company" :disabled="!isAdmin || criteriaModal.saving" @change="loadCriteria"><option value="">Selecione uma empresa</option><option v-for="e in lists.empresas" :key="e.id" :value="e.id">{{ e.nome }}</option></select></div><p class="abc-note">A classe expressa o impacto da falha. Considere segurança, ambiente, produção, qualidade, redundância e tempo de recuperação. Cada publicação preserva a revisão anterior.</p><p v-if="criteriaModal.busy" role="status">Carregando critérios…</p><p v-if="criteriaModal.error" class="abc-error" role="alert">{{ criteriaModal.error }}</p><fieldset v-if="criteriaModal.company && !criteriaModal.busy" :disabled="criteriaModal.saving || !isAdminOrGestor" class="abc-fieldset"><p class="abc-notice">{{ criteriaModal.data.revisao ? 'Revisão vigente: ' + criteriaModal.data.revisao + '. Salvar publicará uma nova revisão.' : 'Sugestão inicial. Preencha os dados de validação antes de publicar.' }}</p><div v-for="letter in ['a','b','c']" :key="letter" class="field"><label :for="'abc-criterion-'+letter">Critério {{ letter.toUpperCase() }} *</label><textarea :id="'abc-criterion-'+letter" v-model="criteriaModal.data['criterio_'+letter]" required rows="3"></textarea></div><div class="field"><label for="abc-representative">Representante da manutenção que validou *</label><input id="abc-representative" v-model="criteriaModal.data.representante_manutencao" maxlength="200" required /></div><div class="field"><label for="abc-date">Data da validação *</label><input id="abc-date" v-model="criteriaModal.data.data_validacao" type="date" required /></div></fieldset></div><footer class="modal-footer"><button type="button" class="btn btn-ghost" :disabled="criteriaModal.saving" @click="criteriaModal.open=false">Fechar</button><button v-if="isAdminOrGestor" class="btn btn-primary" type="submit" :disabled="criteriaModal.busy || criteriaModal.saving || !criteriaModal.company">{{ criteriaModal.saving ? 'Salvando…' : 'Publicar critérios validados' }}</button></footer></form></section></div>
+
+  <div v-if="priorityModal.open" class="modal-backdrop abc-modal-backdrop" @click.self="!priorityModal.saving && (priorityModal.open=false)"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="abc-priority-title"><header class="modal-header"><h2 id="abc-priority-title">Prioridade e histórico</h2><button class="modal-close" aria-label="Fechar prioridade" :disabled="priorityModal.saving" @click="priorityModal.open=false">×</button></header><div class="modal-body"><p v-if="priorityModal.busy" role="status">Carregando OS e histórico…</p><p v-if="priorityModal.error" class="abc-error" role="alert">{{ priorityModal.error }}</p><template v-if="priorityModal.order && !priorityModal.busy"><h3>#{{ priorityModal.order.id }} — {{ priorityModal.order.titulo }}</h3><p><span class="badge" :class="prioridadeBadge(priorityModal.order.prioridade)">{{ prioridadeLabel(priorityModal.order.prioridade) }}</span> · {{ priorityOrigin(priorityModal.order.prioridade_origem) }}</p><p>{{ priorityModal.order.justificativa_prioridade }}</p><p>Criticidade atual: {{ criticidadeLabel(priorityModal.order.criticidade_atual) }}</p><p>Na abertura: {{ criticidadeLabel(priorityModal.order.criticidade_na_abertura,!priorityModal.order.prioridade_herdada_conhecida) }}</p><p v-if="priorityModal.order.justificativa_criticidade_na_abertura">Justificativa na abertura: {{ priorityModal.order.justificativa_criticidade_na_abertura }}</p><details v-if="priorityModal.order.criterios_abertura" class="abc-guide"><summary>Critérios na abertura · revisão {{ priorityModal.order.criterios_abertura.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter">{{ letter.toUpperCase() }}: {{ priorityModal.order.criterios_abertura['criterio_'+letter] }}</p><p>Validados por {{ priorityModal.order.criterios_abertura.representante_manutencao }} em {{ priorityModal.order.criterios_abertura.data_validacao }}.</p></details><p v-if="priorityModal.order.risco_seguranca || priorityModal.order.gravidade_condicao==='critica'" class="abc-notice">{{ priorityModal.order.risco_seguranca ? 'Risco de segurança informado.' : 'Condição crítica informada.' }} Avalie a necessidade de ajuste da prioridade.</p><form v-if="isAdminOrGestor && ['pendente','andamento'].includes(priorityModal.order.status)" @submit.prevent="savePriority(false)"><fieldset class="abc-fieldset" :disabled="priorityModal.saving"><div class="field"><label for="abc-adjust">Nova prioridade</label><select id="abc-adjust" v-model="priorityModal.choice"><option value="A">A — Alta</option><option value="B">B — Média</option><option value="C">C — Baixa</option></select></div><div class="field"><label for="abc-reason">Justificativa da alteração *</label><textarea id="abc-reason" v-model="priorityModal.reason" required rows="3" placeholder="Explique a decisão e as condições observadas."></textarea></div><div class="abc-row-actions"><button class="btn btn-primary" type="submit">{{ priorityModal.saving ? 'Salvando…' : 'Registrar ajuste' }}</button><button v-if="priorityModal.order.prioridade_herdada_conhecida" type="button" class="btn btn-ghost" @click="savePriority(true)">Restaurar {{ prioridadeLabel(priorityModal.order.prioridade_automatica) }} da abertura</button></div><p v-if="!priorityModal.order.prioridade_herdada_conhecida" class="abc-note">A herança da OS legada não é conhecida. Faça um ajuste explícito para revisar sua prioridade.</p></fieldset></form><p v-else class="abc-note">{{ ['concluida','cancelada'].includes(priorityModal.order.status) ? 'OS encerrada: prioridade preservada.' : 'Somente gestor ou administrador pode ajustar a prioridade.' }}</p><h3 class="abc-history-heading">Histórico de prioridade</h3><p v-if="!priorityModal.history.length">Sem registros de alteração.</p><article v-for="h in priorityModal.history" :key="h.id" class="abc-history"><strong>{{ historicPriorityLabel(h.prioridade_anterior) }} → {{ historicPriorityLabel(h.prioridade_nova) }}</strong><p>{{ h.justificativa }}</p><small>{{ h.alterado_por_nome || 'Sistema / legado' }} · {{ fmtDate(h.criado_em) }} · {{ h.origem }}</small><details v-if="h.origem==='migracao'"><summary>Valores preservados do legado</summary><p>Prioridade anterior: {{ historicPriorityLabel(h.dados_anteriores.prioridade) }}</p><p>Referência automática anterior: {{ h.dados_anteriores.prioridade_automatica || 'Não registrada' }}</p><p>Motivo anterior: {{ h.dados_anteriores.justificativa || 'Não registrado' }}</p></details></article></template></div></section></div>
+
   <div v-if="equipModal.open" class="modal-backdrop" @click.self="closeEquipModal">
     <div class="modal modal-wide">
       <div class="modal-header">
@@ -1973,6 +1445,7 @@
           </div>
         </div>
 
+        <section class="abc-guide"><h3>Criticidade do equipamento</h3><p><strong>{{ criticidadeLabel(equipModal.equipamento?.criticidade) }}</strong></p><p>{{ equipModal.equipamento?.justificativa_criticidade || 'Ainda não há justificativa de avaliação registrada.' }}</p><details v-if="equipModal.equipamento?.criterios_utilizados"><summary>Critérios utilizados · revisão {{ equipModal.equipamento.criterios_utilizados.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter"><strong>{{ letter.toUpperCase() }}:</strong> {{ equipModal.equipamento.criterios_utilizados['criterio_'+letter] }}</p><p>Validados por {{ equipModal.equipamento.criterios_utilizados.representante_manutencao }} em {{ equipModal.equipamento.criterios_utilizados.data_validacao }}.</p></details><p v-else class="abc-note">Não há revisão de critérios registrada para esta avaliação.</p><div class="abc-row-actions"><button type="button" class="btn btn-ghost btn-sm" @click="openCriteria(equipModal.equipamento.empresa)">Consultar critérios da empresa</button><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="editItem('equipamento',equipModal.equipamento)">Revisar classificação</button></div><details><summary>Histórico de criticidade</summary><p v-if="equipmentAssessment.busy" role="status">Carregando histórico…</p><p v-if="equipmentAssessment.error" role="alert">{{ equipmentAssessment.error }}</p><p v-if="!equipmentAssessment.busy && !equipmentAssessment.error && !equipmentAssessment.history.length">Sem avaliações registradas.</p><article v-for="h in equipmentAssessment.history" :key="h.id" class="abc-history"><strong>{{ criticidadeLabel(h.criticidade_anterior,h.origem==='migracao'||h.origem==='legado') }} → {{ criticidadeLabel(h.criticidade_nova,h.origem==='legado') }}</strong><p>{{ h.justificativa }}</p><small>{{ h.alterado_por_nome || 'Sistema / legado' }} · {{ fmtDate(h.criado_em) }} · {{ h.origem }}</small><details v-if="h.criterios_utilizados"><summary>Critérios da avaliação · revisão {{ h.criterios_utilizados.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter">{{ letter.toUpperCase() }}: {{ h.criterios_utilizados['criterio_'+letter] }}</p></details></article></details></section>
         <div v-if="equipModal.currentOS" class="detail-os-card" style="margin-top:16px; padding:16px; border:1px solid rgba(0,212,170,0.18); border-radius:12px; background:rgba(0,212,170,0.05);">
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start;">
             <div style="flex:2; min-width:220px;">
@@ -1988,7 +1461,7 @@
               </div>
               <div class="detail-card">
                 <div class="detail-card-label">Prioridade</div>
-                <div class="detail-card-value">{{ equipModal.currentOS.prioridade || '—' }}</div>
+                <div class="detail-card-value">{{ prioridadeLabel(equipModal.currentOS.prioridade) }}</div>
               </div>
               <div class="detail-card">
                 <div class="detail-card-label">Tipo</div>
@@ -2004,11 +1477,13 @@
               </div>
             </div>
             <div v-if="equipModal.currentOS.justificativa_prioridade" style="width:100%; font-size:12px; color:var(--t2);">
+              <p>{{ priorityOrigin(equipModal.currentOS.prioridade_origem) }} · Criticidade na abertura: {{ criticidadeLabel(equipModal.currentOS.criticidade_na_abertura,!equipModal.currentOS.prioridade_herdada_conhecida) }}</p>
               <strong>Motivo da prioridade:</strong> {{ equipModal.currentOS.justificativa_prioridade }}
             </div>
           </div>
         </div>
 
+        <div v-if="equipModal.currentOS" class="alert-linked-order-actions"><button class="btn btn-ghost" @click="openPriority(equipModal.currentOS)">Prioridade e histórico</button><button class="btn btn-primary" @click="editItem('ordem',equipModal.currentOS);closeEquipModal()">Gerenciar esta O.S.</button><button v-if="equipModal.currentOS.alerta_origem" class="btn btn-ghost" @click="openAlertaDetails({id:equipModal.currentOS.alerta_origem})">Ver detecção de origem</button></div>
         <div class="detail-filter-row" style="flex-wrap: wrap;">
           <div style="display:flex; align-items:center; gap:8px;">
             <label class="filter-label">Sensor</label>
@@ -2145,19 +1620,20 @@
             Este equipamento não possui sensores ativos cadastrados.
           </div>
           </div>
+          <section class="alert-equipment-history"><h3>Histórico de alertas do equipamento</h3><p>Consulte as detecções e suas leituras, separadas do atendimento de manutenção.</p><button class="btn btn-ghost" @click="showEquipmentAlerts(equipModal.equipamento.id)">Consultar ocorrências deste equipamento →</button></section>
           <div class="detail-table-wrap" style="margin-top:24px;" v-if="isAdminOrGestor">
             <div class="detail-table-title" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>Histórico do Equipamento ({{ equipModalFilteredOrdens.length }})</span>
+              <span>Ordens de serviço ({{ equipModalFilteredOrdens.length }})</span>
               <div style="display:flex; gap: 8px;">
                 <button class="btn btn-ghost btn-sm" :class="{ 'btn-primary': equipModal.osFilter === 'todas' }" @click="equipModal.osFilter = 'todas'">Tudo</button>
-                <button class="btn btn-ghost btn-sm" :class="{ 'btn-primary': equipModal.osFilter === 'alertas' }" @click="equipModal.osFilter = 'alertas'">Alertas</button>
-                <button class="btn btn-ghost btn-sm" :class="{ 'btn-primary': equipModal.osFilter === 'os' }" @click="equipModal.osFilter = 'os'">Ordens (O.S.)</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'btn-primary': equipModal.osFilter === 'automaticas' }" @click="equipModal.osFilter = 'automaticas'">Originadas por alerta</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'btn-primary': equipModal.osFilter === 'manuais' }" @click="equipModal.osFilter = 'manuais'">Outras ordens</button>
               </div>
             </div>
             <table v-if="equipModalFilteredOrdens.length">
               <thead>
                 <tr>
-                  <th>O.S. / Alerta</th>
+                  <th>Ordem de serviço</th>
                   <th>Data Criação</th>
                   <th>Responsável</th>
                   <th>Prioridade</th>
@@ -2191,6 +1667,39 @@
           </div>
       </div>
     </div>
+  </div>
+
+  <!-- Consulta da ocorrência: nenhuma ação de manutenção modifica o alerta. -->
+  <div v-if="alertHistory.detail" class="modal-backdrop" @click.self="closeAlertaDetails" @keydown.esc="closeAlertaDetails">
+    <section id="alert-detection-dialog" class="modal alert-detection-modal" role="dialog" aria-modal="true" aria-labelledby="alert-detection-title" tabindex="-1">
+      <header class="modal-header"><div><h2 id="alert-detection-title">Detecção #{{ alertHistory.detail.id }}</h2><p>{{ alertEvidence.tipo_alerta || alertHistory.detail.tipo_alerta }}</p></div><button class="btn btn-ghost" aria-label="Fechar detalhes do alerta" @click="closeAlertaDetails">✕</button></header>
+      <div class="modal-body">
+        <p v-if="alertHistory.detailBusy" role="status">Consultando registro…</p>
+        <div v-if="alertHistory.detailError" class="telemetry-notice" role="alert">{{ alertHistory.detailError }} <button class="btn btn-ghost btn-sm" @click="openAlertaDetails(alertHistory.detail)">Tentar novamente</button></div>
+        <p v-if="alertHistory.detail.legado" class="telemetry-notice">Registro legado. As evidências da abertura não foram preservadas na versão anterior. Os dados disponíveis abaixo não reconstituem a detecção inicial.</p>
+        <div class="alert-detection-facts">
+          <div><span>Equipamento</span><strong>{{ alertEvidence.equipamento_nome || alertHistory.detail.equipamento_nome }}</strong></div>
+          <div><span>Sensor</span><strong>{{ alertEvidence.sensor_nome || alertHistory.detail.sensor_nome || 'Sem sensor identificado' }}</strong></div>
+          <div><span>Origem</span><strong>{{ alertHistory.detail.origem === 'limite' ? 'Limite operacional' : alertHistory.detail.origem === 'tendencia' ? 'Tendência preditiva' : 'Manual · legado' }}</strong></div>
+          <div><span>Registrado em</span><strong>{{ fmtDate(alertHistory.detail.data_alerta) }}</strong></div>
+          <div><span>Nível inicial</span><strong>{{ alertEvidence.nivel || 'Não disponível' }}</strong></div>
+          <div><span>Maior nível registrado</span><strong>{{ alertHistory.detail.nivel }}</strong></div>
+          <div><span>Normalização detectada</span><strong>{{ alertHistory.detail.data_normalizacao ? fmtDate(alertHistory.detail.data_normalizacao) : 'Sem registro de normalização' }}</strong></div>
+          <div v-if="alertEvidence.limite_operacional != null"><span>Limite superior na detecção</span><strong>{{ alertEvidence.limite_operacional }} {{ alertEvidence.unidade_medida }}</strong></div>
+        </div>
+        <h3>{{ alertHistory.detail.legado ? 'Descrição disponível' : 'O que originou esta ocorrência?' }}</h3><p class="alert-detection-reason">{{ alertEvidence.descricao || alertHistory.detail.descricao }}</p>
+        <div v-if="alertEvidence.analise?.limites_pct" class="alert-detection-facts"><div v-for="threshold in alertThresholds" :key="threshold.label"><span>Faixa {{ threshold.label.toLowerCase() }} na detecção</span><strong>{{ threshold.percent }}% · {{ formatNumber(threshold.value,2) }} {{ alertEvidence.unidade_medida }}</strong></div></div>
+        <template v-if="alertReadings.length">
+          <h3>Leituras preservadas na detecção</h3><p class="alert-history-note">{{ alertReadings.length }} amostras · {{ alertEvidence.unidade_medida }} · {{ fmtDate(alertReadings[0].timestamp) }} a {{ fmtDate(alertReadings[alertReadings.length-1].timestamp) }}. Este gráfico não muda com novas leituras.</p>
+          <div class="alert-evidence-chart"><svg viewBox="-60 -15 725 215" role="img" aria-label="Evolução das leituras preservadas na detecção"><g v-for="tick in alertChart.ticks" :key="tick.y"><line x1="0" x2="640" :y1="tick.y" :y2="tick.y" stroke="currentColor" opacity="0.15"/><text x="-8" :y="tick.y+4" text-anchor="end" fill="currentColor" font-size="11">{{ tick.label }}</text></g><g v-for="threshold in alertChart.thresholds" :key="threshold.label"><line x1="0" x2="640" :y1="threshold.y" :y2="threshold.y" :stroke="threshold.color" stroke-dasharray="5 4" opacity="0.65"/><text x="635" :y="threshold.y-4" text-anchor="end" :fill="threshold.color" font-size="10">{{ threshold.label }}</text></g><path :d="alertChart.path" fill="none" stroke="var(--mint)" stroke-width="2"/><circle v-for="(point,i) in alertChart.dots" :key="i" :cx="point.x" :cy="point.y" r="3" fill="var(--mint)"><title>{{ fmtDate(alertReadings[i].timestamp) }} · {{ point.label }} {{ alertEvidence.unidade_medida }}</title></circle></svg></div>
+          <details class="alert-evidence-readings"><summary>Consultar valores e horários das amostras</summary><div class="table-wrap"><table><thead><tr><th>Data e hora</th><th>Valor ({{ alertEvidence.unidade_medida }})</th></tr></thead><tbody><tr v-for="(reading,i) in alertReadings" :key="i"><td>{{ fmtDate(reading.timestamp) }}</td><td>{{ reading.valor }}</td></tr></tbody></table></div></details>
+          <details v-if="alertEvidence.analise?.config_used" class="alert-evidence-readings"><summary>Critérios utilizados na detecção da tendência</summary><dl class="alert-detection-facts"><div><dt>Janela</dt><dd>{{ alertEvidence.analise.config_used.periodo_horas }} h</dd></div><div><dt>Duração mínima</dt><dd>{{ alertEvidence.analise.config_used.duracao_minima_minutos }} min</dd></div><div><dt>Amostras mínimas</dt><dd>{{ alertEvidence.analise.config_used.minimo_leituras }}</dd></div><div><dt>Persistência mínima</dt><dd>{{ alertEvidence.analise.config_used.persistencia_minima }}</dd></div><div><dt>R² mínimo</dt><dd>{{ alertEvidence.analise.config_used.r2_minimo }}</dd></div><div><dt>Sensibilidade</dt><dd>{{ alertEvidence.analise.config_used.sensibilidade }}</dd></div></dl></details>
+        </template>
+        <p v-else class="telemetry-notice">Não há leituras da detecção preservadas para este registro.</p>
+        <p class="alert-history-note">A condição atual deve ser consultada no sensor. Normalização detectada e conclusão do atendimento são informações independentes.</p>
+      </div>
+      <footer class="alert-detection-footer"><button v-if="alertHistory.detail.sensor" class="btn btn-ghost" @click="openAlertaSensor(alertHistory.detail)">Acompanhar sensor</button><button v-if="alertHistory.detail.ordem_servico_id" class="btn btn-primary" @click="openAlertaOS(alertHistory.detail)">Abrir O.S. #{{ alertHistory.detail.ordem_servico_id }}</button><span v-else class="alert-history-note">Sem O.S. vinculada.</span><button class="btn btn-ghost" @click="closeAlertaDetails">Fechar</button></footer>
+    </section>
   </div>
 
   <!-- Modal: Configuração de Análise de Tendência -->
@@ -2228,6 +1737,7 @@
             <label>Mínimo de leituras válidas</label>
             <input type="number" v-model.number="trendConfigModal.form.minimo_leituras" required min="3" :max="trendConfigModal.form.num_leituras">
           </div>
+          <div v-if="trendConfigModal.sensorId" class="telemetry-guide-callout"><strong>Tempo mínimo de observação</strong><p>É o período coberto pelas leituras, não uma espera depois de abrir a tela. Abaixo você pode preparar um ajuste; ele só vale ao clicar em Salvar Configuração.</p><div class="telemetry-actions"><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(1)">Preparar perfil de 1 minuto</button><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(5)">5 minutos</button><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(30)">30 minutos</button></div><p>O perfil de 1 minuto define mínimo de 7 leituras e máximo de 500 para comportar coleta frequente. Isso não fabrica histórico nem garante alerta: a frequência de coleta e os outros critérios também precisam ser atendidos.</p></div>
           <div class="field">
             <label>Duração mínima da amostra (minutos)</label>
             <input type="number" v-model.number="trendConfigModal.form.duracao_minima_minutos" required min="1" :max="trendConfigModal.form.periodo_horas * 60">
@@ -2275,6 +1785,7 @@
   </div>
 
 </div><!-- /#app -->
+<script src="live-chart.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

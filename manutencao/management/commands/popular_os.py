@@ -24,11 +24,11 @@ class Command(BaseCommand):
 
         problemas = ['Fuga de óleo', 'Vibração excessiva', 'Sobreaquecimento', 'Falha no sensor', 'Ruído anómalo', 'Substituição de correia']
         status_opcoes = ['pendente', 'andamento']
-        prioridades = ['baixa', 'media', 'alta', 'urgente']
 
         for _ in range(50):
             equipamento = random.choice(equipamentos)
-            responsavel = random.choice(usuarios)
+            candidatos = [u for u in usuarios if u.empresa_id == equipamento.empresa_id]
+            responsavel = random.choice(candidatos) if candidatos else None
             status = random.choice(status_opcoes)
             
             # Vamos criar OS apenas pendentes ou em andamento para podermos finalizar depois!
@@ -37,8 +37,7 @@ class Command(BaseCommand):
                 responsavel=responsavel,
                 titulo=f"{random.choice(problemas)} - {equipamento.nome}",
                 descricao=fake.text(max_nb_chars=200),
-                status=status,
-                prioridade=random.choice(prioridades)
+                status=status
             )
 
         self.stdout.write(self.style.SUCCESS("Base de dados populada com 50 Ordens de Serviço!"))

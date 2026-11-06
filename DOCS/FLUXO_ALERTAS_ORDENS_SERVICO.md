@@ -1,5 +1,7 @@
 # Alertas e Ordens de Serviço: diagnóstico, regras e adequações
 
+> A partir de 06/11/2026, a especificação vigente de interface, API e evidências está em [Histórico de alertas](HISTORICO_ALERTAS.md). Este documento conserva o diagnóstico anterior. As referências abaixo ao CRUD, criação manual e ações de ignorar/resolver não fazem mais parte da interface/API atual. As regras automáticas de recuperação e associação a O.S. permanecem, com registro da evidência inicial e da maior gravidade também em tendências.
+
 Data: 04/11/2026. Escopo: monitoramento por limite, alertas manuais, integração com O.S. e preservação do fluxo preditivo existente.
 
 Atualização de 06/11/2026: as referências deste documento aos critérios preditivos anteriores são históricas. A revisão em [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) passa a definir persistência, desativação, sentidos anormais e geração de OS para toda anomalia confirmada. O fluxo de limites e alertas manuais descrito abaixo permanece vigente.
@@ -39,7 +41,7 @@ O diagnóstico foi feito sobre modelos, sinais, serviços, serializers, views, i
 | Reutilizar O.S. apenas pelo título | Inconsistente | Substituído pelo vínculo da ocorrência e pelo sensor em ordens corretivas ainda abertas. |
 | Recriar O.S. após cancelamento/conclusão no mesmo episódio | Inconsistente | A associação permanece; a decisão administrativa não é desfeita automaticamente. |
 | Reabrir O.S. cancelada | Inconsistente | Cancelada e concluída são estados terminais quanto ao status. |
-| Reescrever contexto de criticidade na abertura | Inconsistente | O contexto inicial é preservado; a condição e a sugestão de prioridade podem evoluir. |
+| Reescrever contexto de criticidade na abertura | Inconsistente | O contexto inicial é preservado; a condição pode evoluir; a prioridade herdada é preservada. |
 | Resolução preditiva independente da O.S. | Correto | Algoritmo e critérios preditivos preservados. |
 | Usar histerese com outro limite de retorno | Opcional | Não existe parâmetro próprio de recuperação. Criar um percentual novo sem evidência ampliaria a configuração; a confirmação por amostras atende ao escopo. |
 | Reproduzir todos os estados e processos de um CMMS corporativo | Opcional | Excluído do escopo acadêmico. |
@@ -53,7 +55,7 @@ As decisões de implementação acima estão consolidadas nas regras da seção 
 3. Sem anormalidade e sem episódio em observação, não há alerta nem O.S. de limite.
 4. A primeira leitura anormal cria uma ocorrência vinculada ao sensor, com origem `limite` e chave `limite:<sensor_id>`.
 5. O alerta ativo aciona o serviço de O.S. Se já estiver vinculado a uma ordem, usa essa associação. Caso contrário, uma recorrência pode utilizar a ordem corretiva ainda aberta do mesmo sensor; na ausência dela, cria uma ordem pendente.
-6. Leituras anormais seguintes atualizam a condição atual, mantêm o maior nível atingido e zeram a confirmação de recuperação. A ordem aberta pode receber atualização de gravidade, sugestão de prioridade e registro textual da nova ocorrência ou agravamento.
+6. Leituras anormais seguintes atualizam a condição atual, mantêm o maior nível atingido e zeram a confirmação de recuperação. A ordem aberta pode receber atualização de gravidade e registro textual da nova ocorrência ou agravamento.
 7. A primeira leitura abaixo da faixa baixa mantém o alerta ativo. A segunda consecutiva confirma recuperação e resolve o alerta. A ordem permanece em seu estado administrativo atual.
 8. O responsável conclui ou cancela a O.S. por ação humana. Concluir gera data e histórico; nenhuma dessas ações altera a condição monitorada.
 9. Após recuperação confirmada, outra anormalidade cria outro registro de alerta. Uma ordem ainda aberta é reaproveitada; uma ordem terminal é preservada e uma nova ordem pode ser aberta.
@@ -78,7 +80,7 @@ Normalização, resolução e encerramento administrativo não têm uma ordem te
 | Leitura abaixo da faixa baixa, sem episódio | Inexistente | Inexistente | Não criar registros operacionais | Condição dentro da faixa. |
 | Primeira leitura na faixa baixa/média/crítica | Inexistente | Sem ordem aberta desse sensor | Criar alerta e ordem pendente | Preserva a política já efetiva de investigação em qualquer nível. |
 | Mesma condição em várias leituras | Ativo | Pendente/andamento | Atualizar a ocorrência; manter a ordem | Evita duplicação por leitura. |
-| Gravidade aumenta | Ativo | Aberta | Registrar pico e atualizar condição/prioridade automática | A prioridade manual permanece respeitada. |
+| Gravidade aumenta | Ativo | Aberta | Registrar pico e atualizar condição; preservar prioridade da OS | A prioridade manual permanece respeitada. |
 | Gravidade diminui, mas segue anormal | Ativo | Aberta | Atualizar condição atual; manter pico e prioridade operacional | Evita perder gravidade histórica. |
 | Uma leitura normal | Ativo | Qualquer estado | Contar uma confirmação; manter ativo | Normalização isolada não encerra o episódio. |
 | Normal, anormal, normal | Ativo | Qualquer estado | Zerar na anormal e contar novamente | A sequência normal foi interrompida. |
@@ -117,7 +119,7 @@ Normalização, resolução e encerramento administrativo não têm uma ordem te
 - **RN-16 — Autonomia:** resolução ou supressão de alertas não concluem nem cancelam O.S. Conclusão/cancelamento de O.S. não resolvem nem ignoram alertas.
 - **RN-17 — Estados da O.S.:** manter `pendente`, `andamento`, `concluida`, `cancelada`. As duas primeiras são abertas. Concluída e cancelada não mudam de status pela API ou por `OrdemServico.save()`. Mantêm-se os demais caminhos existentes entre estados abertos e terminais, incluindo conclusão direta e cancelamento em andamento.
 - **RN-18 — Conclusão:** ao salvar uma ordem concluída, preencher a data se ausente e garantir um único `HistoricoManutencao`, na mesma transação. Na API, se não houver responsável, atribuir o usuário que conclui. O histórico inicial deriva da descrição/título e pode receber o relato e custos pelos mecanismos existentes; não comprova automaticamente que o reparo foi eficaz.
-- **RN-19 — Priorização:** preservar a matriz existente de criticidade, gravidade e segurança. Em ordem corretiva aberta, a automação registra agravamentos e novas ocorrências, sem baixar a prioridade nem substituir prioridade manual. A sugestão automática pode subir mesmo com prioridade manual. O contexto de criticidade registrado na abertura não é reescrito pelo recálculo.
+- **RN-19 — Priorização:** copiar a classe ABC do equipamento na abertura. A automação registra agravamentos e novas ocorrências sem alterar a prioridade da OS nem sua referência da abertura. Gestor/admin pode ajustar a prioridade com justificativa e histórico. Ver [Priorização ABC](PRIORIZACAO_ABC.md).
 - **RN-20 — Proteção da origem:** campos de diagnóstico automático e relações operacionais são controlados pelo backend na API. Um alerta vinculado não pode trocar de sensor/equipamento, e uma ordem não pode trocar para equipamento incompatível com sua origem.
 - **RN-21 — Preditivo:** preservar detecção, resolução, configuração e recomendação de intervenção do serviço de tendência. A O.S. preditiva continua idempotente pelo alerta de origem. A nova FK de atendimento apenas torna esse vínculo acessível de forma uniforme. Ordens por horímetro não tiveram suas regras alteradas.
 - **RN-22 — Transações:** ingestão individual bloqueia o sensor; criação/atualização de ordens bloqueia a ocorrência. O banco PostgreSQL é necessário para validar bloqueios de linha. O índice único de evento ativo e o OneToOne de origem permanecem barreiras adicionais.
@@ -156,7 +158,7 @@ Exemplos abaixo usam limite 100 e percentuais 70/85/100, exclusivamente para tor
 | Conclusão antes da recuperação | `90`, concluir, `110, 110` | Alerta ativo e agravado; ordem concluída, sem duplicação. |
 | Cancelamento antes da recuperação | `90`, cancelar, `110, 110` | Alerta ativo; ordem cancelada, sem recriação automática. |
 | Falha após terminal e recuperação | Encerrar ordem, `60, 60, 90` | Novo alerta e nova ordem pendente. |
-| Prioridade manual | Definir prioridade manual, elevar leitura | Preservar prioridade humana; atualizar gravidade e sugestão automática. |
+| Prioridade manual | Definir prioridade manual, elevar leitura | Preservar prioridade humana; atualizar gravidade sem alterar a prioridade ou a referência da abertura. |
 | Ignorado | `90`, ignorar, `110, 60, 110` | Mesmo episódio ignorado; não abrir outros. |
 | Recorrência após ignorado recuperado | Acrescentar `60, 60, 110` | Preservar ignorado anterior com recuperação; criar outro episódio. |
 | Manual independente | Criar manual com sensor, `90, 60, 60` | Manual ativo; alerta automático resolvido. |
@@ -173,7 +175,7 @@ Exemplos abaixo usam limite 100 e percentuais 70/85/100, exclusivamente para tor
 
 Testes: `telemetria/test_alert_lifecycle.py`, `telemetria/test_alert_concurrency.py`, `telemetria/test_trend_analysis.py`, `alertas/test_migrations.py`, além da suíte preexistente.
 
-As fixtures preditivas foram ajustadas para gravar horários distintos após `bulk_create`, pois `auto_now_add` sobrescrevia os horários fornecidos. As expectativas de prioridade usam os valores reais do modelo e a matriz existente. Nenhuma fórmula preditiva foi alterada.
+As fixtures preditivas foram ajustadas para gravar horários distintos após `bulk_create`, pois `auto_now_add` sobrescrevia os horários fornecidos. As expectativas de prioridade agora verificam a herança ABC imutável da abertura. Nenhuma fórmula preditiva foi alterada.
 
 ## G. Plano mínimo de adequação e resultado
 

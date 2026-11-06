@@ -1,12 +1,8 @@
 const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 const BASE = 'http://127.0.0.1:9000';
-const TELEMETRY_CHART_WIDTH = 320;
-const TELEMETRY_CHART_HEIGHT = 100;
-const TELEMETRY_CHART_LEFT_PAD = 45;
-const TELEMETRY_X_END_PERCENT = 0.7; // last point reaches about 70% of chart width
 
 // Helper: ordena por nível de severidade (critica → alta → media → baixa)
-const NIVEL_PRIORIDADE = { critica: 0, alta: 1, media: 2, baixa: 3 };
+const NIVEL_PRIORIDADE = { A: 0, B: 1, C: 2, critica: 0, alta: 1, media: 2, baixa: 3 };
 function sortByNivel(items, campo = 'nivel') {
   return items.sort((a, b) => (NIVEL_PRIORIDADE[a[campo]] ?? 3) - (NIVEL_PRIORIDADE[b[campo]] ?? 3));
 }
@@ -18,6 +14,7 @@ function sortByTipoUsuario(items, campo = 'tipo_usuario') {
 }
 
 createApp({
+  components: { LiveChart: globalThis.NanaLiveChart?.component, MeasurementSample: globalThis.NanaLiveChart?.sampleComponent },
   setup() {
     const token = ref(localStorage.getItem('sentinel_token') || '');
     const refreshTk = ref(localStorage.getItem('sentinel_refresh') || '');
@@ -31,7 +28,6 @@ createApp({
     const dashAlerts = ref([]);
     const dashAlertsCollapsed = ref(false);
     const dashOrdensCollapsed = ref(false);
-    const filtroFilaPrioridade = ref('todas');
     const alertCount = ref(0);
     const toasts = ref([]);
     const globalEmpresa = ref('');  // Filtro global por empresa (admin)
@@ -64,6 +60,7 @@ createApp({
     const dashboardSummary = ref(null);
     const dashboardKpisLoading = ref(false);
     const dashboardKpisError = ref(null);
+    let dashboardSummaryRequest = 0;
 
     const lists = reactive({
       equipamentos: [], alertas: [], ordens: [],
@@ -111,8 +108,8 @@ createApp({
     });
     const filters = reactive({
       equipamentos: { search: '', status: '', empresa: '', setor: '' },
-      alertas: { search: '', nivel: '', status: '' },
-      ordens: { search: '', status: '', prioridade: '', tipo_os: '' },
+      alertas: { search: '', nivel: '', origem: '', equipamento: '', sensor: '', from: '', to: '', status: '', setor: '' },
+      ordens: { search: '', status: 'abertas', prioridade: '', tipo_os: '', abertas: true, responsavel_escopo: '', equipamento: '', setor: '' },
       historico: { search: '', data_de: '', data_ate: '', custo_min: '', custo_max: '' },
       empresas: { search: '' },
       usuarios: { search: '' },
@@ -123,6 +120,37 @@ createApp({
     const modal = reactive({ open: false, type: '', title: '', editId: null, saving: false, oldStatus: null });
     const fd = reactive({});
     const formErrors = ref({});
+    const alertHistory = reactive({ busy: false, count: 0, error: '', url: '', detail: null, detailBusy: false, detailError: '' });
+    let alertRequest = 0;
+    let alertDetailRequest = 0;
+    const alertSensors = computed(() => telemetry.sensors.filter(sensor =>
+      !filters.alertas.equipamento || Number(sensor.equipamento) === Number(filters.alertas.equipamento)));
+    const alertEvidence = computed(() => alertHistory.detail?.dados_deteccao || {});
+    const alertReadings = computed(() => alertEvidence.value.leituras || []);
+    const alertThresholds = computed(() => {
+      const limit = Number(alertEvidence.value.limite_operacional);
+      if (alertEvidence.value.limite_operacional == null || !Number.isFinite(limit)) return [];
+      const percentages = alertEvidence.value.analise?.limites_pct;
+      return percentages ? ['baixo', 'medio', 'critico'].map(level => ({
+        label: { baixo: 'Baixo', medio: 'Médio', critico: 'Crítico' }[level],
+        value: limit * percentages[level] / 100, percent: percentages[level], color: nivelColor(level),
+      })) : [{ label: 'Limite superior', value: limit, color: nivelColor('critico') }];
+    });
+    const alertChart = computed(() => {
+      const readings = alertReadings.value;
+      const chart = makeLineChart([...readings].reverse(), 640, 180, readings.length,
+        alertThresholds.value.map(row => row.value));
+      if (!readings.length) return { ...chart, thresholds: [] };
+      const times = readings.map(row => new Date(row.timestamp).getTime());
+      const duration = times[times.length - 1] - times[0];
+      if (duration > 0 && times.every(Number.isFinite)) {
+        chart.dots = chart.dots.map((point, index) => ({ ...point, x: (times[index] - times[0]) / duration * 640 }));
+        chart.path = chart.dots.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+      }
+      const range = chart.highValue - chart.lowValue || 1;
+      chart.thresholds = alertThresholds.value.map(row => ({ ...row, y: 162 - (row.value - chart.lowValue) / range * 144 }));
+      return chart;
+    });
 
     const equipModal = reactive({
       open: false,
@@ -166,8 +194,8 @@ createApp({
     });
 
     const equipModalFilteredOrdens = computed(() => {
-      if (equipModal.osFilter === 'alertas') return equipModal.ordens.filter(o => o.titulo.toLowerCase().includes('alerta'));
-      if (equipModal.osFilter === 'os') return equipModal.ordens.filter(o => !o.titulo.toLowerCase().includes('alerta'));
+      if (equipModal.osFilter === 'automaticas') return equipModal.ordens.filter(o => o.alerta_origem);
+      if (equipModal.osFilter === 'manuais') return equipModal.ordens.filter(o => !o.alerta_origem);
       return equipModal.ordens;
     });
 
@@ -177,21 +205,11 @@ createApp({
     const isTecnico = computed(() => me.value?.tipo_usuario === 'tecnico');
     const osSemTecnicoCount = computed(() => lists.ordens.filter(o => !o.responsavel && o.status !== 'concluida' && o.status !== 'cancelada').length);
     
-    const ordensFilaPrioridade = computed(() => {
-      let pendentes = lists.ordens.filter(o => o.status !== 'concluida' && o.status !== 'cancelada');
-      if (filtroFilaPrioridade.value !== 'todas') {
-        pendentes = pendentes.filter(o => o.prioridade === filtroFilaPrioridade.value);
-      }
-      return pendentes.sort((a, b) => {
-        const pa = NIVEL_PRIORIDADE[a.prioridade] ?? 99;
-        const pb = NIVEL_PRIORIDADE[b.prioridade] ?? 99;
-        return pa - pb;
-      });
-    });
+    const ordensFilaPrioridade = computed(() => lists.ordens);
 
     const userInitial = computed(() => (me.value?.username || 'U')[0].toUpperCase());
     const viewTitle = computed(() => ({
-      dashboard: 'Dashboard', equipamentos: 'Equipamentos', alertas: 'Alertas',
+      dashboard: 'Dashboard', equipamentos: 'Equipamentos', alertas: 'Histórico de alertas',
       ordens: 'Ordens de Serviço', telemetria: 'Telemetria', tendencias: 'Tendências',
       historico: 'Histórico de Manutenção', empresas: 'Empresas',
       usuarios: 'Usuários', localizacoes: 'Localizações',
@@ -230,13 +248,13 @@ createApp({
     });
 
     const chartAlertNivel = computed(() => {
-      const counts = dashboardSummary.value?.alertas_ativos
-        ? { ...dashboardSummary.value.alertas_ativos }
+      const counts = dashboardSummary.value?.alertas_24h
+        ? { ...dashboardSummary.value.alertas_24h }
         : { critico: 0, medio: 0, baixo: 0 };
       if (!dashboardSummary.value) {
         dashAlerts.value.forEach(a => { if (counts[a.nivel] !== undefined) counts[a.nivel]++; });
       }
-      const max = Math.max(...Object.values(counts), 1);
+      const max = Math.max(counts.critico, counts.medio, counts.baixo, 1);
       return [
         { label: 'Crítico', value: counts.critico, pct: (counts.critico / max) * 100, color: '#ff3b3b' },
         { label: 'Médio', value: counts.medio, pct: (counts.medio / max) * 100, color: '#ffaa00' },
@@ -260,64 +278,78 @@ createApp({
       ];
     });
 
-    const dashboardEquipamentos = computed(() => {
-      if (!isTecnico.value) return lists.equipamentos;
-      const allowedIds = new Set(lists.ordens.map(o => o.equipamento).filter(Boolean));
-      return lists.equipamentos.filter(eq => allowedIds.has(eq.id));
+    const performanceOpen = ref(false);
+    const liveOpen = ref(false);
+    const telemetryLiveOpen = ref(false);
+    const dashboardTab = ref('minhas');
+    const companySearch = ref('');
+    const dashboardUpdatedAt = ref(null);
+    let dashboardRequest = 0, dashboardTimer = null;
+    const dashboardAdminOverview = computed(() => isAdmin.value && !globalEmpresa.value);
+    const dashboardEquipamentos = computed(() => dashboardSummary.value?.opcoes_equipamentos || []);
+    const dashboardEquipmentOptions = computed(() => dashboardEquipamentos.value.filter(e => !dashSetor.value || e.setor === dashSetor.value));
+    const availableDashboardSectors = computed(() => dashboardSummary.value?.setores || []);
+    const dashboardCompanies = computed(() => (dashboardSummary.value?.empresas || []).filter(c => c.nome.toLocaleLowerCase('pt-BR').includes(companySearch.value.trim().toLocaleLowerCase('pt-BR'))));
+    const dashboardOrders = computed(() => {
+      const d = dashboardSummary.value;
+      return isTecnico.value ? (dashboardTab.value === 'minhas' ? d?.minhas_ordens_prioritarias : d?.ordens_disponiveis) || [] : d?.ordens_prioritarias || [];
     });
-
-    const dashboardAllowedEquipamentoIds = computed(() => new Set(dashboardEquipamentos.value.map(eq => eq.id)));
-
-    const availableDashboardSectors = computed(() => {
-      return [...new Set(dashboardEquipamentos.value.map(eq => locSetor(eq.id)).filter(Boolean))].sort();
+    const dashboardCards = computed(() => {
+      const d = dashboardSummary.value;
+      if (dashboardAdminOverview.value) return [
+        { label: 'Empresas cadastradas', value: d?.total_empresas },
+        { label: 'Empresas com alertas críticos', value: d?.empresas_com_alertas_criticos, critical: true },
+        { label: 'Ordens abertas', value: d?.os_abertas },
+        { label: 'Sem responsável', value: d?.ordens_sem_tecnico },
+      ];
+      if (isTecnico.value) return [
+        { label: 'Minhas pendentes', value: d?.minhas_pendentes, action: 'pendente' },
+        { label: 'Meus atendimentos', value: d?.minhas_em_andamento, action: 'andamento' },
+        { label: 'Disponíveis para assumir', value: d?.ordens_sem_tecnico, action: 'livres' },
+      ];
+      return [
+        { label: 'Alertas críticos ativos', value: d?.alertas_ativos?.critico, critical: true, action: 'alertas' },
+        { label: 'Equipamentos em manutenção', value: d?.resumo_status?.manutencao, action: 'equipamentos' },
+        { label: 'Ordens abertas', value: d?.os_abertas, action: 'abertas' },
+        { label: 'Sem responsável', value: d?.ordens_sem_tecnico, action: 'livres' },
+      ];
     });
-
-    const dashboardEquipmentOptions = computed(() => {
-      if (!dashSetor.value) return dashboardEquipamentos.value;
-      return dashboardEquipamentos.value.filter(eq => locSetor(eq.id) === dashSetor.value);
+    const dashboardMetrics = computed(() => dashboardSummary.value?.desempenho || {});
+    const dashboardCostChart = computed(() => {
+      const rows = (dashboardSummary.value?.custos_por_dia || []).map((d,i) => ({ id:i, valor:Number(d.pecas)+Number(d.mao_de_obra), timestamp:d.data_execucao+'T12:00:00' }));
+      return globalThis.NanaLiveChart?.chart(rows, null) || { points:[], ticks:[], times:[] };
     });
-
-    const dashboardKpisFiltered = computed(() => {
-      const allowedIds = new Set(dashboardEquipamentos.value.map(eq => eq.id));
-      return dashboardKpis.value
-        .filter(k => allowedIds.has(k.equipamento_id))
-        .filter(k => !dashSetor.value || locSetor(k.equipamento_id) === dashSetor.value)
-        .filter(k => !dashEquipamento.value || k.equipamento_id === Number(dashEquipamento.value));
-    });
-
-    const dashboardMetrics = computed(() => {
-      const global = dashboardSummary.value?.kpis_globais;
-      if (global) {
-        return {
-          mttr: Number(global.mttr_medio || 0).toFixed(2),
-          mtbf: Number(global.mtbf_medio || 0).toFixed(2),
-          disponibilidade: Number(global.disponibilidade_media || 0).toFixed(2),
-          custo: Number(global.custo_total_manutencao || 0).toFixed(2),
-          total: dashboardSummary.value.detalhes_equipamentos?.length || 0,
-        };
+    function metric(value, suffix = '') { return value == null ? 'Sem histórico suficiente' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value) + suffix; }
+    function dashboardCompany(id = '') { globalEmpresa.value = id; onGlobalEmpresaChange(); }
+    function applyDashboardFilters() {
+      if (!dashboardEquipmentOptions.value.some(e => Number(e.id) === Number(dashEquipamento.value))) dashEquipamento.value = '';
+      fetchDashboard();
+    }
+    function togglePerformance(event) { performanceOpen.value = event.target.open; if (performanceOpen.value) fetchDashboard({ silent: true }); }
+    function openDashboardOrders(scope = '') {
+      Object.assign(filters.ordens, { search: '', status: ['pendente', 'andamento'].includes(scope) ? scope : 'abertas', prioridade: '', tipo_os: '', abertas: true,
+        responsavel_escopo: scope === 'livres' ? 'livres' : isTecnico.value ? 'minhas' : '', equipamento: dashEquipamento.value, setor: dashSetor.value });
+      return navigate('ordens');
+    }
+    async function openDashboardOrder(order) {
+      try { const current = await api('/api/ordens-servico/' + order.id + '/'); if (current) await openEquipamentoDetails(current.equipamento, current); }
+      catch (_) { toast('Não foi possível abrir esta ordem. Atualize as prioridades.', 'error'); }
+    }
+    function dashboardAction(action) {
+      if (action === 'alertas') {
+        Object.assign(filters.alertas, { search: '', nivel: 'critico', origem: '', equipamento: dashEquipamento.value, sensor: '', from: '', to: '', status: 'ativo', setor: dashSetor.value });
+        return navigate('alertas');
       }
-      const items = dashboardKpisFiltered.value;
-      if (!items.length) {
-        return { mttr: '—', mtbf: '—', disponibilidade: '—', custo: '—', total: 0 };
+      if (action === 'equipamentos') {
+        Object.assign(filters.equipamentos, { search: '', status: 'manutencao', empresa: '', setor: dashSetor.value });
+        return navigate('equipamentos');
       }
-      const validMttr = items.filter(k => k.total_manutencoes > 0).map(k => Number(k.mttr_hours) || 0);
-      const validMtbf = items.filter(k => k.mtbf_hours > 0).map(k => Number(k.mtbf_hours) || 0);
-      const validDisp = items.map(k => k.disponibilidade_porcentagem).filter(v => v !== null && v !== undefined);
-      const avg = (arr) => arr.length ? (arr.reduce((sum, value) => sum + value, 0) / arr.length).toFixed(2) : '—';
-      return {
-        mttr: avg(validMttr),
-        mtbf: avg(validMtbf),
-        disponibilidade: avg(validDisp),
-        custo: items.reduce((sum, k) => sum + (Number(k.custo_total_manutencao) || 0), 0).toFixed(2),
-        total: items.length,
-      };
-    });
-
-    watch(dashSetor, () => {
-      if (dashEquipamento.value && !dashboardEquipmentOptions.value.some(eq => eq.id === Number(dashEquipamento.value))) {
-        dashEquipamento.value = '';
-      }
-    });
+      if (action) return openDashboardOrders(action);
+    }
+    function dashboardAllAlerts() {
+      Object.assign(filters.alertas, { search: '', nivel: '', origem: '', equipamento: dashEquipamento.value, sensor: '', from: '', to: '', status: 'ativo', setor: dashSetor.value });
+      return navigate('alertas');
+    }
 
     function getEquipamentoId(item) {
       if (item == null) return null;
@@ -340,363 +372,8 @@ createApp({
       return '/api/telemetria/leituras/?' + params.toString();
     }
 
-    const dashboardSensors = computed(() => {
-      if (!isTecnico.value) return lists.sensores;
-      const allowedEqIds = dashboardAllowedEquipamentoIds.value;
-      return lists.sensores.filter(s => allowedEqIds.has(getEquipamentoId(s.equipamento)));
-    });
-
-    // ─ Leituras Hoje vs Total ─────────────────────────
-    const leiturasHoje = computed(() => {
-      const hoje = new Date();
-      const hojeStr = hoje.toISOString().slice(0, 10); // 'YYYY-MM-DD'
-      return lists.leituras.filter(l => {
-        if (!l.timestamp) return false;
-        return l.timestamp.slice(0, 10) === hojeStr;
-      });
-    });
-
-    // ─ Sensores filtrados pelo equipamento selecionado ─
-    const dashTelemetriaSensoresFiltrados = computed(() => {
-      const source = isTecnico.value ? dashboardSensors.value : lists.sensores;
-      if (!dashTelemetriaEquip.value) return source;
-      const eqId = Number(dashTelemetriaEquip.value);
-      return source.filter(s => getEquipamentoId(s.equipamento) === eqId);
-    });
-
-    watch(dashboardEquipamentos, (equipamentos) => {
-      if (equipamentos.length && !dashTelemetriaEquip.value) {
-        dashTelemetriaEquip.value = equipamentos[0].id;
-      }
-    });
-
-    watch(dashTelemetriaEquip, (eq) => {
-      const filteredSensors = dashTelemetriaSensoresFiltrados.value;
-      if (filteredSensors.length) {
-        if (!dashTelemetriaSensor.value || !filteredSensors.some(s => s.id === Number(dashTelemetriaSensor.value))) {
-          dashTelemetriaSensor.value = filteredSensors[0].id;
-        }
-      } else {
-        dashTelemetriaSensor.value = '';
-      }
-    });
-
-    watch(dashTelemetriaSensoresFiltrados, (sensors) => {
-      if (sensors.length && !dashTelemetriaSensor.value) {
-        dashTelemetriaSensor.value = sensors[0].id;
-      }
-    });
-
-    function formatChartTimestamp(ts) {
-      if (!ts) return '';
-      return ts.slice(11, 16);
-    }
-
-    const chartTelemetria = computed(() => {
-      let leiturasSource = lists.leituras;
-
-      // Se nenhum sensor específico for selecionado na UI, precisamos pegar apenas 
-      // as leituras de UM único sensor para o gráfico formar uma linha do tempo real.
-      let targetSensorId = dashTelemetriaSensor.value ? Number(dashTelemetriaSensor.value) : null;
-
-      if (!targetSensorId && leiturasSource.length > 0) {
-        // Pega o sensor da leitura mais recente da lista filtrada pelo equipamento (ou global)
-        if (dashTelemetriaEquip.value) {
-          const eqId = Number(dashTelemetriaEquip.value);
-          const sensorIds = new Set(lists.sensores.filter(s => getEquipamentoId(s.equipamento) === eqId).map(s => s.id));
-          const firstValid = leiturasSource.find(l => sensorIds.has(l.sensor));
-          if (firstValid) targetSensorId = firstValid.sensor;
-        } else {
-          targetSensorId = leiturasSource[0].sensor;
-        }
-      }
-
-      if (targetSensorId) {
-        leiturasSource = leiturasSource.filter(l => l.sensor === targetSensorId);
-      }
-
-      // API retorna ordenado por -timestamp (mais recente primeiro); revertemos para exibir cronologicamente no gráfico
-      const raw = leiturasSource.slice(0, 20).reverse();
-      if (raw.length < 2) return { path: '', dots: [], min: 0, max: 0, count: raw.length, xLabels: [], yTicks: [] };
-      const sensorMap = new Map(lists.sensores.map(s => [s.id, s]));
-      const vals = raw.map(l => parseFloat(l.valor) || 0);
-      const thresholdSensor = dashTelemetriaSensor.value ? sensorMap.get(Number(dashTelemetriaSensor.value)) : null;
-      const thresholdValues = thresholdSensor && thresholdSensor.limite_alerta ? [
-        Number((thresholdSensor.limite_alerta_baixo_pct || 70) * thresholdSensor.limite_alerta / 100),
-        Number((thresholdSensor.limite_alerta_medio_pct || 85) * thresholdSensor.limite_alerta / 100),
-        Number((thresholdSensor.limite_alerta_critico_pct || 100) * thresholdSensor.limite_alerta / 100),
-      ] : [];
-      const extendedVals = vals.concat(thresholdValues.filter(v => Number.isFinite(v)));
-      const rawMin = Math.min(...extendedVals);
-      const rawMax = Math.max(...extendedVals);
-      const min = telemetryYAxis.min === null ? rawMin : Math.min(telemetryYAxis.min, rawMin);
-      const max = telemetryYAxis.max === null ? rawMax : Math.max(telemetryYAxis.max, rawMax);
-      const chartRange = Math.max(max - min, 1);
-
-      if (telemetryYAxis.min === null || rawMin < telemetryYAxis.min) {
-        telemetryYAxis.min = rawMin;
-      }
-      if (telemetryYAxis.max === null || rawMax > telemetryYAxis.max) {
-        telemetryYAxis.max = rawMax;
-      }
-      const W = TELEMETRY_CHART_WIDTH;
-      const H = TELEMETRY_CHART_HEIGHT;
-      const padding = 16;
-      const leftPad = TELEMETRY_CHART_LEFT_PAD;
-      const chartW = W - leftPad;
-      const visibleChartW = chartW * TELEMETRY_X_END_PERCENT;
-      const points = raw.map((l, i) => {
-        const v = parseFloat(l.valor) || 0;
-        const sensor = sensorMap.get(l.sensor) || {};
-        return {
-          x: leftPad + (i / (raw.length - 1)) * visibleChartW,
-          y: padding + (1 - ((v - min) / chartRange)) * (H - padding * 2),
-          v,
-          timestamp: l.timestamp,
-          label: sensor.nome || `Sensor ${l.sensor}`,
-          unit: sensor.unidade_medida || '',
-          sensorId: l.sensor,
-        };
-      });
-      const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-      const area = path + ` L${W},${H} L${leftPad},${H} Z`;
-      const yTicks = Array.from({ length: 4 }, (_, idx) => {
-        const value = min + ((chartRange) * idx / 3);
-        return { y: padding + (1 - ((value - min) / chartRange)) * (H - padding * 2), label: value.toFixed(1) };
-      });
-      const xLabels = [
-        { x: leftPad, label: formatChartTimestamp(raw[0].timestamp) },
-        { x: leftPad + visibleChartW / 2, label: formatChartTimestamp(raw[Math.floor(raw.length / 2)].timestamp) },
-        { x: leftPad + visibleChartW, label: formatChartTimestamp(raw[raw.length - 1].timestamp) },
-      ];
-
-      const selectedSensor = dashTelemetriaSensor.value
-        ? sensorMap.get(Number(dashTelemetriaSensor.value))
-        : null;
-      const thresholds = [];
-      if (selectedSensor && selectedSensor.limite_alerta) {
-        const t = computeSensorThresholds(selectedSensor);
-        const rawThresholds = [
-          { name: 'Baixo', display: t.lowValue, value: Number(t.lowValue), pct: t.lowPct, color: 'var(--warn)', dash: '4 4' },
-          { name: 'Médio', display: t.medValue, value: Number(t.medValue), pct: t.medPct, color: 'var(--acid)', dash: '4 4' },
-          { name: 'Crítico', display: t.critValue, value: Number(t.critValue), pct: t.critPct, color: 'var(--danger)', dash: '4 4' },
-        ].filter(th => Number.isFinite(th.value));
-
-        thresholds.push(...rawThresholds.map(th => ({
-          ...th,
-          unit: t.unit,
-          y: padding + (1 - ((th.value - min) / chartRange)) * (H - padding * 2),
-        })));
-      }
-
-      return {
-        path,
-        area,
-        dots: points,
-        min: min.toFixed(1),
-        max: max.toFixed(1),
-        count: leiturasSource.length,
-        yTicks,
-        xLabels,
-        thresholds,
-        leftPad,
-        chartW,
-        visibleChartW,
-      };
-    });
-
-    const telemetryYAxis = reactive({ min: null, max: null });
-    const displayedChartTelemetria = ref(chartTelemetria.value);
     const testerMode = ref(false);
-    const telemetrySlideOffset = ref(0);
-    const telemetryMovingDot = reactive({ x: 0, y: 0, visible: false });
-    let telemetryAnimationFrame = null;
-
-    function toggleTesterMode() {
-      testerMode.value = !testerMode.value;
-    }
-
-    function lerp(a, b, t) {
-      return a + (b - a) * t;
-    }
-
-    function easeOutQuad(t) {
-      return t * (2 - t);
-    }
-
-    function buildChartFromDots(dots, baseChart) {
-      const path = dots.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-      const lastPoint = dots[dots.length - 1];
-      return {
-        ...baseChart,
-        dots,
-        path,
-        area: path + ` L${lastPoint.x.toFixed(1)},100 L${baseChart.leftPad},100 Z`,
-      };
-    }
-
-    function updateDisplayedChartWithDots(dots, baseChart) {
-      if (!dots.length) return;
-      displayedChartTelemetria.value = buildChartFromDots(dots, baseChart);
-    }
-
-    function isSameTelemetrySource(currentChart, nextChart) {
-      if (!currentChart?.dots?.length || !nextChart?.dots?.length) return false;
-      const currentSensor = currentChart.dots[currentChart.dots.length - 1]?.sensorId;
-      const nextSensor = nextChart.dots[nextChart.dots.length - 1]?.sensorId;
-      return currentSensor !== undefined && currentSensor === nextSensor;
-    }
-
-    function animateChartTransition(nextChart) {
-      const currentChart = displayedChartTelemetria.value;
-      if (!currentChart || !currentChart.dots?.length || !nextChart?.dots?.length || currentChart.dots.length !== nextChart.dots.length) {
-        if (telemetryAnimationFrame) cancelAnimationFrame(telemetryAnimationFrame);
-        telemetrySlideOffset.value = 0;
-        telemetryMovingDot.visible = false;
-        displayedChartTelemetria.value = nextChart;
-        return;
-      }
-
-      if (!isSameTelemetrySource(currentChart, nextChart)) {
-        if (telemetryAnimationFrame) cancelAnimationFrame(telemetryAnimationFrame);
-        telemetrySlideOffset.value = 0;
-        telemetryMovingDot.visible = false;
-        displayedChartTelemetria.value = nextChart;
-        return;
-      }
-
-      const stepX = currentChart.dots[1].x - currentChart.dots[0].x;
-      const lastCurrentPoint = currentChart.dots[currentChart.dots.length - 1];
-      const nextLastPoint = nextChart.dots[nextChart.dots.length - 1];
-      const newPoint = { ...nextLastPoint, x: lastCurrentPoint.x + stepX };
-      if (newPoint.timestamp === lastCurrentPoint.timestamp) {
-        return;
-      }
-
-      const slideDots = [...currentChart.dots, newPoint];
-      displayedChartTelemetria.value = buildChartFromDots(slideDots, currentChart);
-      telemetrySlideOffset.value = 0;
-      telemetryMovingDot.visible = false;
-      if (telemetryAnimationFrame) cancelAnimationFrame(telemetryAnimationFrame);
-
-      const start = performance.now();
-      const duration = 2600;
-
-      function animate(now) {
-        const rawProgress = Math.min(Math.max((now - start) / duration, 0), 1);
-        const progress = easeOutQuad(rawProgress);
-        telemetrySlideOffset.value = lerp(0, -stepX, progress);
-
-        if (rawProgress < 1) {
-          telemetryAnimationFrame = requestAnimationFrame(animate);
-        } else {
-          telemetrySlideOffset.value = 0;
-          const finalDots = currentChart.dots.slice(1).map(dot => ({ ...dot, x: dot.x - stepX }));
-          const finalChart = buildChartFromDots([...finalDots, { ...newPoint, x: lastCurrentPoint.x }], currentChart);
-          displayedChartTelemetria.value = finalChart;
-        }
-      }
-
-      telemetryAnimationFrame = requestAnimationFrame(animate);
-    }
-
-    watch(chartTelemetria, (next, prev) => {
-      const nextDots = next?.dots || [];
-      if (nextDots.length < 2) {
-        displayedChartTelemetria.value = next;
-        telemetryMovingDot.visible = false;
-        telemetryYAxis.min = null;
-        telemetryYAxis.max = null;
-        return;
-      }
-      if (!displayedChartTelemetria.value?.dots?.length || next.dots.length !== displayedChartTelemetria.value.dots.length) {
-        displayedChartTelemetria.value = next;
-        return;
-      }
-      animateChartTransition(next);
-    });
-
-    const telemetriaSummary = computed(() => {
-      if (!lists.leituras.length) {
-        return {
-          min: '—', max: '—', avg: '—', latest: '—', latest_sensor: '—', latest_equip: '—', limit: '—', criticos: 0, acima_alerta: 0, thresholds: null
-        };
-      }
-
-      const sensorMap = new Map(lists.sensores.map(s => [s.id, s]));
-      const values = lists.leituras.map(l => parseFloat(l.valor) || 0);
-      const avg = (values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(2);
-      const min = Math.min(...values).toFixed(2);
-      const max = Math.max(...values).toFixed(2);
-      const latest = lists.leituras[0];
-      const selectedSensor = dashTelemetriaSensor.value ? sensorMap.get(Number(dashTelemetriaSensor.value)) : null;
-      const activeSensor = selectedSensor || sensorMap.get(latest.sensor);
-      const latestSensor = sensorMap.get(latest.sensor) || {};
-      const limit = activeSensor?.limite_alerta || latestSensor.limite_alerta || 0;
-      const latestEquip = lists.equipamentos.find(eq => eq.id === (selectedSensor?.equipamento || latestSensor.equipamento)) || {};
-      const thresholds = computeSensorThresholds(activeSensor);
-      const openOrders = lists.ordens.filter(o => {
-        if (!o.equipamento) return false;
-        const eId = typeof o.equipamento === 'object' ? o.equipamento.id : o.equipamento;
-        return eId === latestEquip.id && o.status !== 'concluida' && o.status !== 'cancelada';
-      }).length;
-      const criticos = lists.leituras.filter(l => {
-        const sensor = sensorMap.get(l.sensor);
-        if (!sensor || !sensor.limite_alerta) return false;
-        return parseFloat(l.valor) >= sensor.limite_alerta * 0.9;
-      }).length;
-      const acima_alerta = lists.leituras.filter(l => {
-        const sensor = sensorMap.get(l.sensor);
-        if (!sensor || !sensor.limite_alerta) return false;
-        return parseFloat(l.valor) >= sensor.limite_alerta * 0.7;
-      }).length;
-
-      return {
-        min,
-        max,
-        avg,
-        latest: parseFloat(latest.valor).toFixed(2),
-        latest_sensor: activeSensor?.nome || latestSensor.nome || 'Sensor',
-        latest_equip: latestEquip.nome || 'Equipamento',
-        unit: activeSensor?.unidade_medida || latestSensor.unidade_medida || '',
-        limit: limit ? limit.toFixed(2) : '—',
-        criticos,
-        acima_alerta,
-        open_orders: openOrders,
-        lowPct: thresholds?.lowPct,
-        medPct: thresholds?.medPct,
-        critPct: thresholds?.critPct,
-        lowValue: thresholds?.lowValue,
-        medValue: thresholds?.medValue,
-        critValue: thresholds?.critValue,
-        thresholds,
-      };
-    });
-
-    watch([dashTelemetriaEquip, dashTelemetriaSensor], async ([eq, sen]) => {
-      let url = '/api/telemetria/leituras/?limit=200&ordering=-timestamp';
-      if (sen) {
-        url += '&sensor=' + sen;
-      }
-
-      try {
-        const res = await api(url);
-        if (res) {
-          let readings = normList(res);
-          if (eq && !sen) {
-            const sensorIds = new Set(lists.sensores.filter(s => s.equipamento === Number(eq)).map(s => s.id));
-            readings = readings.filter(l => sensorIds.has(l.sensor));
-          }
-          if (globalEmpresa.value) {
-            const filterIds = new Set(lists.sensores.map(s => s.id));
-            readings = readings.filter(l => filterIds.has(l.sensor));
-          }
-          lists.leituras = readings;
-        }
-      } catch (err) {
-        console.error("Erro ao buscar leituras filtradas no dashboard", err);
-      }
-    });
+    function toggleTesterMode() { testerMode.value = !testerMode.value; }
 
     function donutArcs(segments, r = 52, cx = 64, cy = 64) {
       const total = segments.reduce((s, g) => s + g.value, 0);
@@ -927,6 +604,7 @@ createApp({
           localStorage.setItem('sentinel_refresh', data.refresh);
         }
         await fetchMe();
+        await fetchEmpresasAll();
         resetTrendMonitoring();
         navigate('dashboard');
         startTrendPolling();
@@ -939,11 +617,17 @@ createApp({
     }
 
     function logout() {
-      stopTrendPolling(); resetTrendMonitoring();
+      closeABC(); closeEquipModal();
+      ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; liveOpen.value = false; telemetryLiveOpen.value = false; performanceOpen.value = false;
+      stopTrendPolling(); resetTrendMonitoring(); clearTrendDemo();
+      ++dashboardSummaryRequest; dashboardSummary.value = null; dashAlerts.value = []; alertCount.value = 0;
+      ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.count = 0; alertHistory.url = ''; alertCount.value = 0;
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
       Object.assign(telemetry, { rows: [], equipments: [], sensors: [], count: 0, busy: false, updatedAt: null });
       Object.assign(trendPage, { equipment: '', sensor: '', condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
       token.value = ''; refreshTk.value = ''; me.value = null;
+      globalEmpresa.value = ''; dashSetor.value = ''; dashEquipamento.value = ''; dashboardTab.value = 'minhas';
+      for (const resource of Object.keys(lists)) lists[resource] = [];
       localStorage.removeItem('sentinel_token');
       localStorage.removeItem('sentinel_refresh');
     }
@@ -952,7 +636,7 @@ createApp({
     const fetchers = {
       dashboard: () => fetchDashboard(),
       equipamentos: () => fetchEquipamentos(),
-      alertas: () => fetchAlertas(),
+      alertas: () => enterAlertHistory(),
       ordens: () => fetchOrdens(),
       telemetria: () => enterTelemetry(),
       tendencias: () => fetchTrends(),
@@ -965,30 +649,8 @@ createApp({
     function navigate(v) { view.value = v; fetchers[v]?.(); }
 
     // Navegação dos cards clicáveis do técnico no dashboard
-    function navigateMinhasOrdens() {
-      filters.ordens.status = '';
-      filters.ordens.prioridade = '';
-      filters.ordens.tipo_os = '';
-      navigate('ordens');
-      // Após carregar, filtra client-side para mostrar apenas as atribuídas ao técnico
-      nextTick(() => {
-        const userId = me.value?.id;
-        if (userId) {
-          lists.ordens = lists.ordens.filter(o => o.responsavel === userId && o.status !== 'concluida' && o.status !== 'cancelada');
-        }
-      });
-    }
-
-    function navigateOsSemTecnico() {
-      filters.ordens.status = '';
-      filters.ordens.prioridade = '';
-      filters.ordens.tipo_os = '';
-      navigate('ordens');
-      // Após carregar, filtra client-side para mostrar apenas O.S. sem responsável
-      nextTick(() => {
-        lists.ordens = lists.ordens.filter(o => !o.responsavel && o.status !== 'concluida' && o.status !== 'cancelada');
-      });
-    }
+    function navigateMinhasOrdens() { return openDashboardOrders(); }
+    function navigateOsSemTecnico() { return openDashboardOrders('livres'); }
 
     // ─ Fetchers ──────────────────────────────────────
     async function withLoading(fn) {
@@ -1004,148 +666,26 @@ createApp({
       return { next: d?.next ?? null, prev: d?.previous ?? null };
     }
 
-    async function fetchDashboardKpis() {
-      dashboardKpisLoading.value = true;
-      dashboardKpisError.value = null;
+    async function fetchDashboard({ silent = false } = {}) {
+      if (silent && dashboardKpisLoading.value) return;
+      const request = ++dashboardRequest, company = globalEmpresa.value, userId = me.value?.id;
+      dashboardKpisLoading.value = true; dashboardKpisError.value = '';
+      const p = new URLSearchParams({ incluir_desempenho: String(performanceOpen.value && !dashboardAdminOverview.value && !isTecnico.value) });
+      if (company) p.set('empresa_id', company);
+      if (dashSetor.value) p.set('setor', dashSetor.value);
+      if (dashEquipamento.value) p.set('equipamento_id', dashEquipamento.value);
       try {
-        const query = globalEmpresa.value ? `?empresa_id=${encodeURIComponent(globalEmpresa.value)}` : '';
-        const data = await api('/api/dashboards/resumo/' + query);
-        dashboardSummary.value = data;
-        dashboardKpis.value = data?.detalhes_equipamentos || [];
-      } catch (err) {
-        dashboardKpisError.value = err?.message || 'Falha ao carregar KPIs';
-        toast(dashboardKpisError.value, 'error');
-        dashboardKpis.value = [];
-        dashboardSummary.value = null;
-      } finally {
-        dashboardKpisLoading.value = false;
-      }
-    }
-
-    async function fetchDashboard() {
-      try {
-        const empParam = globalEmpresa.value ? '&empresa=' + globalEmpresa.value : '';
-        const [eqRes, alertRes, ordRes, histRes] = await Promise.allSettled([
-          api('/api/equipamentos/?limit=200' + empParam),
-          api('/api/alertas/?status=ativo&limit=100&ordering=-criado_em' + (globalEmpresa.value ? '&equipamento__empresa=' + globalEmpresa.value : '')),
-          api('/api/ordens-servico/?limit=100' + (globalEmpresa.value ? '&equipamento__empresa=' + globalEmpresa.value : '')),
-          api('/api/historico/?limit=50' + (globalEmpresa.value ? '&ordem_servico__equipamento__empresa=' + globalEmpresa.value : '')),
-        ]);
-
-        if (eqRes.status === 'fulfilled' && eqRes.value) lists.equipamentos = normList(eqRes.value);
-        if (ordRes.status === 'fulfilled' && ordRes.value) lists.ordens = normList(ordRes.value);
-        if (histRes.status === 'fulfilled' && histRes.value) lists.historico = normList(histRes.value);
-
-        const eqIds = globalEmpresa.value
-          ? new Set(lists.equipamentos.map(eq => eq.id))
-          : null;
-
-        if (eqIds) {
-          lists.ordens = lists.ordens.filter(o => eqIds.has(o.equipamento));
-        }
-
-        const allowedEqIds = isTecnico.value
-          ? new Set(lists.ordens.map(o => o.equipamento).filter(Boolean))
-          : eqIds;
-
-        if (isTecnico.value && allowedEqIds && allowedEqIds.size) {
-          lists.equipamentos = lists.equipamentos.filter(eq => allowedEqIds.has(eq.id));
-        }
-
-        if (alertRes.status === 'fulfilled' && alertRes.value) {
-          let alerts = normList(alertRes.value);
-          if (allowedEqIds) {
-            alerts = alerts.filter(a => allowedEqIds.has(a.equipamento));
-          }
-          sortByNivel(alerts);
-          dashAlerts.value = alerts;
-          alertCount.value = alerts.length;
-        }
-
-        const sensorFilter = allowedEqIds && allowedEqIds.size
-          ? '&equipamento__in=' + [...allowedEqIds].join(',')
-          : '';
-        const sensorRes = await api('/api/telemetria/sensores/?limit=999' + sensorFilter);
-        if (sensorRes) lists.sensores = normList(sensorRes);
-
-        const today = new Date().toISOString().slice(0, 10);
-        const timestampDe = `${today}T00:00:00`;
-        const timestampAte = `${today}T23:59:59`;
-
-        const telUrl = buildTelemetriaUrl({
-          limit: 50,
-          allowedEqIds: dashboardAllowedEquipamentoIds.value,
-          sensorId: dashTelemetriaSensor.value,
-          equipamentoId: dashTelemetriaEquip.value,
-        });
-        const telRes = await api(telUrl);
-        const telHojeRes = await api(buildTelemetriaUrl({
-          limit: 1,
-          allowedEqIds: dashboardAllowedEquipamentoIds.value,
-          timestampDe,
-          timestampAte,
-        }));
-        const telTotalRes = await api(buildTelemetriaUrl({
-          limit: 1,
-          allowedEqIds: dashboardAllowedEquipamentoIds.value,
-        }));
-
-        if (telRes) {
-          let leituras = normList(telRes);
-          if (lists.sensores.length) {
-            const sensorIds = new Set(lists.sensores.map(s => s.id));
-            leituras = leituras.filter(l => sensorIds.has(l.sensor));
-          }
-          lists.leituras = leituras;
-        }
-        if (telTotalRes) {
-          leiturasTotalCount.value = Number(telTotalRes.count ?? 0) || 0;
-        } else {
-          leiturasTotalCount.value = 0;
-        }
-        if (telHojeRes) {
-          leiturasTodayCount.value = Number(telHojeRes.count ?? 0) || 0;
-        } else {
-          leiturasTodayCount.value = 0;
-        }
-
-        if (histRes.status === 'fulfilled' && histRes.value) lists.historico = normList(histRes.value);
-
-        if (!isTecnico.value) {
-          await fetchDashboardKpis();
-        } else {
-          dashboardKpis.value = [];
-        }
-
-        if (isTecnico.value) {
-          const ordensAbertas = lists.ordens.filter(o => o.status === 'pendente' || o.status === 'andamento');
-          const minhasOrdens = ordensAbertas.filter(o => o.responsavel === me.value?.id).length;
-          const ordensSemTecnico = ordensAbertas.filter(o => !o.responsavel).length;
-
-          kpis.value = {
-            total_equipamentos: lists.equipamentos.length,
-            alertas_ativos: dashAlerts.value.length,
-            ordens_abertas: ordensAbertas.length,
-            ordens_sem_tecnico: ordensSemTecnico,
-            minhas_ordens: minhasOrdens,
-          };
-        } else {
-          const summary = dashboardSummary.value;
-          kpis.value = {
-            total_equipamentos: summary?.resumo_status?.total ?? lists.equipamentos.length,
-            alertas_ativos: summary?.alertas_ativos?.total ?? dashAlerts.value.length,
-            ordens_abertas: summary?.os_abertas ?? lists.ordens.filter(o => o.status === 'pendente' || o.status === 'andamento').length,
-            leituras_hoje: leiturasTodayCount.value,
-            leituras_total: leiturasTotalCount.value || lists.leituras.length,
-          };
-        }
-
-        await fetchTrendAlerts();
-
-        // Busca localizações para filtro de setor no custo
-        api('/api/localizacao/?limit=999').then(d => { if (d) lists.localizacoes = normList(d); }).catch(() => { });
-
-      } catch { toast('Erro ao carregar dashboard', 'error'); }
+        const data = await api('/api/dashboards/resumo/?' + p);
+        if (request !== dashboardRequest || company !== globalEmpresa.value || userId !== me.value?.id || view.value !== 'dashboard' || !data) return;
+        dashboardSummary.value = data; dashboardUpdatedAt.value = data.atualizado_em;
+        if (!isAdmin.value && data.empresa_atual) lists.empresas = [data.empresa_atual];
+        dashboardKpis.value = data.detalhes_equipamentos || [];
+        dashAlerts.value = data.alertas_recentes || []; alertCount.value = data.alertas_24h?.total || 0;
+        kpis.value = { total_equipamentos: data.resumo_status?.total, alertas_ativos: data.alertas_ativos?.total, alertas_24h: data.alertas_24h?.total, ordens_abertas: data.os_abertas };
+        if (isAdmin.value && data.empresas) lists.empresas = data.empresas.map(c => ({ id: c.id, nome: c.nome }));
+      } catch (_) {
+        if (request === dashboardRequest) dashboardKpisError.value = 'Não foi possível atualizar o dashboard. Os dados anteriores, quando disponíveis, foram preservados.';
+      } finally { if (request === dashboardRequest) dashboardKpisLoading.value = false; }
     }
 
     function acceptTrendSnapshot(data) {
@@ -1339,42 +879,231 @@ createApp({
       });
     }
 
-    async function fetchAlertas() {
-      await withLoading(async () => {
-        const p = new URLSearchParams();
-        if (filters.alertas.search) p.set('search', filters.alertas.search);
-        if (filters.alertas.nivel) p.set('nivel', filters.alertas.nivel);
-        if (filters.alertas.status) p.set('status', filters.alertas.status);
-        if (globalEmpresa.value) p.set('equipamento__empresa', globalEmpresa.value);
-        const d = await api('/api/alertas/?' + p);
-        let items = normList(d);
-        // Filtro por empresa: filtra client-side via IDs de equipamentos da empresa
-        sortByNivel(items);
-        lists.alertas = items;
-        Object.assign(pages.alertas, normPages(d));
-        // Busca localizações para mostrar o setor/local de cada equipamento
-        const locRes = await api('/api/localizacao/?limit=999');
-        if (locRes) lists.localizacoes = normList(locRes);
-        // Busca ordens para o botão 'Assumir O.S.' do técnico
-        await fetchOrdensAll();
-      });
+    function alertParams() {
+      const f = filters.alertas;
+      const p = new URLSearchParams();
+      for (const key of ['search', 'nivel', 'origem', 'equipamento', 'sensor', 'status', 'setor'])
+        if (f[key] !== '') p.set(key, f[key]);
+      if (f.from && f.to && new Date(f.from) > new Date(f.to))
+        throw new Error('A data inicial deve ser anterior à data final.');
+      if (f.from) p.set('data_de', new Date(f.from).toISOString());
+      if (f.to) p.set('data_ate', new Date(f.to).toISOString());
+      if (globalEmpresa.value) p.set('equipamento__empresa', globalEmpresa.value);
+      return p;
+    }
+    async function enterAlertHistory() {
+      return Promise.all([loadTelemetryOptions(), fetchAlertas()]);
+    }
+    async function fetchAlertas(url = null, { silent = false } = {}) {
+      const request = ++alertRequest;
+      if (!silent) alertHistory.busy = true;
+      alertHistory.error = '';
+      try {
+        const path = typeof url === 'string' ? url.replace(/^https?:\/\/[^/]+/, '') : '/api/alertas/?' + alertParams();
+        const data = await api(path);
+        if (request !== alertRequest) return;
+        if (!data) throw new Error('Não foi possível consultar o histórico. Entre novamente.');
+        lists.alertas = normList(data);
+        alertHistory.url = path;
+        alertHistory.count = data.count ?? lists.alertas.length;
+        Object.assign(pages.alertas, normPages(data));
+      } catch (error) {
+        if (request === alertRequest) alertHistory.error = error.message || 'Não foi possível carregar o histórico.';
+      } finally {
+        if (request === alertRequest) alertHistory.busy = false;
+      }
+    }
+    async function openAlertaDetails(alerta) {
+      const request = ++alertDetailRequest;
+      alertHistory.detail = alerta;
+      nextTick(() => document.getElementById('alert-detection-dialog')?.focus());
+      alertHistory.detailBusy = true;
+      alertHistory.detailError = '';
+      closeEquipModal();
+      try {
+        const data = await api('/api/alertas/' + alerta.id + '/');
+        if (request === alertDetailRequest && alertHistory.detail) {
+          if (!data) throw new Error('Registro indisponível.');
+          alertHistory.detail = data;
+        }
+      } catch {
+        if (request === alertDetailRequest) alertHistory.detailError = 'Não foi possível atualizar este registro. Tente novamente.';
+      } finally {
+        if (request === alertDetailRequest) alertHistory.detailBusy = false;
+      }
+    }
+    function closeAlertaDetails() {
+      ++alertDetailRequest;
+      alertHistory.detail = null; alertHistory.detailBusy = false; alertHistory.detailError = '';
+    }
+    async function openAlertaOS(alerta) {
+      if (!alerta.ordem_servico_id) return;
+      const company = globalEmpresa.value;
+      const session = token.value;
+      try {
+        const ordem = await api('/api/ordens-servico/' + alerta.ordem_servico_id + '/');
+        if (company !== globalEmpresa.value || session !== token.value) return;
+        if (!ordem) throw new Error('Ordem indisponível');
+        closeAlertaDetails();
+        await openEquipamentoDetails(ordem.equipamento, ordem);
+      } catch { toast('Não foi possível acessar a O.S. vinculada.', 'error'); }
+    }
+    async function openAlertaSensor(alerta) {
+      if (!alerta.sensor) return;
+      closeAlertaDetails();
+      Object.assign(telemetry, { tab: 'leituras', equipment: alerta.equipamento, sensor: alerta.sensor,
+        from: '', to: '', min: '', max: '', search: '', offset: 0 });
+      view.value = 'telemetria';
+      return Promise.all([loadTelemetryOptions(), fetchTelemetria()]);
+    }
+    function showEquipmentAlerts(equipment) {
+      closeEquipModal(); closeAlertaDetails();
+      Object.assign(filters.alertas, { equipamento: equipment, sensor: '', nivel: '', origem: '', from: '', to: '', search: '', status: '', setor: '' });
+      view.value = 'alertas'; return enterAlertHistory();
     }
 
-    async function fetchOrdens() {
-      await withLoading(async () => {
-        const p = new URLSearchParams();
-        if (filters.ordens.search) p.set('search', filters.ordens.search);
-        if (filters.ordens.status) p.set('status', filters.ordens.status);
-        if (filters.ordens.prioridade) p.set('prioridade', filters.ordens.prioridade);
-        if (filters.ordens.tipo_os) p.set('tipo_os', filters.ordens.tipo_os);
-        if (globalEmpresa.value) p.set('equipamento__empresa', globalEmpresa.value);
-        const d = await api('/api/ordens-servico/?' + p);
-        let items = normList(d);
-        sortByNivel(items, 'prioridade');
-        lists.ordens = items;
-        if (!lists.usuarios.length) await fetchUsuariosAll();
-        Object.assign(pages.ordens, normPages(d));
-      });
+    const orderState = reactive({ busy: false, error: '', count: 0, total: 0, triage: 0 });
+    let orderRequest = 0;
+    function orderParams() {
+      const p = new URLSearchParams();
+      for (const key of ['responsavel_escopo', 'equipamento', 'setor', 'search', 'prioridade', 'tipo_os']) {
+        if (filters.ordens[key]) p.set(key, String(filters.ordens[key]));
+      }
+      if (filters.ordens.status === 'abertas') p.set('abertas', 'true');
+      else if (filters.ordens.status) p.set('status', filters.ordens.status);
+      if (globalEmpresa.value) p.set('equipamento__empresa', globalEmpresa.value);
+      return p;
+    }
+    async function fetchOrdens(url = null) {
+      const request = ++orderRequest;
+      orderState.busy = true; orderState.error = '';
+      try {
+        const path = typeof url === 'string' ? url.replace(/^https?:\/\/[^/]+/, '') : '/api/ordens-servico/?' + orderParams();
+        const data = await api(path);
+        if (request !== orderRequest) return;
+        lists.ordens = normList(data);
+        Object.assign(pages.ordens, normPages(data));
+        orderState.count = data?.count ?? lists.ordens.length;
+        orderState.total = data?.total_escopo ?? orderState.count;
+        orderState.triage = data?.a_definir ?? 0;
+      } catch (error) {
+        if (request === orderRequest) { lists.ordens = []; orderState.count = 0; orderState.triage = 0; orderState.error = 'Não foi possível carregar as OS. Tente novamente.'; }
+      } finally { if (request === orderRequest) orderState.busy = false; }
+    }
+    function selectOrderPriority(value) { filters.ordens.prioridade = value; return fetchOrdens(); }
+    function clearOrderFilters() {
+      Object.assign(filters.ordens, { search: '', status: 'abertas', prioridade: '', tipo_os: '', abertas: true,
+        responsavel_escopo: '', equipamento: '', setor: '' });
+      return fetchOrdens();
+    }
+
+    const equipmentGuide = reactive({ busy: false, error: '', current: null, types: [] });
+    const criteriaModal = reactive({ open: false, busy: false, saving: false, error: '', company: '', data: {} });
+    const equipmentAssessment = reactive({ busy: false, error: '', history: [] });
+    const priorityModal = reactive({ open: false, busy: false, saving: false, error: '', order: null, history: [], choice: 'A', reason: '' });
+    const orderEquipmentOptions = ref([]);
+    let guideRequest = 0, criteriaRequest = 0, assessmentRequest = 0, priorityRequest = 0;
+    function criticidadeLabel(value, legacy = false) { if (legacy && value) return value + ' — ' + ({A:'Crítica', B:'Alta', C:'Moderada', D:'Baixa'}[value] || value) + ' (legado)'; return { A: 'A — Alta criticidade', B: 'B — Média criticidade', C: 'C — Baixa criticidade', D: 'D — Baixa (legado)' }[value] || 'Não avaliada'; }
+    function historicPriorityLabel(value) { return { alta: 'Alta (legado)', critica: 'Crítica (legado)', media: 'Média (legado)', baixa: 'Baixa (legado)' }[value] || prioridadeLabel(value); }
+    function priorityOrigin(value) { return { herdada: 'Herdada', ajustada: 'Ajustada', convertida: 'Convertida do legado' }[value] || 'Legado'; }
+    async function loadEquipmentGuide() {
+      const request = ++guideRequest;
+      equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.error = '';
+      const company = fd.empresa;
+      if (!company) { equipmentGuide.busy = false; return; }
+      equipmentGuide.busy = true;
+      try {
+        const [guide, types] = await Promise.all([
+          api('/api/criterios-criticidade/atual/?empresa=' + company),
+          telemetryAll('/api/tipos-equipamento/?empresa=' + company + '&limit=100'),
+        ]);
+        if (request === guideRequest) { equipmentGuide.current = guide; equipmentGuide.types = types; }
+      } catch (error) { if (request === guideRequest) equipmentGuide.error = 'Não foi possível carregar os critérios da empresa.'; }
+      finally { if (request === guideRequest) equipmentGuide.busy = false; }
+    }
+    function acceptEquipmentSuggestion() {
+      const type = equipmentGuide.types.find(row => Number(row.id) === Number(fd.tipo_equipamento));
+      if (type?.criticidade_padrao) { fd.criticidade = type.criticidade_padrao; fd.aceitar_sugestao = true; }
+    }
+    async function openCriteria(company = null) {
+      criteriaModal.open = true; criteriaModal.error = ''; criteriaModal.data = {};
+      criteriaModal.company = company || globalEmpresa.value || me.value?.empresa || '';
+      await fetchEmpresasAll();
+      return loadCriteria();
+    }
+    async function loadCriteria() {
+      const request = ++criteriaRequest;
+      criteriaModal.data = {}; criteriaModal.error = '';
+      if (!criteriaModal.company) { criteriaModal.busy = false; return; }
+      criteriaModal.busy = true;
+      try {
+        const data = await api('/api/criterios-criticidade/atual/?empresa=' + criteriaModal.company);
+        if (request === criteriaRequest) criteriaModal.data = data || {};
+      } catch (error) { if (request === criteriaRequest) criteriaModal.error = 'Não foi possível carregar os critérios.'; }
+      finally { if (request === criteriaRequest) criteriaModal.busy = false; }
+    }
+    async function saveCriteria() {
+      const request = criteriaRequest;
+      const actor = me.value?.id;
+      criteriaModal.saving = true; criteriaModal.error = '';
+      try {
+        const payload = { empresa: Number(criteriaModal.company) };
+        for (const key of ['criterio_a', 'criterio_b', 'criterio_c', 'representante_manutencao', 'data_validacao']) payload[key] = criteriaModal.data[key];
+        const saved = await api('/api/criterios-criticidade/', { method: 'POST', body: JSON.stringify(payload) });
+        if (!saved || request !== criteriaRequest || actor !== me.value?.id || !criteriaModal.open) return;
+        criteriaModal.open = false;
+        if (modal.open && modal.type === 'equipamento' && Number(fd.empresa) === Number(saved.empresa)) await loadEquipmentGuide();
+        toast('Nova revisão dos critérios registrada.', 'success');
+      } catch (error) { criteriaModal.error = Object.values(parseDjangoErrors(error.fieldErrors || { detail: error.message })).join(' '); }
+      finally { criteriaModal.saving = false; }
+    }
+    async function loadEquipmentAssessment(equipment) {
+      const request = ++assessmentRequest;
+      equipmentAssessment.busy = true; equipmentAssessment.error = ''; equipmentAssessment.history = [];
+      try {
+        const rows = await telemetryAll('/api/historico-criticidade/?equipamento=' + equipment.id + '&limit=100');
+        if (request === assessmentRequest) equipmentAssessment.history = rows;
+      } catch (error) { if (request === assessmentRequest) equipmentAssessment.error = 'Não foi possível carregar o histórico de criticidade.'; }
+      finally { if (request === assessmentRequest) equipmentAssessment.busy = false; }
+    }
+    async function openPriority(order) {
+      const request = ++priorityRequest;
+      Object.assign(priorityModal, { open: true, busy: true, error: '', order: null, history: [], reason: '' });
+      try {
+        const [current, history] = await Promise.all([
+          api('/api/ordens-servico/' + order.id + '/'),
+          telemetryAll('/api/ordens-servico/' + order.id + '/historico_prioridade/?limit=100'),
+        ]);
+        if (request === priorityRequest) Object.assign(priorityModal, { order: current, history, choice: current?.prioridade || 'A' });
+      } catch (error) { if (request === priorityRequest) priorityModal.error = 'Não foi possível carregar a prioridade e seu histórico.'; }
+      finally { if (request === priorityRequest) priorityModal.busy = false; }
+    }
+    async function savePriority(restore = false) {
+      if (!priorityModal.reason.trim()) { priorityModal.error = 'Informe a justificativa da alteração.'; return; }
+      const request = priorityRequest;
+      const actor = me.value?.id;
+      priorityModal.saving = true; priorityModal.error = '';
+      try {
+        const payload = { justificativa: priorityModal.reason.trim() };
+        if (!restore) payload.prioridade = priorityModal.choice;
+        const saved = await api('/api/ordens-servico/' + priorityModal.order.id + '/' + (restore ? 'restaurar_prioridade' : 'ajustar_prioridade') + '/', { method: 'POST', body: JSON.stringify(payload) });
+        if (!saved || request !== priorityRequest || actor !== me.value?.id || !priorityModal.open) return;
+        if (equipModal.currentOS?.id === saved.id) equipModal.currentOS = saved;
+        if (equipModal.open) await fetchEquipamentoOrdens(equipModal.equipamento.id);
+        await openPriority(saved);
+        if (view.value === 'ordens') await fetchOrdens();
+        else if (view.value === 'dashboard') await fetchDashboard();
+        toast('Prioridade registrada com justificativa.', 'success');
+      } catch (error) { priorityModal.error = Object.values(parseDjangoErrors(error.fieldErrors || { detail: error.message })).join(' '); }
+      finally { priorityModal.saving = false; }
+    }
+    function closeABC() {
+      ++guideRequest; ++criteriaRequest; ++assessmentRequest; ++priorityRequest; ++orderRequest;
+      criteriaModal.open = false; priorityModal.open = false; modal.open = false;
+      equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.busy = false;
+      equipmentAssessment.history = []; equipmentAssessment.busy = false;
+      priorityModal.order = null; priorityModal.history = []; criteriaModal.data = {};
+      orderEquipmentOptions.value = []; lists.ordens = []; orderState.error = ''; orderState.count = 0; orderState.total = 0; orderState.triage = 0; orderState.busy = false;
     }
 
     const telemetry = reactive({
@@ -1426,15 +1155,99 @@ createApp({
       insufficient: scopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
       disabled: scopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
     }));
-    const trendChart = computed(() => {
-      const rows = trendPage.detail?.readings_summary || [];
-      if (!rows.length) return { points: '', min: 0, max: 0, from: '', to: '' };
+    const selectedTrend = computed(() => trendPage.equipment && trendPage.sensor
+      ? trendPage.rows.find(trend => trend.sensor_id === Number(trendPage.sensor) &&
+        trend.sensor_info.equipamento_id === Number(trendPage.equipment)) || null : null);
+    function buildTrendChart(trend) {
+      const rows = trend?.readings_summary || [];
+      if (!rows.length) return { points: '', min: 0, max: 0, from: '', to: '', ticks: [], limitY: null, limit: null };
+      const limit = Number(trend.sensor_info.limite_alerta);
       const values = rows.map(row => row.valor);
-      const min = Math.min(...values), max = Math.max(...values);
+      const min = Math.min(...values, ...(Number.isFinite(limit) ? [limit] : []));
+      const max = Math.max(...values, ...(Number.isFinite(limit) ? [limit] : []));
+      const range = max - min || 1;
+      const y = value => 150 - (value - min) / range * 115;
       const first = Date.parse(rows[0].timestamp), last = Date.parse(rows[rows.length - 1].timestamp);
       return { min, max, from: rows[0].timestamp, to: rows[rows.length - 1].timestamp,
-        points: rows.map(row => `${30 + (Date.parse(row.timestamp) - first) / (last - first || 1) * 640},${140 - (row.valor - min) / (max - min || 1) * 110}`).join(' ') };
-    });
+        limit: Number.isFinite(limit) ? limit : null, limitY: Number.isFinite(limit) ? y(limit) : null,
+        ticks: [min, min + range / 2, max].map(value => ({ value: Number(value.toFixed(2)), y: y(value) })),
+        points: rows.map(row => `${55 + (Date.parse(row.timestamp) - first) / (last - first || 1) * 600},${y(row.valor)}`).join(' ') };
+    }
+    const trendChart = computed(() => buildTrendChart(trendPage.detail));
+    const selectedTrendChart = computed(() => buildTrendChart(selectedTrend.value));
+    function setTrendTimePreset(minutes) {
+      const form = trendConfigModal.form;
+      form.duracao_minima_minutos = minutes;
+      if (minutes === 1) { form.minimo_leituras = 7; form.num_leituras = 500; }
+    }
+    const trendDemo = reactive({ busy: false, error: '', session: null, company: '', scenario: 'aumento' });
+    let demoTimer = null;
+    let demoRequest = 0;
+    function stopDemoPolling() {
+      if (demoTimer !== null) clearInterval(demoTimer);
+      demoTimer = null;
+    }
+    function clearTrendDemo() {
+      stopDemoPolling(); ++demoRequest;
+      Object.assign(trendDemo, { session: null, busy: false, error: '', company: '' });
+    }
+    function acceptDemoSnapshot(data) {
+      trendDemo.session = data;
+      const analysis = data.analysis;
+      if (analysis) {
+        const index = trendPage.rows.findIndex(row => row.sensor_id === data.sensor_id);
+        if (index === -1) trendPage.rows.push(analysis); else trendPage.rows[index] = analysis;
+        if (trendPage.detail?.sensor_id === data.sensor_id) trendPage.detail = analysis;
+        const others = trendAlerts.value.filter(row => row.sensor_id !== data.sensor_id);
+        acceptTrendSnapshot([...others, analysis]);
+        trendPage.updatedAt = analysis.analyzed_at;
+      }
+      if (data.status !== 'executando') stopDemoPolling();
+    }
+    function startDemoPolling() {
+      stopDemoPolling();
+      if (trendDemo.session?.status === 'executando') demoTimer = setInterval(() => {
+        if (view.value === 'tendencias' && !document.hidden && testerMode.value && isAdmin.value && token.value)
+          runTrendDemo('avancar');
+      }, 2000);
+    }
+    async function runTrendDemo(action = 'criar', scenario = trendDemo.scenario) {
+      if (!isAdmin.value || !testerMode.value || trendDemo.busy || !token.value) return;
+      const company = globalEmpresa.value || trendDemo.company;
+      if (action === 'criar' && !company) { trendDemo.error = 'Escolha a empresa que receberá o equipamento de demonstração.'; return; }
+      if (action !== 'criar' && action !== 'retomar' && !trendDemo.session) return;
+      const request = ++demoRequest, context = globalEmpresa.value, ownerId = me.value?.id;
+      trendDemo.busy = true; trendDemo.error = '';
+      try {
+        const path = '/api/telemetria/tendencias/demo/' + (['criar', 'retomar'].includes(action) ? '' : trendDemo.session.id + '/');
+        const data = action === 'retomar' ? await api(path) : await api(path, { method: 'POST', body: JSON.stringify(
+          action === 'criar' ? { empresa: Number(company), cenario: scenario } : { acao: action, cenario: scenario }) });
+        if (request !== demoRequest || context !== globalEmpresa.value || !token.value || ownerId !== me.value?.id) return;
+        if (!data) throw new Error('Nenhuma demonstração encontrada. Inicie um teste.');
+        if (context && Number(data.empresa_id) !== Number(context)) throw new Error('O último teste pertence a outra empresa. Selecione a empresa correspondente ou inicie um novo.');
+        acceptDemoSnapshot(data);
+        if (['criar', 'fase', 'retomar'].includes(action)) {
+          Object.assign(trendPage, { equipment: data.equipamento_id, sensor: data.sensor_id, condition: '', offset: 0, detail: null });
+          startDemoPolling();
+          nextTick(() => document.getElementById('trend-live-monitor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        }
+      } catch (error) {
+        if (request === demoRequest) {
+          trendDemo.error = error.fieldErrors ? Object.values(error.fieldErrors).flat().join(' ') : error.message;
+          stopDemoPolling();
+        }
+      } finally {
+        if (request === demoRequest) trendDemo.busy = false;
+      }
+    }
+    async function toggleTrendTestMode() {
+      toggleTesterMode();
+      if (testerMode.value && !lists.empresas.length) {
+        try { await fetchEmpresasAll(); } catch { trendDemo.error = 'Não foi possível carregar as empresas. Tente novamente.'; }
+      }
+      if (!testerMode.value) stopDemoPolling();
+    }
+
     async function telemetryAll(path) {
       const result = [];
       while (path) {
@@ -1559,7 +1372,14 @@ createApp({
         ? Math.floor((trendCount.value - 1) / trendPage.size) * trendPage.size : 0;
     }
     function applyTrendFilters(equipmentChanged = false) {
-      if (equipmentChanged) trendPage.sensor = '';
+      if (equipmentChanged) {
+        const candidates = trendPage.rows.filter(row => row.sensor_info.equipamento_id === Number(trendPage.equipment));
+        trendPage.sensor = candidates.length === 1 ? candidates[0].sensor_id : '';
+      }
+      if (trendPage.sensor && !trendPage.equipment) {
+        const row = trendPage.rows.find(row => row.sensor_id === Number(trendPage.sensor));
+        if (row) trendPage.equipment = row.sensor_info.equipamento_id;
+      }
       trendPage.offset = 0; trendPage.detail = null;
     }
     function clearTrendFilters() {
@@ -1668,9 +1488,8 @@ createApp({
     }
 
     async function fetchEmpresasAll() {
-      if (lists.empresas.length) return;
-      const d = await api('/api/empresas/?limit=999');
-      lists.empresas = normList(d);
+      if (isTecnico.value || lists.empresas.length) return;
+      lists.empresas = await telemetryAll('/api/empresas/?limit=200');
     }
     async function fetchEquipamentosAll() {
       if (lists.equipamentos.length) return;
@@ -1689,7 +1508,7 @@ createApp({
       lists.ordens = normList(d);
     }
     async function fetchUsuariosAll() {
-      if (lists.usuarios.length) return;
+      if (isTecnico.value || lists.usuarios.length) return;
       const d = await api('/api/usuarios/?limit=999');
       const items = normList(d);
       sortByTipoUsuario(items);
@@ -1698,6 +1517,8 @@ createApp({
 
     async function fetchPage(resource, url) {
       if (!url) return;
+      if (resource === 'alertas') return fetchAlertas(url);
+      if (resource === 'ordens') return fetchOrdens(url);
       await withLoading(async () => {
         const path = url.replace(/^https?:\/\/[^\/]+/, '');
         const d = await api(path);
@@ -1710,20 +1531,16 @@ createApp({
     const modalConfig = {
       equipamento: {
         title: 'Equipamento', endpoint: '/api/equipamentos/',
-        defaults: { nome: '', tipo: '', modelo: '', fabricante: '', numero_serie: '', status: 'ativo', criticidade: null, justificativa_criticidade: '', empresa: null, data_instalacao: '', descricao: '' }
-      },
-      alerta: {
-        title: 'Alerta', endpoint: '/api/alertas/',
-        defaults: { tipo_alerta: '', nivel: 'medio', descricao: '', status: 'ativo', equipamento: null }
+        defaults: { nome: '', tipo: '', modelo: '', fabricante: '', numero_serie: '', status: 'ativo', criticidade: null, justificativa_criticidade: '', aceitar_sugestao: false, tipo_equipamento: null, empresa: null, data_instalacao: '', descricao: '' }
       },
 
       ordem: {
         title: 'Ordem de Serviço', endpoint: '/api/ordens-servico/',
-        defaults: { titulo: '', tipo_os: 'preventiva', prioridade: 'media', gravidade_condicao: 'ausente', risco_seguranca: false, status: 'pendente', equipamento: null, responsavel: null, descricao: '', custo_pecas: null, custo_mao_de_obra: null }
+        defaults: { titulo: '', tipo_os: 'preventiva', gravidade_condicao: 'ausente', risco_seguranca: false, status: 'pendente', equipamento: null, responsavel: null, descricao: '', custo_pecas: null, custo_mao_de_obra: null }
       },
       encerrar_os: {
         title: 'Encerrar O.S.', endpoint: '/api/ordens-servico/',
-        defaults: { titulo: '', tipo_os: 'preventiva', prioridade: 'media', status: 'concluida', equipamento: null, responsavel: null, descricao: '', custo_pecas: null, custo_mao_de_obra: null }
+        defaults: { titulo: '', tipo_os: 'preventiva', status: 'concluida', equipamento: null, responsavel: null, descricao: '', custo_pecas: null, custo_mao_de_obra: null }
       },
 
       empresa: {
@@ -1786,12 +1603,18 @@ createApp({
         }
       }
 
+      if (type === 'equipamento') fd.empresa = globalEmpresa.value ? Number(globalEmpresa.value) : me.value?.empresa || null;
       modal.open = true;
-      if (['equipamento', 'alerta', 'ordem', 'sensor', 'localizacao', 'leitura'].includes(type)) {
+      if (type === 'equipamento') await loadEquipmentGuide();
+      if (['equipamento', 'ordem', 'sensor', 'localizacao', 'leitura'].includes(type)) {
         await fetchEquipamentosAll();
         await fetchEmpresasAll();
       }
-      if (type === 'ordem') await fetchUsuariosAll();
+      if (type === 'ordem') {
+        await fetchUsuariosAll();
+        const company = globalEmpresa.value || me.value?.empresa;
+        orderEquipmentOptions.value = await telemetryAll('/api/equipamentos/?limit=100' + (company ? '&empresa=' + company : ''));
+      }
       if (type === 'leitura') await fetchSensoresAll();
       if (type === 'usuario') await fetchEmpresasAll();
       if (type === 'historico') await fetchOrdensAll(); // Histórico precisa das ordens
@@ -1802,12 +1625,17 @@ createApp({
       modal.type = type; modal.title = 'Editar ' + cfg.title;
       modal.editId = item.id; modal.oldStatus = item.status; formErrors.value = {};
       resetForm({ ...cfg.defaults, ...item }); modal.open = true;
+      if (type === 'equipamento') await loadEquipmentGuide();
 
-      if (['equipamento', 'alerta', 'ordem', 'sensor', 'localizacao', 'leitura'].includes(type)) {
+      if (['equipamento', 'ordem', 'sensor', 'localizacao', 'leitura'].includes(type)) {
         await fetchEquipamentosAll();
         await fetchEmpresasAll();
       }
-      if (type === 'ordem') await fetchUsuariosAll();
+      if (type === 'ordem') {
+        await fetchUsuariosAll();
+        const company = globalEmpresa.value || me.value?.empresa;
+        orderEquipmentOptions.value = await telemetryAll('/api/equipamentos/?limit=100' + (company ? '&empresa=' + company : ''));
+      }
       if (type === 'leitura') await fetchSensoresAll();
       if (type === 'usuario') await fetchEmpresasAll();
       if (type === 'historico') await fetchOrdensAll();
@@ -1829,10 +1657,9 @@ createApp({
           if (payload.status === 'concluida' && !payload.responsavel && me.value?.id) {
             payload.responsavel = me.value.id;
           }
-          const prioridadesValidas = ['baixa', 'media', 'alta', 'critica'];
           const statusValidos = ['pendente', 'andamento', 'concluida', 'cancelada'];
           const tiposValidos = ['preventiva', 'corretiva', 'preditiva'];
-          if (!prioridadesValidas.includes(payload.prioridade)) payload.prioridade = 'media';
+          for (const key of ['prioridade', 'prioridade_automatica', 'prioridade_manual', 'prioridade_origem', 'prioridade_herdada_conhecida', 'justificativa_prioridade', 'criticidade_na_abertura', 'justificativa_criticidade_na_abertura', 'criterios_criticidade_na_abertura']) delete payload[key];
           if (!statusValidos.includes(payload.status)) payload.status = 'pendente';
           if (!tiposValidos.includes(payload.tipo_os)) payload.tipo_os = 'preventiva';
         }
@@ -1857,16 +1684,19 @@ createApp({
 
         let createdOsId = modal.editId;
         if (modal.editId) {
-          const alertaAutomatico = modal.type === 'alerta' && fd.origem !== 'manual';
           await api(cfg.endpoint + modal.editId + '/', {
-            method: alertaAutomatico ? 'PATCH' : 'PUT',
-            body: JSON.stringify(alertaAutomatico ? { status: payload.status } : payload),
+            method: 'PUT',
+            body: JSON.stringify(payload),
           });
         } else {
           const res = await api(cfg.endpoint, { method: 'POST', body: JSON.stringify(payload) });
           if ((modal.type === 'ordem' || modal.type === 'encerrar_os') && res) createdOsId = res.id;
         }
 
+        if (modal.type === 'equipamento' && equipModal.open && equipModal.equipamento?.id === modal.editId) {
+          equipModal.equipamento = await api('/api/equipamentos/' + modal.editId + '/');
+          await loadEquipmentAssessment(equipModal.equipamento);
+        }
         modal.open = false;
         toast(modal.type === 'change_password' ? 'Senha alterada com sucesso!' : (modal.editId ? 'Atualizado com sucesso!' : 'Criado com sucesso!'), 'success');
         if (modal.type === 'leitura') {
@@ -1955,24 +1785,6 @@ createApp({
       }
     }
 
-    async function assumirOSFromAlerta(alerta) {
-      if (!alerta.ordem_servico_id) {
-        toast('Este alerta não possui O.S. vinculada.', 'error');
-        return;
-      }
-      try {
-        const os = await api('/api/ordens-servico/' + alerta.ordem_servico_id + '/');
-        if (['concluida', 'cancelada'].includes(os.status) || os.responsavel) {
-          toast('A O.S. vinculada está encerrada ou já possui responsável.', 'error');
-          return;
-        }
-        await assumirOS(os);
-        navigate(view.value);
-      } catch {
-        toast('Não foi possível acessar a O.S. vinculada.', 'error');
-      }
-    }
-
     // ─ Exportação (com fallback client-side) ─────────
     function getExportData(resource) {
       const now = new Date().toLocaleString('pt-BR');
@@ -1989,12 +1801,13 @@ createApp({
           };
         case 'alertas':
           return {
-            title: 'Alertas',
+            title: 'Histórico de alertas',
             subtitle: `Gerado em: ${now}`,
-            columns: ['ID', 'Tipo', 'Nível', 'Descrição', 'Equipamento', 'Status', 'Data'],
+            columns: ['ID', 'Tipo', 'Nível máximo', 'Motivo', 'Equipamento', 'Normalização', 'Data', 'Sensor', 'Origem', 'O.S.'],
             rows: lists.alertas.map(a => [
-              a.id, a.tipo_alerta, a.nivel, a.descricao || '—',
-              eqNome(a.equipamento), a.status, fmtDate(a.data_alerta)
+              a.id, a.tipo_alerta, a.nivel, a.dados_deteccao?.descricao || a.descricao || '—',
+              a.equipamento_nome || eqNome(a.equipamento), fmtDate(a.data_normalizacao), fmtDate(a.data_alerta),
+              a.sensor_nome || '—', a.origem, a.ordem_servico_id || '—'
             ])
           };
         case 'ordens-servico':
@@ -2033,7 +1846,7 @@ createApp({
           if (!k) return null;
           const rows = [
             ['Total de Equipamentos', k.total_equipamentos ?? '—'],
-            ['Alertas Ativos', k.alertas_ativos ?? '—'],
+            ['Alertas nas últimas 24h', k.alertas_24h ?? '—'],
             ['Ordens Abertas', k.ordens_abertas ?? '—'],
             ['Leituras de Telemetria', k.leituras_hoje ?? '—'],
           ];
@@ -2169,14 +1982,10 @@ createApp({
         if (filters.equipamentos.status) p.set('status', filters.equipamentos.status);
         if (filters.equipamentos.empresa || globalEmpresa.value) p.set('empresa', filters.equipamentos.empresa || globalEmpresa.value);
       } else if (resource === 'alertas') {
-        if (filters.alertas.nivel) p.set('nivel', filters.alertas.nivel);
-        if (filters.alertas.status) p.set('status', filters.alertas.status);
-        if (globalEmpresa.value) p.set('empresa', globalEmpresa.value);
+        try { for (const [key, value] of alertParams()) p.set(key, value); }
+        catch (error) { toast(error.message, 'error'); return; }
       } else if (resource === 'ordens-servico') {
-        if (filters.ordens.status) p.set('status', filters.ordens.status);
-        if (filters.ordens.prioridade) p.set('prioridade', filters.ordens.prioridade);
-        if (filters.ordens.tipo_os) p.set('tipo_os', filters.ordens.tipo_os);
-        if (globalEmpresa.value) p.set('empresa', globalEmpresa.value);
+        for (const [key, value] of orderParams()) p.set(key, value);
       } else if (resource === 'historico') {
         if (filters.historico.data_de) p.set('data_execucao_depois', filters.historico.data_de);
         if (filters.historico.data_ate) p.set('data_execucao_antes', filters.historico.data_ate);
@@ -2184,6 +1993,8 @@ createApp({
       } else if (resource === 'telemetria') {
         if (globalEmpresa.value) p.set('empresa', globalEmpresa.value);
       } else if (resource === 'dashboard') {
+        if (dashSetor.value) p.set('setor', dashSetor.value);
+        if (dashEquipamento.value) p.set('equipamento_id', dashEquipamento.value);
         if (globalEmpresa.value) p.set('empresa_id', globalEmpresa.value);
       }
 
@@ -2243,16 +2054,16 @@ createApp({
     function ordemStatusBadge(s) { return { pendente: 'badge-blue', andamento: 'badge-yellow', concluida: 'badge-green', cancelada: 'badge-gray' }[s] || 'badge-gray'; }
 
     // AJUSTE: Classes baseadas nas novas prioridades do Django
-    function prioridadeBadge(p) { return { critica: 'badge-red', alta: 'badge-orange', media: 'badge-yellow', baixa: 'badge-green' }[p] || 'badge-gray'; }
-    function prioridadeIcon(p) { return { critica: '🔴', alta: '🟠', media: '🟡', baixa: '🟢' }[p] || '⚪'; }
-    function prioridadeLabel(p) { return { critica: 'Crítica', alta: 'Alta', media: 'Média', baixa: 'Baixa' }[p] || '—'; }
+    function prioridadeBadge(p) { return { A: 'badge-red', B: 'badge-yellow', C: 'badge-green', critica: 'badge-red', alta: 'badge-orange', media: 'badge-yellow', baixa: 'badge-green' }[p] || 'badge-gray'; }
+    function prioridadeIcon(p) { return { A: '🔴', B: '🟡', C: '🟢', critica: '🔴', alta: '🟠', media: '🟡', baixa: '🟢' }[p] || '⚪'; }
+    function prioridadeLabel(p) { return { A: 'A · Alta', B: 'B · Média', C: 'C · Baixa', critica: 'Crítica', alta: 'Alta', media: 'Média', baixa: 'Baixa' }[p] || 'A definir'; }
 
-    function makeLineChart(readings, W = 360, H = 180) {
-      const raw = Array.isArray(readings) ? readings.slice(0, 20).reverse() : [];
+    function makeLineChart(readings, W = 360, H = 180, limit = 20, bounds = []) {
+      const raw = Array.isArray(readings) ? readings.slice(0, limit).reverse() : [];
       if (!raw.length) return { path: '', area: '', dots: [], ticks: [], min: 0, max: 0 };
       const values = raw.map(l => parseFloat(l.valor) || 0);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
+      const min = Math.min(...values, ...bounds);
+      const max = Math.max(...values, ...bounds);
       const range = max - min || 1;
       const points = values.map((v, i) => ({
         x: (i / (values.length - 1 || 1)) * W,
@@ -2267,7 +2078,7 @@ createApp({
         const value = (min + f * (max - min)).toFixed(2);
         return { y, label: value };
       });
-      return { path, area, dots: points, ticks, min: min.toFixed(2), max: max.toFixed(2) };
+      return { path, area, dots: points, ticks, min: min.toFixed(2), max: max.toFixed(2), lowValue: min, highValue: max };
     }
 
     async function fetchEquipamentoSensors(eqId) {
@@ -2320,7 +2131,7 @@ createApp({
       try {
         const res = await api(`/api/ordens-servico/?equipamento=${eqId}&limit=999`);
         equipModal.ordens = normList(res);
-        sortByNivel(equipModal.ordens, 'prioridade'); // Ordem de prioridade (crítico > médio > baixo)
+
       } catch (err) {
         equipModal.ordens = [];
         console.error("Erro ao buscar ordens do equipamento", err);
@@ -2357,12 +2168,13 @@ createApp({
       }
       equipModal.equipamento = equipment;
       equipModal.currentOS = os || null;
+      loadEquipmentAssessment(equipment);
       equipModal.selectedSensor = null;
       equipModal.readings = [];
       equipModal.error = '';
       equipModal.refreshing = false;
       equipModal.ordens = [];
-      equipModal.osFilter = os ? 'os' : 'todas';
+      equipModal.osFilter = 'todas';
       await fetchEquipamentoSensors(equipment.id);
       fetchEquipamentoOrdens(equipment.id);
       if (equipModal.sensors.length) {
@@ -2372,6 +2184,7 @@ createApp({
     }
 
     function closeEquipModal() {
+      ++assessmentRequest; equipmentAssessment.history = []; equipmentAssessment.busy = false;
       equipModal.open = false;
       equipModal.equipamento = null;
       equipModal.currentOS = null;
@@ -2396,7 +2209,7 @@ createApp({
 
     function eqNome(id) {
       if (id == null) return '—';
-      const eq = lists.equipamentos.find(e => e.id === id);
+      const eq = lists.equipamentos.find(e => e.id === id) || dashboardEquipamentos.value.find(e => e.id === Number(id));
       return eq ? `${eq.nome} (#${eq.id})` : `#${id}`;
     }
     function getEquipamentoInfo(id) {
@@ -2499,7 +2312,12 @@ createApp({
     });
 
     function onGlobalEmpresaChange() {
-      resetTrendMonitoring();
+      closeABC(); closeEquipModal();
+      ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; dashSetor.value = ''; dashEquipamento.value = ''; performanceOpen.value = false; liveOpen.value = false;
+      clearTrendDemo(); resetTrendMonitoring();
+      ++dashboardSummaryRequest; dashboardSummary.value = null; dashAlerts.value = []; alertCount.value = 0;
+      ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.url = ''; alertHistory.count = 0;
+      Object.assign(filters.alertas, { search: '', nivel: '', origem: '', equipamento: '', sensor: '', from: '', to: '' });
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
       Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, rows: [], equipments: [], sensors: [], busy: false });
       Object.assign(trendPage, { equipment: '', sensor: '', condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
@@ -2519,7 +2337,9 @@ createApp({
       // Adicionar listener para fechar janelas com ESC
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-          if (trendConfigModal.open) trendConfigModal.open = false;
+          if (priorityModal.open) { priorityModal.open = false; ++priorityRequest; }
+          else if (criteriaModal.open) { criteriaModal.open = false; ++criteriaRequest; }
+          else if (trendConfigModal.open) trendConfigModal.open = false;
           else if (trendPage.detail && view.value === 'tendencias') trendPage.detail = null;
           else if (modal.open) modal.open = false;
           else if (equipModal.open) closeEquipModal();
@@ -2536,90 +2356,17 @@ createApp({
       }
       document.addEventListener('visibilitychange', onTrendVisibilityChange);
 
-      // ─── ATUALIZAÇÃO AUTOMÁTICA SILENCIOSA (OTIMIZADA) ───
-      setInterval(async () => {
-        // Só tenta buscar se o usuário estiver logado
-        if (token.value) {
-          try {
-            if (view.value === 'dashboard') {
-              const today = new Date().toISOString().slice(0, 10);
-              const timestampDe = `${today}T00:00:00`;
-              const timestampAte = `${today}T23:59:59`;
-              const telUrl = buildTelemetriaUrl({
-                limit: 50,
-                allowedEqIds: dashboardAllowedEquipamentoIds.value,
-                sensorId: dashTelemetriaSensor.value,
-                equipamentoId: dashTelemetriaEquip.value,
-              });
-
-              const [telRes, telHojeRes, telTotalRes, alertRes] = await Promise.allSettled([
-                api(telUrl),
-                api(buildTelemetriaUrl({
-                  limit: 1,
-                  allowedEqIds: dashboardAllowedEquipamentoIds.value,
-                  timestampDe,
-                  timestampAte,
-                })),
-                api(buildTelemetriaUrl({
-                  limit: 1,
-                  allowedEqIds: dashboardAllowedEquipamentoIds.value,
-                })),
-                api('/api/alertas/?status=ativo&limit=50&ordering=-criado_em')
-              ]);
-
-              // Atualiza os gráficos de forma dinâmica e reativa sem travar a tela
-              if (telRes.status === 'fulfilled') {
-                let leituras = normList(telRes.value);
-                // Se filtro por equipamento (sem sensor específico), filtra client-side
-                if (dashTelemetriaEquip.value && !dashTelemetriaSensor.value) {
-                  const eqId = Number(dashTelemetriaEquip.value);
-                  const sensorIds = new Set(lists.sensores.filter(s => getEquipamentoId(s.equipamento) === eqId).map(s => s.id));
-                  leituras = leituras.filter(l => sensorIds.has(l.sensor));
-                }
-                // Se empresa global ativa, filtra pelos sensores conhecidos
-                if (globalEmpresa.value && !dashTelemetriaSensor.value) {
-                  const filterIds = new Set(lists.sensores.map(s => s.id));
-                  leituras = leituras.filter(l => filterIds.has(l.sensor));
-                }
-                lists.leituras = leituras;
-              }
-              if (telTotalRes.status === 'fulfilled' && telTotalRes.value) {
-                leiturasTotalCount.value = Number(telTotalRes.value.count ?? 0) || lists.leituras.length;
-                if (kpis.value) kpis.value.leituras_total = leiturasTotalCount.value;
-              }
-              if (telHojeRes.status === 'fulfilled' && telHojeRes.value) {
-                leiturasTodayCount.value = Number(telHojeRes.value.count ?? 0) || 0;
-                if (kpis.value) kpis.value.leituras_hoje = leiturasTodayCount.value;
-              }
-              if (alertRes.status === 'fulfilled') {
-                const alertItems = normList(alertRes.value);
-                sortByNivel(alertItems);
-                lists.alertas = alertItems;
-                alertCount.value = lists.alertas.length;
-                dashAlerts.value = lists.alertas.slice(0, 5);
-              }
-            }
-            else if (view.value === 'alertas') {
-              // Atualização silenciosa — reutiliza os filtros ativos do usuário
-              const p = new URLSearchParams();
-              if (filters.alertas.search) p.set('search', filters.alertas.search);
-              if (filters.alertas.nivel) p.set('nivel', filters.alertas.nivel);
-              if (filters.alertas.status) p.set('status', filters.alertas.status);
-              const res = await api('/api/alertas/?' + p);
-              if (res) { const items = normList(res); sortByNivel(items); lists.alertas = items; }
-            }
-          } catch (e) {
-            console.warn("Pequeno atraso na sincronização, tentando no próximo ciclo...");
-          }
-        }
-      }, 10000); // 10 segundos — sincroniza em tempo real sem sobrecarregar
+      dashboardTimer = setInterval(() => {
+        if (token.value && !document.hidden && view.value === 'dashboard') fetchDashboard({ silent: true });
+      }, 30000);
     });
 
     function onTrendVisibilityChange() {
-      if (!document.hidden) refreshTrendMonitoring();
+      if (!document.hidden) { refreshTrendMonitoring(); if (token.value && view.value === 'dashboard') fetchDashboard({ silent: true }); }
     }
     onUnmounted(() => {
-      stopTrendPolling(); ++trendMonitorRequest;
+      if (dashboardTimer !== null) clearInterval(dashboardTimer); ++dashboardRequest;
+      stopTrendPolling(); stopDemoPolling(); ++demoRequest; ++trendMonitorRequest;
       document.removeEventListener('visibilitychange', onTrendVisibilityChange);
     });
 
@@ -2768,7 +2515,7 @@ createApp({
 
       // Técnico
       if (type === 'Como Consertar') {
-        promptText = 'Quais os passos recomendados para consertar e analisar a causa raiz dos alertas críticos mais recentes?';
+        promptText = 'Analise as detecções críticas recentes e suas leituras. Quais verificações e atendimentos nas O.S. vinculadas são recomendados?';
       } else if (type === 'O Que Fazer') {
         promptText = 'O que devo fazer com as ordens de serviço pendentes e como priorizá-las em campo?';
       } else if (type === 'Sugerir Preventivas') {
@@ -2788,7 +2535,7 @@ createApp({
       } else if (type === 'Estratégia Sistêmica') {
         promptText = 'Quais ferramentas de alta gestão e estratégias sistêmicas você sugere para melhorar a confiabilidade de toda a plataforma?';
       } else if (type === 'Alertas Críticos Globais') {
-        promptText = 'Quais são os alertas críticos globais que exigem intervenção macro ou escalonamento imediato?';
+        promptText = 'Analise as ocorrências críticas recentes, a condição atual dos sensores e suas O.S. Quais atendimentos exigem escalonamento?';
       }
 
       if (promptText) {
@@ -2876,31 +2623,40 @@ createApp({
     }
 
     return {
+      orderState, orderParams, selectOrderPriority, clearOrderFilters, equipmentGuide, equipmentAssessment, criteriaModal,
+      loadEquipmentGuide, acceptEquipmentSuggestion, openCriteria, loadCriteria, saveCriteria, criticidadeLabel, historicPriorityLabel, priorityOrigin,
+      priorityModal, openPriority, savePriority, orderEquipmentOptions,
+      api, dashboardCostChart, dashboardSummary, dashboardCards, dashboardCompanies, dashboardOrders, dashboardAdminOverview,
+      companySearch, dashboardTab, performanceOpen, liveOpen, telemetryLiveOpen, dashboardUpdatedAt,
+      dashboardCompany, applyDashboardFilters, togglePerformance, dashboardAction, dashboardAllAlerts, openDashboardOrders, openDashboardOrder, metric,
       token, me, view, loading, loginLoading, loginError, loginForm,
       kpis, dashAlerts, alertCount, toasts, lists, pages, filters,
       modal, fd, formErrors, globalEmpresa,
+      alertHistory, alertSensors, alertEvidence, alertReadings, alertThresholds, alertChart, enterAlertHistory,
+      openAlertaDetails, closeAlertaDetails, openAlertaOS, openAlertaSensor, showEquipmentAlerts,
       isAdmin, isAdminOrGestor, isTecnico, userInitial, viewTitle, osSemTecnicoCount,
       doLogin, logout, navigate, debouncedFetch,
       telemetry, telemetrySensors, telemetryCount, telemetryRows, trendSummary, trendChart, trendPage, trendCount, trendRows, trendEquipments, trendSensors,
+      selectedTrend, selectedTrendChart, buildTrendChart, setTrendTimePreset,
+      trendDemo, runTrendDemo, toggleTrendTestMode,
       fetchTrends, applyTrendFilters, clearTrendFilters, changeTrendPage, openTrendDetail, showTrends,
       sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,
       clearTelemetryFilters, changeTelemetryPage, enterTelemetry,
       fetchEquipamentos, fetchAlertas, fetchOrdens, fetchTelemetria,
       fetchHistorico, fetchEmpresas, fetchUsuarios, fetchLocalizacoes, fetchPrompts, fetchPage, fetchDashboard,
-      openModal, editItem, saveItem, deleteItem, exportData, assumirOS, iniciarAtendimento, openEncerrarOS, assumirOSFromAlerta,
+      openModal, editItem, saveItem, deleteItem, exportData, assumirOS, iniciarAtendimento, openEncerrarOS,
       formatNumber, fmtDate, nivelBadge, nivelColor, statusBadge, eqStatusBadge,
       ordemStatusBadge, prioridadeBadge, prioridadeIcon, prioridadeLabel,
       eqNome, getEquipamentoInfo, osTitulo, osEquipNome, eqEmpresaNome, empresaNome, sensorNome, locSetor, custoTotal, countSensores, usuarioNome,
       empresaNomeSensor, sensorEquipNome,
       onGlobalEmpresaChange,
-      chartEquipStatus, chartAlertNivel, chartOrdens, chartTelemetria, chartCustoEvolucao,
-      telemetriaSummary, telemetryMovingDot, displayedChartTelemetria, telemetrySlideOffset,
+      chartEquipStatus, chartAlertNivel, chartOrdens, chartCustoEvolucao,
       dashboardEquipamentos,
-      dashAlertsCollapsed, dashOrdensCollapsed, filtroFilaPrioridade, ordensFilaPrioridade,
+      dashAlertsCollapsed, dashOrdensCollapsed, ordensFilaPrioridade,
       donutArcs,
       availableSectors,
-      leiturasHoje, leiturasTodayCount, leiturasTotalCount, dashTelemetriaEquip, dashTelemetriaSensor,
-      dashTelemetriaSensoresFiltrados, dashCustoSetor,
+      leiturasTodayCount, leiturasTotalCount, dashTelemetriaEquip, dashTelemetriaSensor,
+      dashCustoSetor,
       dashSetor, dashEquipamento, explainerCollapsed, dashboardMetrics, dashboardEquipmentOptions, availableDashboardSectors, dashboardKpisLoading, dashboardKpisError,
       trendMonitor, refreshTrendMonitoring, reviewNewTrends, startTrendPolling,
       trendAlerts, trendDataCache, trendAILoading, trendConfigModal,

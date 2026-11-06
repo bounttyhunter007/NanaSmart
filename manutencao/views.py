@@ -2,6 +2,13 @@ from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as df_filters
 from .models import OrdemServico, HistoricoManutencao
+from .filters import OrdemServicoFilter
+from .ordering import ordenar_ordens
+from .services import alterar_prioridade
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from accounts.permissions import IsGestor
+from .serializers import AjustePrioridadeSerializer, RestaurarPrioridadeSerializer, HistoricoPrioridadeOSSerializer
 from .serializers import OrdemServicoSerializer, HistoricoManutencaoSerializer
 from .permissions import IsOwnerOrGestorOrUnassigned
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
@@ -22,14 +29,45 @@ class HistoricoManutencaoFilter(df_filters.FilterSet):
         ]
 
 
+
+
 class OrdemServicoViewSet(viewsets.ModelViewSet):
     serializer_class = OrdemServicoSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrGestorOrUnassigned]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'prioridade', 'equipamento', 'equipamento__empresa', 'responsavel', 'tipo_os']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_class = OrdemServicoFilter
     search_fields = ['titulo', 'descricao']
-    ordering_fields = ['data_abertura', 'prioridade', 'status']
-    ordering = ['-data_abertura']
+    def list(self, request, *args, **kwargs):
+        visible = self.get_queryset()
+        qs = self.filter_queryset(visible)
+        page = self.paginate_queryset(qs)
+        response = self.get_paginated_response(self.get_serializer(page, many=True).data)
+        response.data['a_definir'] = qs.filter(prioridade__isnull=True).count()
+        response.data['total_escopo'] = visible.count()
+        return response
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsGestor], serializer_class=AjustePrioridadeSerializer)
+    def ajustar_prioridade(self, request, pk=None):
+        obj = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = alterar_prioridade(obj, request.user, **serializer.validated_data)
+        return Response(OrdemServicoSerializer(obj).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsGestor], serializer_class=RestaurarPrioridadeSerializer)
+    def restaurar_prioridade(self, request, pk=None):
+        obj = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = alterar_prioridade(obj, request.user, restaurar=True, **serializer.validated_data)
+        return Response(OrdemServicoSerializer(obj).data)
+
+    @action(detail=True, methods=['get'], serializer_class=HistoricoPrioridadeOSSerializer)
+    def historico_prioridade(self, request, pk=None):
+        qs = self.get_object().historico_prioridade.select_related('alterado_por')
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
+
 
     @transaction.atomic
     def perform_create(self, serializer):
@@ -43,6 +81,9 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_update(self, serializer):
+        serializer.instance = self.get_queryset().select_for_update(of=('self',)).get(pk=serializer.instance.pk)
+        self.check_object_permissions(self.request, serializer.instance)
+        serializer.validate(dict(serializer.validated_data))
         validated = serializer.validated_data
         status = validated.get('status', serializer.instance.status)
         responsavel = validated.get('responsavel', serializer.instance.responsavel)
@@ -55,7 +96,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return OrdemServico.objects.none()
         user = self.request.user
-        qs = OrdemServico.objects.select_related('equipamento', 'responsavel')
+        qs = ordenar_ordens(OrdemServico.objects.select_related('equipamento', 'responsavel', 'criterios_criticidade_na_abertura__criado_por'))
         
         if user.tipo_usuario == 'admin':
             return qs.all()

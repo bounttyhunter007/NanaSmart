@@ -7,13 +7,13 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 - Cadastro de empresas, usuários, equipamentos, tipos de equipamento e planos de manutenção.
 - Separação de dados por empresa e permissões por perfil: administrador, gestor e técnico.
 - Telemetria por sensor, alertas por limites configuráveis e análise de tendências.
-- Ordens de serviço preventivas, corretivas e preditivas, com prioridade calculada e histórico de criticidade.
+- Ordens de serviço preventivas, corretivas e preditivas, com prioridade ABC herdada na abertura e histórico de revisões justificadas.
 - Painéis com indicadores de manutenção, exportações CSV/Excel/PDF e integração opcional com Google Gemini.
 - Frontend em `FrontATT/`, incluindo dashboard, gestão operacional e chat de IA.
 
 As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
 
-A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de equipamento/sensor, paginação e configuração de análise. O administrador também pode editar a configuração global. Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
+A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de equipamento/sensor, paginação e configuração de análise. O administrador também pode editar a configuração global. A página inclui um gráfico para o sensor selecionado e uma demonstração guiada de aproximadamente um minuto, exclusiva de admin. Consulte o [roteiro de demonstração de tendências](DOCS/DEMONSTRACAO_TENDENCIAS.md). Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
 
 ## Requisitos
 
@@ -164,11 +164,13 @@ Os perfis têm escopos diferentes. Administradores têm acesso global; gestores 
 - Alertas operacionais podem ser associados a ordens de serviço; alertas gerados pela análise de tendência usam um fluxo preditivo próprio.
 - A análise de tendências pode recomendar intervenção, gerar alerta e criar ou atualizar a ordem preditiva correspondente.
 - Alterações de horímetro são comparadas com os planos ativos do equipamento para avaliar a necessidade de manutenção.
-- A prioridade das ordens considera a criticidade do equipamento, a gravidade informada e o risco de segurança. Alterações de criticidade mantêm histórico.
+- A prioridade ABC de novas ordens copia a criticidade do equipamento na abertura. Alterações posteriores só afetam novas OS; gestor/admin pode ajustar ordens abertas com justificativa e histórico. Critérios são validados por empresa. Consulte [Priorização ABC](DOCS/PRIORIZACAO_ABC.md).
 
-Alertas por limite são separados por sensor, preservam o maior nível do episódio e registram a condição atual. Duas novas leituras normais consecutivas confirmam recuperação, sem encerrar a O.S. Recorrências preservam outro registro de alerta e podem reutilizar a ordem ainda aberta do mesmo sensor. Uma ordem concluída ou cancelada não é recriada automaticamente enquanto persistir a mesma ocorrência.
+Alertas são um histórico automático de ocorrências, sem cadastro, edição, exclusão ou baixa manual na API/interface. Cada registro preserva as evidências da abertura e permite consultar suas leituras e a O.S. vinculada. Problemas identificados por pessoas entram diretamente em uma O.S. O dashboard mostra novas ocorrências das últimas 24 horas, inclusive já normalizadas.
 
-Diagnóstico, regras RN-01 a RN-23, matriz de situações, cenários de validação e migrações estão documentados em [Fluxo de alertas e Ordens de Serviço](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md).
+Alertas por limite são separados por sensor, preservam o maior nível do episódio e registram a normalização após duas novas leituras normais consecutivas, sem encerrar a O.S. Recorrências podem reutilizar uma ordem ainda aberta do mesmo sensor. Tendências preservam sua janela inicial de análise e maior gravidade. Uma ordem concluída ou cancelada não é recriada durante a mesma ocorrência.
+
+Funcionamento, filtros, compatibilidade e migração estão em [Histórico de alertas](DOCS/HISTORICO_ALERTAS.md). O [diagnóstico anterior](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md) permanece como referência histórica.
 
 Os detalhes de parâmetros e respostas estão documentados no Swagger e nos serializers da API.
 
@@ -180,7 +182,7 @@ Use o Swagger para consultar a lista completa, filtros, permissões e formatos. 
 |---|---|
 | Autenticação e perfil | `/api/auth/` |
 | Empresas e usuários | `/api/empresas/`, `/api/usuarios/` |
-| Equipamentos, tipos e criticidade | `/api/equipamentos/`, `/api/tipos-equipamento/`, `/api/historico-criticidade/` |
+| Equipamentos, tipos e criticidade | `/api/equipamentos/`, `/api/tipos-equipamento/`, `/api/historico-criticidade/`, `/api/criterios-criticidade/` |
 | Planos e ordens de serviço | `/api/planos-manutencao/`, `/api/ordens-servico/`, `/api/historico/` |
 | Sensores, leituras e tendências | `/api/telemetria/` |
 | Alertas e dashboards | `/api/alertas/`, `/api/dashboards/` |

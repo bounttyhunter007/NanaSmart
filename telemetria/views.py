@@ -11,6 +11,17 @@ from .trend_analysis import analyze_sensor_trend, get_all_sensor_trends
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 
 
+def operational_scope(qs, request, equipment_field):
+    """Opt-in scope for the live chart, matching the technician's visible orders."""
+    if request.user.tipo_usuario == 'tecnico' and request.query_params.get('escopo_operacional') == 'true':
+        from manutencao.models import OrdemServico
+        ids = OrdemServico.objects.filter(equipamento__empresa_id=request.user.empresa_id).filter(
+            models.Q(responsavel=request.user) | models.Q(responsavel__isnull=True)
+        ).values('equipamento_id')
+        qs = qs.filter(**{equipment_field + '__in': ids})
+    return qs
+
+
 class SensorViewSet(viewsets.ModelViewSet):
     serializer_class = SensorSerializer
     permission_classes = [IsAuthenticatedNoDeleteForTecnico]
@@ -28,6 +39,7 @@ class SensorViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(equipamento__empresa=user.empresa)
             else:
                 return qs.none()
+        qs = operational_scope(qs, self.request, 'equipamento_id')
         equipamento_ids = self.request.query_params.get('equipamento__in')
         if equipamento_ids:
             try:
@@ -41,6 +53,7 @@ class SensorViewSet(viewsets.ModelViewSet):
 from django_filters import rest_framework as df_filters
 
 class TelemetriaFilter(df_filters.FilterSet):
+    id_ate = df_filters.NumberFilter(field_name='id', lookup_expr='lte')
     valor_min = df_filters.NumberFilter(field_name="valor", lookup_expr='gte')
     valor_max = df_filters.NumberFilter(field_name="valor", lookup_expr='lte')
     timestamp_de = df_filters.DateTimeFilter(field_name='timestamp', lookup_expr='gte')
@@ -67,6 +80,7 @@ class TelemetriaViewSet(viewsets.ModelViewSet):
             else:
                 return qs.none()
 
+        qs = operational_scope(qs, self.request, 'sensor__equipamento_id')
         equipamento_ids = self.request.query_params.get('sensor__equipamento__in')
         if equipamento_ids:
             try:

@@ -5,6 +5,7 @@ import math
 from django.db import transaction
 
 from alertas.models import Alerta
+from alertas.evidence import detection_snapshot
 from .models import Sensor
 
 
@@ -64,6 +65,7 @@ def sync_limit_reading(leitura):
         dados['leituras_normais_consecutivas'] = dados.get('leituras_normais_consecutivas', 0) + 1
         if dados['leituras_normais_consecutivas'] >= LEITURAS_NORMAIS_PARA_RECUPERACAO:
             dados['recuperado_em'] = leitura.timestamp.isoformat()
+            ultimo.data_normalizacao = leitura.timestamp
             if ultimo.status == 'ativo':
                 ultimo.status = 'resolvido'
     else:
@@ -81,11 +83,15 @@ def sync_limit_reading(leitura):
             equipamento=sensor.equipamento, sensor=sensor, origem='limite',
             evento_chave=chave, tipo_alerta=f'Alerta de {sensor.get_tipo_display()}',
             nivel=nivel, descricao=descricao, dados_analise=dados,
+            dados_deteccao=detection_snapshot(
+                sensor, 'limite', f'Alerta de {sensor.get_tipo_display()}',
+                nivel, descricao, dados, leitura,
+            ),
             data_ultima_analise=leitura.timestamp,
         )
     ultimo.nivel = dados.get('nivel_maximo', ultimo.nivel)
     ultimo.descricao = descricao
     ultimo.dados_analise = dados
     ultimo.data_ultima_analise = leitura.timestamp
-    ultimo.save(update_fields=['nivel', 'descricao', 'dados_analise', 'data_ultima_analise', 'status'])
+    ultimo.save(update_fields=['nivel', 'descricao', 'dados_analise', 'data_ultima_analise', 'status', 'data_normalizacao'])
     return ultimo

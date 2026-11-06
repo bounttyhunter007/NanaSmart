@@ -108,6 +108,10 @@ def build_system_instruction(user, purpose):
         "telemetria, desempenho de equipamentos e gestão de manutenção. Recuse perguntas "
         f"fora desse escopo. {focus}\n"
         f"\n\nObjetivo atual: {purpose}. "
+        "Alertas são registros históricos automáticos de detecções, sem ações de resolver, ignorar, editar ou excluir. "
+        "Os alertas do contexto são ocorrências das últimas 24 horas, não uma lista de problemas atuais. "
+        "Use as leituras para analisar a condição atual e a O.S. vinculada para orientar o atendimento. "
+        "Normalização do sensor não comprova conclusão da manutenção. Problemas humanos entram diretamente em uma O.S. "
         "Use sempre formatação Markdown com marcadores ou tópicos quando for útil."
     )
 

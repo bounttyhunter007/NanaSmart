@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.utils import timezone
 from django.db.models import Sum, Count
 from ativos.models import Equipamento
 from alertas.models import Alerta
@@ -54,12 +55,25 @@ def get_recent_telemetry(user, limit=5):
     return resumo
 
 
+def get_recent_alerts(user):
+    return Alerta.objects.filter(
+        equipamento__in=get_user_equipment_queryset(user),
+        data_alerta__gte=timezone.now() - timedelta(hours=24), data_alerta__lte=timezone.now(),
+    ).select_related('equipamento').order_by('-data_alerta', '-pk')
+
+
 def build_alert_summary(alerts, limit=5):
     summary = []
     for alerta in alerts[:limit]:
+        evidence = alerta.dados_deteccao or {}
+        normalization = (f"normalização detectada em {alerta.data_normalizacao.isoformat()}"
+                         if alerta.data_normalizacao else 'sem registro de normalização; consultar leituras atuais')
         summary.append(
-            f"- [{alerta.nivel.upper()}] {alerta.tipo_alerta} no equipamento '{alerta.equipamento.nome}': "
-            f"{alerta.descricao} (aberto em {alerta.data_alerta.strftime('%d/%m/%Y %H:%M')})"
+            f"- Ocorrência histórica #{alerta.pk} [{alerta.nivel.upper()} máximo] "
+            f"{alerta.tipo_alerta} no equipamento '{alerta.equipamento.nome}': "
+            f"{evidence.get('descricao', alerta.descricao)} "
+            f"(registrada em {alerta.data_alerta.isoformat()}; {normalization}; "
+            f"O.S. vinculada: {alerta.ordem_servico_id or 'não disponível'})."
         )
     return summary
 
@@ -69,7 +83,7 @@ def build_order_summary(orders, limit=5):
     for ordem in orders[:limit]:
         responsavel = ordem.responsavel.username if ordem.responsavel else 'Não designado'
         summary.append(
-            f"- #{ordem.id} '{ordem.titulo}' [{ordem.tipo_os.upper()} / Prioridade: {ordem.prioridade.upper()}] - "
+            f"- #{ordem.id} '{ordem.titulo}' [{ordem.tipo_os.upper()} / Prioridade: {(ordem.prioridade or 'A definir').upper()}] - "
             f"Status: {ordem.status} - Equipamento: {ordem.equipamento.nome} - Responsável: {responsavel}"
         )
     return summary
@@ -136,7 +150,7 @@ def get_financial_summary(user, max_items=5):
 
 def build_base_context(user):
     equipamentos = get_user_equipment_queryset(user)
-    alerts = get_active_alerts(user)
+    alerts = get_recent_alerts(user)
     open_orders = get_open_orders(user)
     assigned_orders = get_assigned_orders(user)
     unassigned_orders = get_unassigned_orders(user)

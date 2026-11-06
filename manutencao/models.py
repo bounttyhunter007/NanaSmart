@@ -41,13 +41,8 @@ class OrdemServico(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
     
-    PRIORIDADE_CHOICES = (
-        ('baixa', 'Baixa'),
-        ('media', 'Média'),
-        ('alta', 'Alta'),
-        ('critica', 'Crítica'),
-    )
-    prioridade = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default='baixa')
+    PRIORIDADE_CHOICES = (('A', 'A — Alta'), ('B', 'B — Média'), ('C', 'C — Baixa'))
+    prioridade = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, default=None, null=True, blank=True)
     GRAVIDADE_CHOICES = (
         ('ausente', 'Não informada'), ('baixa', 'Baixa'), ('moderada', 'Moderada'),
         ('alta', 'Alta'), ('critica', 'Crítica'),
@@ -55,10 +50,13 @@ class OrdemServico(models.Model):
     gravidade_condicao = models.CharField(max_length=20, choices=GRAVIDADE_CHOICES, default='ausente')
     risco_seguranca = models.BooleanField(default=False)
     prioridade_manual = models.BooleanField(default=False)
-    prioridade_automatica = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, blank=True)
+    prioridade_automatica = models.CharField(max_length=20, choices=PRIORIDADE_CHOICES, blank=True, null=True, default=None)
+    prioridade_origem = models.CharField(max_length=20, choices=[('herdada', 'Herdada'), ('ajustada', 'Ajustada'), ('convertida', 'Convertida')], default='herdada')
+    prioridade_herdada_conhecida = models.BooleanField(default=True)
     justificativa_prioridade = models.TextField(blank=True)
     criticidade_na_abertura = models.CharField(max_length=1, blank=True, null=True)
     justificativa_criticidade_na_abertura = models.TextField(blank=True)
+    criterios_criticidade_na_abertura = models.ForeignKey('ativos.CriteriosCriticidade', on_delete=models.PROTECT, null=True, blank=True)
     
     # Datas
     data_abertura = models.DateTimeField(default=timezone.now) # Preenche com a hora atual, mas aceita valores manuais
@@ -67,6 +65,20 @@ class OrdemServico(models.Model):
     def save(self, *args, **kwargs):
         with transaction.atomic():
             anterior = type(self).objects.select_for_update().filter(pk=self.pk).first() if self.pk else None
+            if anterior is None:
+                from .services import PrioridadeOSService
+                # Também cobre criação por comandos, sinais e administração.
+                equipamento_atual = Equipamento.objects.select_for_update().get(pk=self.equipamento_id)
+                for campo, valor in PrioridadeOSService.preencher({}, equipamento_atual).items():
+                    setattr(self, campo, valor)
+            else:
+                imutaveis = ['equipamento_id', 'criticidade_na_abertura', 'justificativa_criticidade_na_abertura',
+                             'criterios_criticidade_na_abertura_id', 'prioridade_automatica', 'prioridade_herdada_conhecida']
+                for campo in imutaveis:
+                    if getattr(self, campo) != getattr(anterior, campo):
+                        raise ValidationError({campo: 'O contexto da abertura da OS é imutável.'})
+                if anterior.status in ('concluida', 'cancelada') and self.prioridade != anterior.prioridade:
+                    raise ValidationError({'prioridade': 'Uma ordem encerrada não pode mudar de prioridade.'})
             if anterior and anterior.status in ('concluida', 'cancelada') and self.status != anterior.status:
                 raise ValidationError({'status': 'Uma ordem concluída ou cancelada não pode mudar de status.'})
             if self.status == 'concluida' and not self.data_conclusao:
@@ -74,6 +86,9 @@ class OrdemServico(models.Model):
                 if kwargs.get('update_fields') is not None:
                     kwargs['update_fields'] = set(kwargs['update_fields']) | {'data_conclusao'}
             super().save(*args, **kwargs)
+            if anterior is None:
+                HistoricoPrioridadeOS.objects.create(ordem_servico=self, prioridade_nova=self.prioridade,
+                    justificativa=self.justificativa_prioridade, origem='herdada')
             if self.status == 'concluida':
                 HistoricoManutencao.objects.get_or_create(
                     ordem_servico=self,
@@ -85,6 +100,20 @@ class OrdemServico(models.Model):
 
     def __str__(self):
         return f"OS #{self.id} - {self.titulo} ({self.equipamento.nome})"
+
+
+class HistoricoPrioridadeOS(models.Model):
+    ordem_servico = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='historico_prioridade')
+    prioridade_anterior = models.CharField(max_length=20, null=True, blank=True)
+    prioridade_nova = models.CharField(max_length=20, null=True, blank=True)
+    justificativa = models.TextField()
+    origem = models.CharField(max_length=20)
+    alterado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    dados_anteriores = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-pk']
 
 class HistoricoManutencao(models.Model):
     ordem_servico = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='historico')

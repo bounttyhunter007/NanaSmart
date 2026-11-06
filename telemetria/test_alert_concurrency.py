@@ -67,3 +67,17 @@ class AlertConcurrencyTests(TransactionTestCase):
         self.paralelo(lambda: sync_sensor_trend(self.sensor.pk))
         self.assertEqual(Alerta.objects.filter(origem='tendencia', status='ativo').count(), 1)
         self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)
+
+    def test_ticks_simultaneos_de_demo_gravam_um_unico_passo(self):
+        from accounts.models import Usuario
+        from .demo_service import create_demo, update_demo
+        from .models import TrendDemo
+        owner = Usuario.objects.create_user(username='demo-concurrent', password='test', tipo_usuario='admin')
+        result = create_demo(owner, self.sensor.equipamento.empresa_id)
+        demo = TrendDemo.objects.get(pk=result['id'])
+        now = demo.ultima_leitura_em + timedelta(seconds=10)
+        with patch('django.utils.timezone.now', return_value=now):
+            self.paralelo(lambda: update_demo(owner, demo.pk, 'avancar'))
+        demo.refresh_from_db()
+        self.assertEqual(demo.passo, 1)
+        self.assertEqual(Telemetria.objects.filter(sensor=demo.sensor).count(), 2)

@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from alertas.models import Alerta
+from alertas.evidence import detection_snapshot
 from .models import Sensor
 from .trend_analysis import analyze_sensor_trend, _operational_context
 
@@ -35,7 +36,7 @@ def sync_sensor_trend(sensor_id):
         sensor=sensor, origem='tendencia', status='ativo'
     )
     if not is_relevant:
-        active.update(status='resolvido', data_ultima_analise=timezone.now())
+        active.update(status='resolvido', data_ultima_analise=timezone.now(), data_normalizacao=timezone.now())
         trend.update(_operational_context(sensor.id))
         return trend
 
@@ -57,8 +58,13 @@ def sync_sensor_trend(sensor_id):
         'status': 'ativo',
     }
     if alerta is None:
+        values['dados_deteccao'] = detection_snapshot(
+            sensor, 'tendencia', values['tipo_alerta'], values['nivel'], descricao, trend,
+        )
         alerta = Alerta.objects.create(equipamento=sensor.equipamento, **values)
     else:
+        weights = {'baixo': 1, 'medio': 2, 'critico': 3}
+        values['nivel'] = max((alerta.nivel, values['nivel']), key=weights.__getitem__)
         for field, value in values.items():
             setattr(alerta, field, value)
         alerta.save()

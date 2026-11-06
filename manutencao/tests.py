@@ -187,21 +187,21 @@ class PriorizacaoTests(APITestCase):
         self.gestor = Usuario.objects.create_user(username='gestor_prio', password='123', tipo_usuario='gestor', empresa=self.empresa)
         self.equipamento = Equipamento.objects.create(empresa=self.empresa, nome='Linha crítica', numero_serie='PRIO-01', criticidade='A')
 
-    def test_matriz_criticidade_e_gravidade_e_risco_de_seguranca(self):
-        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'moderada')[0], 'alta')
-        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'critica')[0], 'critica')
-        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'baixa', True)[0], 'critica')
+    def test_heranca_independe_de_gravidade_e_risco_de_seguranca(self):
+        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'moderada')[0], 'A')
+        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'critica')[0], 'A')
+        self.assertEqual(PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'baixa', True)[0], 'A')
 
     def test_critica_ausente_tem_tratamento_explicito(self):
         self.equipamento.criticidade = None
         self.equipamento.save()
-        prioridade, justificativa, _ = PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'alta')
-        self.assertEqual(prioridade, 'alta')
+        prioridade, justificativa, _ = PrioridadeOSService.calcular(self.equipamento, 'corretiva', 'critica')
+        self.assertIsNone(prioridade)
         self.assertIn('sem criticidade avaliada', justificativa)
 
-    def test_preventiva_de_equipamento_a_nao_vira_emergencia(self):
+    def test_preventiva_herda_a_classe_sem_prioridade_do_plano(self):
         prioridade, _, _ = PrioridadeOSService.calcular(self.equipamento, 'preventiva', 'ausente', prioridade_plano='media')
-        self.assertEqual(prioridade, 'media')
+        self.assertEqual(prioridade, 'A')
 
     def test_api_preserva_contexto_da_abertura_e_prioridade_manual_de_gestor(self):
         self.client.force_authenticate(self.gestor)
@@ -210,6 +210,6 @@ class PriorizacaoTests(APITestCase):
             'tipo_os': 'corretiva', 'gravidade_condicao': 'moderada',
         }, format='json')
         self.assertEqual(resposta.status_code, status.HTTP_201_CREATED, resposta.data)
-        self.assertEqual(resposta.data['prioridade'], 'alta')
+        self.assertEqual(resposta.data['prioridade'], 'A')
         self.assertEqual(resposta.data['criticidade_na_abertura'], 'A')
         self.assertTrue(resposta.data['justificativa_prioridade'])

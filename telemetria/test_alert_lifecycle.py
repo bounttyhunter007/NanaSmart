@@ -66,7 +66,7 @@ class AlertLifecycleTests(APITestCase):
         self.assertEqual(alerta.nivel, 'critico')
         self.assertEqual(alerta.dados_analise['nivel_atual'], 'baixo')
         self.assertEqual(alerta.dados_analise['ultimo_valor'], 75)
-        self.assertEqual(alerta.ordem_servico.prioridade, 'critica')
+        self.assertEqual(alerta.ordem_servico.prioridade, 'C')
 
     def test_oscilacao_reinicia_confirmacao_e_recuperacao_nao_fecha_ordem(self):
         self.ler(90, 60, 90, 60)
@@ -164,16 +164,16 @@ class AlertLifecycleTests(APITestCase):
         self.ler(75)
         ordem = self.alertas().get().ordem_servico
         ordem.prioridade_manual = True
-        ordem.prioridade = 'baixa'
+        ordem.prioridade = 'B'
         ordem.save()
         self.equipamento.criticidade = 'A'
         self.equipamento.save()
         self.ler(110)
         ordem.refresh_from_db()
-        self.assertEqual(ordem.prioridade, 'baixa')
+        self.assertEqual(ordem.prioridade, 'B')
         self.assertTrue(ordem.prioridade_manual)
         self.assertEqual(ordem.gravidade_condicao, 'critica')
-        self.assertEqual(ordem.prioridade_automatica, 'critica')
+        self.assertEqual(ordem.prioridade_automatica, 'C')
         self.assertEqual(ordem.criticidade_na_abertura, 'C')
         resposta = self.client.patch(reverse('ordens-servico-detail', args=[ordem.pk]),
                                     {'status': 'andamento'}, format='json')
@@ -195,7 +195,9 @@ class AlertLifecycleTests(APITestCase):
         alerta = self.alertas().get()
         resposta = self.client.patch(reverse('alertas-detail', args=[alerta.pk]),
                                     {'status': 'ignorado'}, format='json')
-        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.status_code, 405, resposta.data)
+        # Prepara um ignorado legado, que continua sendo acompanhado.
+        Alerta.objects.filter(pk=alerta.pk).update(status='ignorado')
         self.ler(110, 60, 110)
         self.assertEqual(self.alertas().count(), 1)
         self.ler(60, 60, 110)
@@ -204,14 +206,11 @@ class AlertLifecycleTests(APITestCase):
         self.assertIn('recuperado_em', alerta.dados_analise)
         self.assertEqual(self.alertas().count(), 2)
 
-    def test_alerta_manual_mesmo_nome_e_sensor_nao_e_resolvido_pela_telemetria(self):
-        resposta = self.client.post(reverse('alertas-list'), {
-            'equipamento': self.equipamento.pk, 'sensor': self.sensor.pk,
-            'tipo_alerta': 'Alerta de Temperatura', 'nivel': 'medio', 'descricao': 'Verificação humana',
-        }, format='json')
-        self.assertEqual(resposta.status_code, 201, resposta.data)
-        manual = Alerta.objects.get(pk=resposta.data['id'])
-        self.assertEqual(manual.origem, 'manual')
+    def test_alerta_manual_legado_nao_e_resolvido_pela_telemetria(self):
+        manual = Alerta.objects.create(
+            equipamento=self.equipamento, sensor=self.sensor, origem='manual',
+            tipo_alerta='Alerta de Temperatura', nivel='medio', descricao='Verificação humana',
+        )
         self.ler(90, 60, 60)
         manual.refresh_from_db()
         self.assertEqual(manual.status, 'ativo')
@@ -219,19 +218,19 @@ class AlertLifecycleTests(APITestCase):
         self.assertEqual(OrdemServico.objects.count(), 2)
         resposta = self.client.patch(reverse('alertas-detail', args=[manual.pk]),
                                     {'status': 'resolvido'}, format='json')
-        self.assertEqual(resposta.status_code, 200, resposta.data)
+        self.assertEqual(resposta.status_code, 405, resposta.data)
 
     def test_api_nao_forja_origem_nem_altera_identidade_automatica(self):
         resposta = self.client.post(reverse('alertas-list'), {
             'equipamento': self.equipamento.pk, 'tipo_alerta': 'Falso',
             'origem': 'limite', 'nivel': 'critico', 'descricao': 'Teste',
         }, format='json')
-        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(resposta.status_code, 405)
         self.ler(90)
         alerta = self.alertas().get()
         for dados in ({'origem': 'manual'}, {'sensor': None}, {'status': 'resolvido'}):
             resposta = self.client.patch(reverse('alertas-detail', args=[alerta.pk]), dados, format='json')
-            self.assertEqual(resposta.status_code, 400, resposta.data)
+            self.assertEqual(resposta.status_code, 405, resposta.data)
 
     def test_conclusao_modelo_gera_data_e_historico_uma_unica_vez(self):
         self.ler(90)
@@ -300,7 +299,7 @@ class AlertLifecycleTests(APITestCase):
         self.equipamento.save()
         self.ler(75, 90)
         ordem = self.alertas().get().ordem_servico
-        self.assertEqual(ordem.prioridade, 'alta')
+        self.assertIsNone(ordem.prioridade)
         self.assertEqual(ordem.gravidade_condicao, 'moderada')
 
     def test_alerta_manual_vinculado_nao_pode_mudar_de_equipamento(self):
@@ -312,4 +311,4 @@ class AlertLifecycleTests(APITestCase):
         )
         resposta = self.client.patch(reverse('alertas-detail', args=[alerta.pk]),
                                     {'equipamento': outro.pk}, format='json')
-        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(resposta.status_code, 405)

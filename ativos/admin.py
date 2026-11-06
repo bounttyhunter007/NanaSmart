@@ -3,6 +3,7 @@ from .models import Equipamento, EquipamentoLocalizacao
 
 @admin.register(Equipamento)
 class EquipamentoAdmin(admin.ModelAdmin):
+    readonly_fields = ('criticidade', 'criticidade_origem', 'justificativa_criticidade', 'criterios_criticidade')
     list_display = ('nome', 'tipo', 'numero_serie', 'status', 'empresa')
     list_filter = ('status', 'tipo', 'empresa')
     search_fields = ('nome', 'numero_serie')

@@ -1,22 +1,33 @@
 from rest_framework import serializers
-from .models import OrdemServico, HistoricoManutencao
+from .models import OrdemServico, HistoricoManutencao, HistoricoPrioridadeOS
 from accounts.validation import validate_company_resource
-from .services import PrioridadeOSService
+from ativos.serializers import CriteriosCriticidadeSerializer
 
 class OrdemServicoSerializer(serializers.ModelSerializer):
+    equipamento_nome = serializers.CharField(source='equipamento.nome', read_only=True)
+    criticidade_atual = serializers.CharField(source='equipamento.criticidade', read_only=True, allow_null=True)
+    responsavel_nome = serializers.SerializerMethodField()
+    criterios_abertura = CriteriosCriticidadeSerializer(source='criterios_criticidade_na_abertura', read_only=True)
+
+    def get_responsavel_nome(self, obj) -> str | None:
+        return (obj.responsavel.get_full_name() or obj.responsavel.username) if obj.responsavel else None
+
     class Meta:
         model = OrdemServico
         fields = '__all__'
         
         # A magia da segurança Sênior acontece aqui:
         read_only_fields = [
-            'data_abertura', 'data_conclusao', 'prioridade_automatica',
+            'data_abertura', 'data_conclusao', 'prioridade', 'prioridade_automatica',
+            'prioridade_origem', 'prioridade_herdada_conhecida', 'criterios_criticidade_na_abertura',
             'justificativa_prioridade', 'criticidade_na_abertura',
             'justificativa_criticidade_na_abertura', 'prioridade_manual',
             'alerta_origem', 'sensor_origem',
         ]
 
     def validate(self, data):
+        if 'prioridade' in self.initial_data:
+            raise serializers.ValidationError({'prioridade': 'Utilize a ação de ajuste de prioridade, informando a justificativa.'})
         request = self.context.get('request')
         user = request.user if request and request.user.is_authenticated else None
         equipamento = data.get('equipamento', getattr(self.instance, 'equipamento', None))
@@ -42,6 +53,9 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             if data.get('status', self.instance.status) != self.instance.status:
                 raise serializers.ValidationError({'status': 'Uma ordem concluída ou cancelada não pode mudar de status.'})
 
+        if self.instance and equipamento.pk != self.instance.equipamento_id:
+            raise serializers.ValidationError({'equipamento': 'O equipamento é fixo após abertura. Cancele a OS e abra outra para corrigir o vínculo.'})
+
         sensor = getattr(self.instance, 'sensor_origem', None)
         alerta = getattr(self.instance, 'alerta_origem', None)
         if equipamento and ((sensor and sensor.equipamento_id != equipamento.pk)
@@ -52,40 +66,17 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         request = self.context.get('request')
-        prioridade_informada = 'prioridade' in self.initial_data
-        if prioridade_informada and request and request.user.tipo_usuario in ['gestor', 'admin']:
-            validated_data['prioridade_manual'] = True
-            validated_data['prioridade_automatica'] = validated_data['prioridade']
-            validated_data['justificativa_prioridade'] = 'Prioridade definida manualmente por usuário autorizado.'
-        else:
-            validated_data.pop('prioridade', None)
-            PrioridadeOSService.preencher(validated_data, validated_data['equipamento'])
         if request and request.user.is_authenticated and request.user.tipo_usuario == 'tecnico':
             responsavel = validated_data.get('responsavel')
             if responsavel is None and validated_data.get('status') in ['andamento', 'concluida']:
                 validated_data['responsavel'] = request.user
-        return super().create(validated_data)
+        ordem = super().create(validated_data)
+        if request and request.user.is_authenticated:
+            ordem.historico_prioridade.filter(origem='herdada').update(alterado_por=request.user)
+        return ordem
 
     def update(self, instance, validated_data):
         request = self.context.get('request')
-        prioridade_informada = 'prioridade' in self.initial_data
-        if prioridade_informada and request and request.user.tipo_usuario in ['gestor', 'admin']:
-            validated_data['prioridade_manual'] = True
-            validated_data['prioridade_automatica'] = validated_data['prioridade']
-            validated_data['justificativa_prioridade'] = 'Prioridade definida manualmente por usuário autorizado.'
-        elif not instance.prioridade_manual:
-            validated_data.pop('prioridade', None)
-            dados_calculo = {
-                'tipo_os': validated_data.get('tipo_os', instance.tipo_os),
-                'gravidade_condicao': validated_data.get('gravidade_condicao', instance.gravidade_condicao),
-                'risco_seguranca': validated_data.get('risco_seguranca', instance.risco_seguranca),
-            }
-            PrioridadeOSService.preencher(dados_calculo, validated_data.get('equipamento', instance.equipamento))
-            dados_calculo.pop('criticidade_na_abertura', None)
-            dados_calculo.pop('justificativa_criticidade_na_abertura', None)
-            validated_data.update(dados_calculo)
-        else:
-            validated_data.pop('prioridade', None)
         if request and request.user.is_authenticated and request.user.tipo_usuario == 'tecnico':
             responsavel = validated_data.get('responsavel', instance.responsavel)
             if instance.responsavel is None and responsavel is None:
@@ -93,6 +84,23 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             if validated_data.get('status') == 'concluida' and validated_data.get('responsavel') is None:
                 validated_data['responsavel'] = request.user
         return super().update(instance, validated_data)
+
+class AjustePrioridadeSerializer(serializers.Serializer):
+    prioridade = serializers.ChoiceField(choices=OrdemServico.PRIORIDADE_CHOICES)
+    justificativa = serializers.CharField(allow_blank=False)
+
+
+class RestaurarPrioridadeSerializer(serializers.Serializer):
+    justificativa = serializers.CharField(allow_blank=False)
+
+
+class HistoricoPrioridadeOSSerializer(serializers.ModelSerializer):
+    alterado_por_nome = serializers.CharField(source='alterado_por.username', read_only=True, default=None)
+
+    class Meta:
+        model = HistoricoPrioridadeOS
+        fields = '__all__'
+
 
 class HistoricoManutencaoSerializer(serializers.ModelSerializer):
     custo_total = serializers.ReadOnlyField()

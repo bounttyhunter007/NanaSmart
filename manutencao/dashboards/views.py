@@ -4,11 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, inline_serializer
-from django.db.models import Avg, F, ExpressionWrapper, DurationField, Count, Sum, Q
+from django.db.models import Avg, F, ExpressionWrapper, DurationField, Sum
 from django.utils import timezone
 from manutencao.models import OrdemServico, HistoricoManutencao
 from ativos.models import Equipamento
-from alertas.models import Alerta
 from datetime import timedelta
 
 
@@ -74,6 +73,7 @@ class KpiService:
             'mtbf_hours': round(mtbf.total_seconds() / 3600, 2),
             'disponibilidade_porcentagem': round(disponibilidade, 2) if disponibilidade is not None else None,
             'total_manutencoes': total_manutencoes,
+            'amostras_mtbf': len(inter_failure_times),
             'custo_total_manutencao': round(custo_total, 2),
         }
 
@@ -90,145 +90,8 @@ class DashboardSummaryView(APIView):
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
-        user = request.user
-        empresa_id = request.query_params.get('empresa_id')
-        dias = request.query_params.get('dias')
-
-        # Filtro base por empresa (isolamento multi-tenant)
-        eq_filter = {}
-        visible_orders = None
-        if user.tipo_usuario == 'admin':
-            if empresa_id:
-                eq_filter['empresa_id'] = empresa_id
-            equipamentos = Equipamento.objects.filter(**eq_filter)
-        elif user.tipo_usuario == 'tecnico':
-            if not user.empresa:
-                return Response({'error': 'Usuário sem empresa vinculada.'}, status=400)
-            visible_orders = OrdemServico.objects.filter(
-                equipamento__empresa=user.empresa
-            ).select_related('equipamento', 'responsavel').filter(
-                Q(responsavel=user) | Q(responsavel__isnull=True)
-            )
-            equipamento_ids = visible_orders.values_list('equipamento_id', flat=True).distinct()
-            equipamentos = Equipamento.objects.filter(id__in=equipamento_ids)
-        elif user.empresa:
-            eq_filter['empresa'] = user.empresa
-            equipamentos = Equipamento.objects.filter(**eq_filter)
-        else:
-            return Response({'error': 'Usuário sem empresa vinculada.'}, status=400)
-
-        if user.tipo_usuario == 'tecnico':
-            status_counts = equipamentos.values('status').annotate(total=Count('status'))
-            resumo_status = {'total': equipamentos.count(), 'ativo': 0, 'manutencao': 0, 'inativo': 0}
-            for item in status_counts:
-                resumo_status[item['status']] = item['total']
-
-            alertas_ativos = Alerta.objects.filter(
-                equipamento__in=equipamentos,
-                status='ativo'
-            ).values('nivel').annotate(total=Count('nivel'))
-            resumo_alertas = {'critico': 0, 'medio': 0, 'baixo': 0, 'total': 0}
-            for a in alertas_ativos:
-                resumo_alertas[a['nivel']] = a['total']
-                resumo_alertas['total'] += a['total']
-
-            ordens_abertas = visible_orders.filter(status__in=['pendente', 'andamento']).count()
-            ordens_sem_tecnico = visible_orders.filter(status__in=['pendente', 'andamento'], responsavel__isnull=True).count()
-            minhas_ordens = visible_orders.filter(responsavel=user).count()
-            ordens_recentes = [
-                {
-                    'id': os.id,
-                    'titulo': os.titulo,
-                    'status': os.status,
-                    'equipamento': os.equipamento.nome if os.equipamento else None,
-                    'responsavel': os.responsavel.username if os.responsavel else None,
-                    'data_abertura': os.data_abertura,
-                }
-                for os in visible_orders.order_by('-data_abertura')[:5]
-            ]
-
-            return Response({
-                'resumo_status': resumo_status,
-                'alertas_ativos': resumo_alertas,
-                'ordens_abertas': ordens_abertas,
-                'ordens_sem_tecnico': ordens_sem_tecnico,
-                'minhas_ordens': minhas_ordens,
-                'total_equipamentos': equipamentos.count(),
-                'equipamentos': [
-                    {'id': eq.id, 'nome': eq.nome, 'status': eq.status}
-                    for eq in equipamentos
-                ],
-                'ordens_recentes': ordens_recentes,
-            })
-
-        # 1. Contagens de Status dos equipamentos
-        status_counts = equipamentos.values('status').annotate(total=Count('status'))
-        resumo_status = {'total': equipamentos.count(), 'ativo': 0, 'manutencao': 0, 'inativo': 0}
-        for item in status_counts:
-            resumo_status[item['status']] = item['total']
-
-        # 2. Base de OS — filtra por período se solicitado
-        os_base = OrdemServico.objects.filter(
-            status='concluida',
-            data_conclusao__isnull=False,
-            equipamento__in=equipamentos
-        )
-        if dias:
-            try:
-                desde = timezone.now() - timedelta(days=int(dias))
-                os_base = os_base.filter(data_abertura__gte=desde)
-            except ValueError:
-                pass  # Ignora valor inválido de dias
-
-        # 3. KPIs por equipamento
-        individual_kpis = [KpiService.calcular_kpi(eq, os_base) for eq in equipamentos]
-
-        # Médias globais — exclui equipamentos sem histórico da média de disponibilidade
-        valid_mttr = [k['mttr_hours'] for k in individual_kpis if k['total_manutencoes'] > 0]
-        valid_mtbf = [k['mtbf_hours'] for k in individual_kpis if k['mtbf_hours'] > 0]
-        valid_disp = [k['disponibilidade_porcentagem'] for k in individual_kpis if k['disponibilidade_porcentagem'] is not None]
-
-        avg_mttr = round(sum(valid_mttr) / len(valid_mttr), 2) if valid_mttr else 0
-        avg_mtbf = round(sum(valid_mtbf) / len(valid_mtbf), 2) if valid_mtbf else 0
-        avg_disp = round(sum(valid_disp) / len(valid_disp), 2) if valid_disp else 0
-        custo_total_geral = round(sum(k['custo_total_manutencao'] for k in individual_kpis), 2)
-
-        # 4. Alertas ativos da empresa
-        alertas_ativos = Alerta.objects.filter(
-            equipamento__in=equipamentos,
-            status='ativo'
-        ).values('nivel').annotate(total=Count('nivel'))
-        resumo_alertas = {'critico': 0, 'medio': 0, 'baixo': 0, 'total': 0}
-        for a in alertas_ativos:
-            resumo_alertas[a['nivel']] = a['total']
-            resumo_alertas['total'] += a['total']
-
-        # 5. OS abertas (pendente + andamento)
-        os_abertas = OrdemServico.objects.filter(
-            equipamento__in=equipamentos,
-            status__in=['pendente', 'andamento']
-        ).count()
-
-        ordem_counts = OrdemServico.objects.filter(
-            equipamento__in=equipamentos
-        ).values('status').annotate(total=Count('status'))
-        resumo_ordens = {status: 0 for status, _ in OrdemServico.STATUS_CHOICES}
-        for item in ordem_counts:
-            resumo_ordens[item['status']] = item['total']
-
-        return Response({
-            'resumo_status': resumo_status,
-            'kpis_globais': {
-                'mttr_medio': avg_mttr,
-                'mtbf_medio': avg_mtbf,
-                'disponibilidade_media': avg_disp,
-                'custo_total_manutencao': custo_total_geral,
-            },
-            'alertas_ativos': resumo_alertas,
-            'os_abertas': os_abertas,
-            'resumo_ordens': resumo_ordens,
-            'detalhes_equipamentos': individual_kpis,
-        })
+        from .summary import build_summary
+        return Response(build_summary(request, KpiService))
 
 
 class KpiDashboardView(APIView):

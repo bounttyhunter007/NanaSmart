@@ -14,7 +14,7 @@ class Alerta(models.Model):
         ('ignorado', 'Ignorado'),
     )
 
-    equipamento = models.ForeignKey(Equipamento, on_delete=models.CASCADE, related_name='alertas')
+    equipamento = models.ForeignKey(Equipamento, on_delete=models.PROTECT, related_name='alertas')
     sensor = models.ForeignKey(
         'telemetria.Sensor', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='alertas',
@@ -37,6 +37,8 @@ class Alerta(models.Model):
         help_text='Identificador estável do episódio para reprocessamento idempotente.'
     )
     dados_analise = models.JSONField(default=dict, blank=True)
+    dados_deteccao = models.JSONField(default=dict, blank=True, editable=False)
+    data_normalizacao = models.DateTimeField(null=True, blank=True, editable=False)
     analise_ia = models.TextField(blank=True, default='')
     data_ultima_analise = models.DateTimeField(null=True, blank=True)
     nivel = models.CharField(max_length=20, choices=NIVEL_CHOICES, default='baixo')

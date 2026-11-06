@@ -38,13 +38,16 @@ def analyze_sensor_trend(sensor_id):
     result = {
         'sensor_id': sensor.id, 'sensor_info': _sensor_info(sensor),
         'direction': 'stable', 'slope': 0.0, 'slope_per_hour': 0.0,
-        'projected_breach_hours': None, 'risk_level': 'baixo',
+        'projected_breach_hours': None, 'projected_breach_minutes': None, 'risk_level': 'baixo',
         'current_value': None, 'limite_operacional': sensor.limite_alerta,
         'readings_summary': [], 'readings_count': 0, 'config_used': config,
+        'regression_line': None, 'projected_breach_at': None,
         'insufficient_data': False, 'analysis_enabled': config['ativo'],
         'data_quality': 'disabled', 'analysis_window_hours': config['periodo_horas'],
         'sample_duration_minutes': 0.0, 'r_squared': None, 'persistence_ratio': 0.0,
         'is_anomalous': False, 'intervention_recommended': False,
+        'checks': [{'label': 'Análise ativa', 'passed': config['ativo']}],
+        'threshold_per_hour': None,
         'analyzed_at': now.isoformat(), **_operational_context(sensor.id),
     }
     if not config['ativo']:
@@ -73,6 +76,10 @@ def analyze_sensor_trend(sensor_id):
     result['sample_duration_minutes'] = round(duration, 4)
     if readings:
         result['current_value'] = readings[-1][1]
+    result['checks'].extend([
+        {'label': 'Quantidade mínima de leituras', 'passed': len(readings) >= config['minimo_leituras']},
+        {'label': 'Tempo mínimo observado', 'passed': duration >= config['duracao_minima_minutos']},
+    ])
     if len(readings) < config['minimo_leituras'] or duration < config['duracao_minima_minutos']:
         result.update(insufficient_data=True, data_quality='insufficient')
         return result
@@ -98,19 +105,40 @@ def analyze_sensor_trend(sensor_id):
         'ambas': ('increasing', 'decreasing'),
     }[config['direcao_alerta']]
     anomalous = direction in abnormal_directions
+    result['threshold_per_hour'] = threshold
+    result['checks'].extend([
+        {'label': 'Ritmo acima da sensibilidade', 'passed': abs(slope) > threshold},
+        {'label': 'Movimento consistente (R²)', 'passed': r_squared >= config['r2_minimo']},
+        {'label': 'Movimento persistente', 'passed': persistence >= config['persistencia_minima']},
+        {'label': 'Sentido configurado como anormal', 'passed': anomalous},
+    ])
     projection = None
     # O cadastro modela somente limite superior. Quedas nunca projetam esse limite.
     if direction == 'increasing' and math.isfinite(limit):
         projection = max(0.0, (limit - ys[-1]) / slope)
+    # Presentation only: keep the fitted line inside the observed sample.
+    # The existing projection starts at the LAST measurement, not the query time.
+    regression_line = [
+        {'timestamp': stamp.isoformat(), 'valor': mean_y + slope * (x - mean_x)}
+        for stamp, x in ((readings[0][0], xs[0]), (readings[-1][0], xs[-1]))
+    ]
+    projected_at = None
+    if projection is not None and projection > 0 and math.isfinite(projection):
+        try:
+            projected_at = (readings[-1][0] + timedelta(hours=projection)).isoformat()
+        except OverflowError:
+            pass  # An unrepresentable date must not break the analysis.
     risk = _calculate_risk_level(ys[-1], limit, direction, projection, config['sensibilidade'])
     if anomalous and risk == 'baixo':
         risk = 'medio'
     result.update(
         direction=direction, slope=round(slope, 6), slope_per_hour=round(slope, 4),
         projected_breach_hours=round(projection, 2) if projection is not None else None,
+        projected_breach_minutes=round(projection * 60, 2) if projection is not None else None,
         risk_level=risk, data_quality='valid', r_squared=round(r_squared, 6),
         persistence_ratio=round(persistence, 6), is_anomalous=anomalous,
         intervention_recommended=anomalous,
+        regression_line=regression_line, projected_breach_at=projected_at,
     )
     return result
 

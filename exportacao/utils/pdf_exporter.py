@@ -3,6 +3,7 @@ Utilitário para exportação de dados em formato PDF.
 Utiliza reportlab para geração nativa de PDFs com tabelas profissionais.
 """
 from io import BytesIO
+from xml.sax.saxutils import escape
 from django.http import HttpResponse
 from django.utils import timezone
 
@@ -65,20 +66,20 @@ class ExportadorPDF(Exportador):
         )
 
         # ── Cabeçalho do relatório ───────────────────────────────────────
-        elements.append(Paragraph(f'NanaSmart — {titulo}', title_style))
+        elements.append(Paragraph(escape(f'NanaSmart — {titulo}'), title_style))
         data_geracao = timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')
         elements.append(Paragraph(f'Gerado em: {data_geracao}', subtitle_style))
         elements.append(Spacer(1, 6 * mm))
 
         # ── Prepara dados da tabela ──────────────────────────────────────
         # Envolve cada célula em Paragraph para suportar quebra de linha
-        header_row = [Paragraph(str(c), ParagraphStyle(
+        header_row = [Paragraph(escape(str(c)), ParagraphStyle(
             'HeaderCell', parent=cell_style, textColor=colors.white, fontName='Helvetica-Bold', fontSize=7
         )) for c in colunas]
 
         data_rows = []
         for linha in linhas:
-            row = [Paragraph(str(v) if v is not None else '—', cell_style) for v in linha]
+            row = [Paragraph(escape(str(v)) if v is not None else '—', cell_style) for v in linha]
             data_rows.append(row)
 
         table_data = [header_row] + data_rows
@@ -90,7 +91,7 @@ class ExportadorPDF(Exportador):
         col_widths = [col_width] * num_cols
 
         # ── Cria tabela ──────────────────────────────────────────────────
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=1)
 
         # ── Estilização da tabela ────────────────────────────────────────
         style_commands = [

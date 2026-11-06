@@ -63,7 +63,7 @@ def configurar_logging(debug=False):
 
 def obter_sensores_ativos(sensor_ids=None, equipamento_ids=None, empresa_ids=None):
     from telemetria.models import Sensor
-    qs = Sensor.objects.filter(ativo=True, equipamento__status='ativo').select_related('equipamento')
+    qs = Sensor.objects.filter(ativo=True, equipamento__status='ativo', demonstracao__isnull=True).select_related('equipamento')
     for campo, ids in [('pk', sensor_ids), ('equipamento_id', equipamento_ids),
                        ('equipamento__empresa_id', empresa_ids)]:
         if ids:

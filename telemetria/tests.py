@@ -37,7 +37,7 @@ class TelemetriaAlertTests(APITestCase):
         
         os = OrdemServico.objects.filter(equipamento=self.motor, status='pendente').first()
         self.assertIsNotNone(os)
-        self.assertEqual(os.prioridade, 'alta')  # Sem criticidade avaliada: triagem conservadora.
+        self.assertIsNone(os.prioridade)  # Sem criticidade avaliada: requer triagem explícita.
 
         # 2. Alerta Médio (90% de 100 = 90.0) -> Escalada
         data_medio = {"sensor": self.sensor.id, "valor": 90.0}
@@ -46,7 +46,7 @@ class TelemetriaAlertTests(APITestCase):
         self.assertEqual(alerta.nivel, 'medio')
         
         os.refresh_from_db()
-        self.assertEqual(os.prioridade, 'alta')
+        self.assertIsNone(os.prioridade)
 
         # 3. Alerta Crítico (110% de 100 = 110.0) -> Escalada Máxima
         data_critico = {"sensor": self.sensor.id, "valor": 110.0}
@@ -55,7 +55,7 @@ class TelemetriaAlertTests(APITestCase):
         self.assertEqual(alerta.nivel, 'critico')
         
         os.refresh_from_db()
-        self.assertEqual(os.prioridade, 'critica')
+        self.assertIsNone(os.prioridade)
 
     def test_custom_alert_thresholds(self):
         sensor = Sensor.objects.create(
@@ -162,10 +162,10 @@ class TelemetriaAlertTests(APITestCase):
             format='json',
         )
 
+        self.assertEqual(alert_response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         for response in (
             sensor_response,
             reading_response,
-            alert_response,
             trend_response,
             global_config_response,
         ):

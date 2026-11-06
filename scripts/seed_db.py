@@ -21,8 +21,8 @@ django.setup()
 
 from faker import Faker
 from accounts.models import Empresa, Usuario
-from ativos.models import Equipamento, EquipamentoLocalizacao, PlanoManutencao, TipoEquipamento
-from ativos.services import aplicar_criticidade
+from ativos.models import Equipamento, EquipamentoLocalizacao, PlanoManutencao, TipoEquipamento, CriteriosCriticidade
+from ativos.services import aplicar_criticidade, CRITERIOS_SUGERIDOS
 from telemetria.models import Sensor, Telemetria, TrendConfig
 from manutencao.models import OrdemServico, HistoricoManutencao
 from manutencao.services import PrioridadeOSService
@@ -313,6 +313,8 @@ def run_seed(
             estado=estado,
             endereco=fake.address()
         )
+        CriteriosCriticidade.objects.create(empresa=emp, revisao=1, **CRITERIOS_SUGERIDOS,
+            representante_manutencao='Validação fictícia — dados de demonstração', data_validacao=timezone.localdate())
         empresas.append(emp)
         tipos_por_empresa[emp.id] = {}
         for tipo_nome, (criticidade_padrao, criterios) in CRITICIDADE_TIPOS.items():
@@ -567,33 +569,15 @@ def run_seed(
             if data_os > now:
                 data_os = now - timedelta(days=random.randint(1, 5), hours=random.randint(0, 12))
 
-        # Alertas e OS para equipamentos em manutenção
-        if eq.status == 'manutencao':
-            Alerta.objects.create(
-                equipamento=eq, 
-                tipo_alerta="Parada Não Programada", 
-                nivel='critico',
-                descricao="Alerta disparado por interrupção brusca nos parâmetros operacionais.",
-                status='ativo',
-                origem='manual',
-            )
-        
-        elif random.random() > 0.8: # Alertas esporádicos em equipamentos ativos
-            nivel_alerta = random.choice(['baixo', 'medio', 'critico'])
-            tipo_al = random.choice([
-                "Anomalia de Vibração RMS", 
-                "Sobretemperatura de Mancal", 
-                "Sobrecorrente na Fase R", 
-                "Queda de Pressão na Linha"
-            ])
-            Alerta.objects.create(
-                equipamento=eq, 
-                tipo_alerta=tipo_al, 
-                nivel=nivel_alerta,
-                descricao=f"Desvio detectado: {tipo_al} fora dos padrões nominais da ISO 10816 / FMEA.",
-                status=random.choice(['ativo', 'resolvido']),
-                origem='manual',
-            )
+        # As ocorrências de exemplo passam pelo monitoramento real. Não há
+        # cadastro manual de alertas nem evidências inventadas pelo seed.
+        if eq.status == 'manutencao' or random.random() > 0.8:
+            sensor = Sensor.objects.filter(equipamento=eq, ativo=True).first()
+            if sensor and sensor.limite_alerta > 0:
+                Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 1.1)
+                if eq.status != 'manutencao':
+                    Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 0.3)
+                    Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 0.3)
 
         log_progresso("Manutenção & Alertas", idx + 1, total_equips)
     print(f"OK (Duração: {time.time() - t_start:.2f}s)")

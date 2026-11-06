@@ -1,0 +1,383 @@
+/* Shared live view. Polling cadence never creates measurements or advances the time axis. */
+(function (root) {
+  const number = value => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value);
+  const date = value => new Date(value).toLocaleString('pt-BR');
+  const forecastDate = value => new Date(value).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const list = data => Array.isArray(data) ? data : data?.results || [];
+  const localPath = url => url.replace(/^https?:\/\/[^/]+/, '');
+  function normalize(rows) {
+    const byId = new Map();
+    for (const row of rows) {
+      if (row.valor === null || row.valor === '' || !Number.isFinite(Number(row.valor)) || !Number.isFinite(Date.parse(row.timestamp))) continue;
+      byId.set(String(row.id), { ...row, valor: Number(row.valor) });
+    }
+    return [...byId.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp) || Number(a.id) - Number(b.id));
+  }
+  function thresholds(sensor) {
+    const limit = Number(sensor?.limite_alerta);
+    if (!Number.isFinite(limit) || limit <= 0) return [];
+    const percentages = ['baixo', 'medio', 'critico'].map((name, i) => Number(sensor['limite_alerta_' + name + '_pct'] ?? [70, 85, 100][i]));
+    if (!percentages.every(Number.isFinite) || !(0 <= percentages[0] && percentages[0] < percentages[1] && percentages[1] < percentages[2] && percentages[2] <= 100)) return [];
+    return percentages.map((pct, i) => ({ name: ['Baixo', 'Médio', 'Crítico'][i], value: limit * pct / 100,
+      color: ['var(--warn)', 'var(--live-medium)', 'var(--danger)'][i], dash: ['3 5', '9 5', '12 4 2 4'][i] }));
+  }
+  function fitLine(rows) {
+    // A visual fit uses exactly the displayed time sample, with one value per timestamp.
+    const times = new Map();
+    for (const row of normalize(rows)) times.set(Date.parse(row.timestamp), row);
+    const sample = [...times.values()];
+    if (sample.length < 3) return [];
+    const origin = Date.parse(sample[0].timestamp);
+    const xs = sample.map(r => (Date.parse(r.timestamp)-origin)/3600000);
+    const meanX = xs.reduce((sum,x) => sum+x,0)/xs.length;
+    const meanY = sample.reduce((sum,r) => sum+r.valor,0)/sample.length;
+    const spread = xs.reduce((sum,x) => sum+(x-meanX)**2,0);
+    if (!(spread > 0)) return [];
+    const slope = xs.reduce((sum,x,i) => sum+(x-meanX)*(sample[i].valor-meanY),0)/spread;
+    return [0,sample.length-1].map(i => ({ timestamp:sample[i].timestamp, valor:meanY+slope*(xs[i]-meanX) }));
+  }
+  function projectionSummary(analysis) {
+    if (!analysis?.analysis_enabled || analysis.insufficient_data || analysis.data_quality !== 'valid' || analysis.direction !== 'increasing') return null;
+    const limit = Number(analysis.limite_operacional ?? analysis.sensor_info?.limite_alerta);
+    if (!Number.isFinite(limit) || limit <= 0) return null;
+    const at = analysis.projected_breach_at;
+    const reference = analysis.readings_summary?.[analysis.readings_summary.length-1]?.timestamp;
+    const end = Date.parse(at), last = Date.parse(reference), queried = Date.parse(analysis.analyzed_at);
+    if (!Number.isFinite(end) || !Number.isFinite(last) || !Number.isFinite(queried) || end <= queried || end <= last) return null;
+    const minutes = (end-last)/60000;
+    const rounded = Math.max(1, Math.round(minutes));
+    const hours = Math.floor(rounded/60), rest = rounded%60;
+    const duration = rounded < 60 ? rounded + ' min' : hours + ' h' + (rest ? ' ' + rest + ' min' : '');
+    return { at, reference, duration };
+  }
+  function horizonLabel(milliseconds) {
+    const seconds = Math.max(1, Math.round(milliseconds / 1000));
+    if (seconds < 60) return seconds + ' s';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return minutes + ' min';
+    return Math.floor(minutes / 60) + ' h' + (minutes % 60 ? ' ' + minutes % 60 + ' min' : '');
+  }
+  function projectForward(rows, fitted, { analysis = null, limit = null } = {}) {
+    const unique = new Map();
+    for (const row of normalize(rows)) unique.set(Date.parse(row.timestamp), row);
+    const sample = [...unique.values()];
+    if (sample.length < 3 || fitted.length !== 2) return null;
+    const first = sample[0], last = sample[sample.length - 1];
+    const from = Date.parse(last.timestamp), span = from - Date.parse(first.timestamp);
+    const fitSpan = Date.parse(fitted[1].timestamp) - Date.parse(fitted[0].timestamp);
+    const slope = (Number(fitted[1].valor) - Number(fitted[0].valor)) / fitSpan;
+    if (!(span > 0) || !(fitSpan > 0) || !Number.isFinite(slope) || slope === 0 || Date.parse(fitted[0].timestamp) !== Date.parse(first.timestamp) || Date.parse(fitted[1].timestamp) !== from) return null;
+    if (analysis) {
+      if (!analysis.analysis_enabled || analysis.insufficient_data || analysis.data_quality !== 'valid' || !['increasing', 'decreasing'].includes(analysis.direction) || (analysis.direction === 'increasing') !== (slope > 0)) return null;
+    } else {
+      // This is a visual extrapolation, never the operational alert decision.
+      const mean = sample.reduce((sum, row) => sum + row.valor, 0) / sample.length;
+      const total = sample.reduce((sum, row) => sum + (row.valor - mean) ** 2, 0);
+      const residual = sample.reduce((sum, row) => sum + (row.valor - (Number(fitted[0].valor) + slope * (Date.parse(row.timestamp) - Date.parse(fitted[0].timestamp)))) ** 2, 0);
+      const r2 = total > 0 ? 1 - residual / total : 0;
+      const persistence = sample.slice(1).filter((row, i) => (row.valor - sample[i].valor) * slope > 0).length / (sample.length - 1);
+      if (!Number.isFinite(r2) || r2 < .8 || persistence < .7) return null;
+    }
+    // Keep at least two thirds of the time axis for observations. Long-range
+    // limit estimates stay in the optional detail instead of flattening history.
+    const horizon = Math.min(span / 2, 24 * 3600000);
+    const to = from + horizon;
+    if (!Number.isFinite(to) || !Number.isFinite(new Date(to).getTime())) return null;
+    const upper = Number(limit);
+    const untilLimit = Number.isFinite(upper) && upper > 0 && upper > last.valor && slope > 0 ? (upper - last.valor) / slope : null;
+    const reachesLimit = untilLimit !== null && untilLimit > 0 && untilLimit <= horizon;
+    const endTime = reachesLimit ? from + untilLimit : to;
+    const endValue = reachesLimit ? upper : last.valor + slope * horizon;
+    if (!Number.isFinite(endValue)) return null;
+    return { from, to, horizon, horizonLabel: horizonLabel(horizon), reachesLimit,
+      limitOutside: untilLimit !== null && untilLimit > horizon,
+      points: [{ timestamp: last.timestamp, valor: last.valor }, { timestamp: new Date(endTime).toISOString(), valor: endValue }] };
+  }
+  function chart(rows, sensor, envelope = null, minutes = 'auto', domain = null, compact = false, trendLine = [], projection = null) {
+    if (!rows.length) return { width:compact ? 360 : 900, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], ticks: [], times: [], limits: [], path: '', trendPath: '', projection: null, domain: null };
+    const limits = thresholds(sensor), values = rows.map(r => r.valor).concat(limits.map(t => t.value), trendLine.map(p => p.valor), (projection?.points || []).map(p => p.valor));
+    const rawMin = Math.min(...values), rawMax = Math.max(...values);
+    const padding = (rawMax - rawMin || Math.max(Math.abs(rawMax) * 0.1, 1)) * 0.08;
+    let min = Math.min(rawMin - padding, envelope?.min ?? Infinity);
+    let max = Math.max(rawMax + padding, envelope?.max ?? -Infinity);
+    const to = Date.parse(rows[rows.length - 1].timestamp);
+    const from = minutes === 'auto' ? Date.parse(rows[0].timestamp) : to - Number(minutes) * 60000;
+    const bounds = domain || { min, max, from: from === to ? to - 1000 : from, to: projection?.to || to };
+    ({ min, max } = bounds);
+    const y = value => 230 - (value - min) / (max - min) * 188;
+    const left = compact ? 48 : 72, right = compact ? 344 : 722;
+    const x = time => left + (time - bounds.from) / Math.max(bounds.to - bounds.from, 1) * (right-left);
+    const points = rows.map(r => ({ ...r, x: x(Date.parse(r.timestamp)), y: y(r.valor) }));
+    const crossesDate = new Date(bounds.from).toLocaleDateString() !== new Date(bounds.to).toLocaleDateString();
+    const timeFormat = new Intl.DateTimeFormat('pt-BR', { ...(crossesDate ? { day: '2-digit', month: '2-digit' } : {}), hour: '2-digit', minute: '2-digit', ...(bounds.to - bounds.from < 3600000 ? { second: '2-digit' } : {}) });
+    const projectedPoints = (projection?.points || []).map(p => ({ ...p, x: x(Date.parse(p.timestamp)), y: y(p.valor) }));
+    return { points, width:compact ? 360 : 900, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
+      ticks: Array.from({ length: 5 }, (_, i) => { const v = min + (max - min) * i / 4; return { value: v, label: number(v), y: y(v) }; }),
+      times: Array.from({ length: 3 }, (_, i) => ({ x: left + i * (right-left)/2, label: timeFormat.format(bounds.from + (bounds.to - bounds.from) * i / 2) })),
+      trendPath: trendLine.map((p,i) => `${i ? 'L' : 'M'}${x(Date.parse(p.timestamp)).toFixed(2)},${y(p.valor).toFixed(2)}`).join(' '),
+      projection: projection ? { ...projection, startX: Math.min(right, Math.max(left, x(projection.from))), width: Math.max(0, right - Math.max(left, x(projection.from))),
+        points: projectedPoints, path: projectedPoints.map((p,i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '), end: projectedPoints[projectedPoints.length - 1] } : null,
+      limits: limits.map(t => ({ ...t, y: y(t.value) })) };
+  }
+  async function readings(api, sensorId, minutes) {
+    const base = new URLSearchParams({ sensor: String(sensorId), escopo_operacional: 'true', limit: minutes === 'auto' ? '60' : '1' });
+    const head = await api('/api/telemetria/leituras/?' + base);
+    if (!head) throw new Error('Consulta interrompida.');
+    const latest = list(head)[0];
+    if (!latest) return { rows: [], truncated: false };
+    let data = head, rows = minutes === 'auto' ? list(head) : [];
+    const maximum = minutes === 'auto' ? 60 : 1000;
+    if (minutes !== 'auto') {
+      base.set('timestamp_de', new Date(Date.parse(latest.timestamp) - Number(minutes) * 60000).toISOString());
+      base.set('timestamp_ate', latest.timestamp);
+      base.set('id_ate', String(latest.id));
+      base.set('limit', '200');
+      data = await api('/api/telemetria/leituras/?' + base);
+      if (!data) throw new Error('Consulta interrompida.');
+      rows = list(data);
+    }
+    const seen = new Set();
+    while (data.next && rows.length < maximum + (minutes === 'auto' ? 0 : 1)) {
+      if (seen.has(data.next)) break;
+      seen.add(data.next);
+      let next = localPath(data.next);
+      if (minutes === 'auto') {
+        const query = new URLSearchParams(next.split('?')[1]);
+        query.set('timestamp_ate', latest.timestamp); query.set('id_ate', String(latest.id));
+        next = next.split('?')[0] + '?' + query;
+      }
+      data = await api(next);
+      if (!data) throw new Error('Consulta interrompida.');
+      rows.push(...list(data));
+    }
+    const unique = normalize(rows);
+    return { rows: unique.slice(-maximum), truncated: minutes !== 'auto' && (unique.length > maximum || Number(data.count || head.count) > maximum || Boolean(data.next)) };
+  }
+  function useCompact() {
+    const media = root.matchMedia?.('(max-width: 700px)');
+    const compact = Vue.ref(media?.matches || false);
+    const changed = () => { compact.value = media.matches; };
+    Vue.onMounted(() => media?.addEventListener?.('change', changed));
+    Vue.onUnmounted(() => media?.removeEventListener?.('change', changed));
+    return compact;
+  }
+  const component = {
+    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null } },
+    setup(props) {
+      const { ref, computed, watch, onMounted, onUnmounted } = Vue;
+      const compact = useCompact();
+      const showTrend = ref(false);
+      const equipment = ref(''), sensorId = ref(''), minutes = ref('auto'), options = ref([]), sensors = ref([]);
+      const rows = ref([]), displayed = ref(chart([], null)), busy = ref(false), optionsBusy = ref(false), paused = ref(false);
+      const error = ref(''), optionsError = ref(''), updatedAt = ref(null), now = ref(Date.now()), truncated = ref(false), selected = ref(null);
+      let generation = 0, optionGeneration = 0, equipmentGeneration = 0, timer = null, clock = null, frame = null, envelope = null, signature = '', disposed = false;
+      const sensor = computed(() => sensors.value.find(s => Number(s.id) === Number(sensorId.value)));
+      const fitted = computed(() => showTrend.value ? fitLine(rows.value) : []);
+      const projected = computed(() => showTrend.value ? projectForward(rows.value, fitted.value, {limit:sensor.value?.limite_alerta}) : null);
+      const latest = computed(() => rows.value[rows.value.length - 1]);
+      const age = computed(() => {
+        if (!latest.value) return '';
+        const seconds = Math.max(0, Math.floor((now.value - Date.parse(latest.value.timestamp)) / 1000));
+        return seconds < 60 ? `${seconds} s` : seconds < 3600 ? `${Math.floor(seconds / 60)} min` : `${Math.floor(seconds / 3600)} h ${Math.floor(seconds % 3600 / 60)} min`;
+      });
+      const detail = computed(() => selected.value || latest.value);
+      function cancelAnimation() { if (frame !== null) cancelAnimationFrame(frame); frame = null; }
+      function stop() {
+        if (timer !== null) clearInterval(timer);
+        if (clock !== null) clearInterval(clock);
+        timer = clock = null; cancelAnimation(); ++generation; busy.value = false;
+      }
+      function reset() {
+        stop(); envelope = null; signature = ''; rows.value = []; displayed.value = chart([], null);
+        updatedAt.value = null; selected.value = null; truncated.value = false; error.value = '';
+      }
+      function render(next, animate) {
+        cancelAnimation();
+        const previous = displayed.value;
+        if (!animate || !previous.domain || !next.domain || root.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { displayed.value = next; return; }
+        const started = performance.now();
+        function step(time) {
+          const t = Math.min((time - started) / 300, 1), d = {};
+          for (const key of ['min', 'max', 'from', 'to']) d[key] = previous.domain[key] + (next.domain[key] - previous.domain[key]) * t;
+          displayed.value = t === 1 ? next : chart(rows.value, sensor.value, envelope, minutes.value, d, compact.value, fitted.value, projected.value);
+          frame = t < 1 ? requestAnimationFrame(step) : null;
+        }
+        frame = requestAnimationFrame(step);
+      }
+      async function refresh() {
+        if (busy.value || paused.value || document.hidden || !sensorId.value || !sensor.value?.ativo || disposed) return;
+        const request = generation;
+        busy.value = true;
+        try {
+          const result = await readings(props.api, sensorId.value, minutes.value);
+          if (request !== generation || disposed) return;
+          const nextSignature = JSON.stringify([result.rows, thresholds(sensor.value)]);
+          updatedAt.value = new Date().toISOString(); now.value = Date.now(); error.value = ''; truncated.value = result.truncated;
+          if (nextSignature !== signature) {
+            signature = nextSignature; rows.value = result.rows; selected.value = null;
+            const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value);
+            envelope = next.domain ? { min: next.domain.min, max: next.domain.max } : null;
+            render(next, true);
+          }
+        } catch (_) {
+          if (request === generation && !disposed) error.value = 'Não foi possível consultar novas leituras. O último gráfico foi preservado.';
+        } finally { if (request === generation) busy.value = false; }
+      }
+      function start() {
+        stop();
+        if (paused.value || document.hidden || !sensor.value?.ativo || disposed) return;
+        refresh(); timer = setInterval(refresh, 5000); clock = setInterval(() => { now.value = Date.now(); }, 1000);
+      }
+      async function loadOptions() {
+        const request = ++equipmentGeneration;
+        optionsBusy.value = true; optionsError.value = '';
+        try {
+          const response = props.equipamentos !== null ? { opcoes_equipamentos: props.equipamentos } : await props.api('/api/dashboards/resumo/?incluir_desempenho=false' + (props.empresa ? '&empresa_id=' + props.empresa : ''));
+          if (request !== equipmentGeneration || disposed) return;
+          if (!response) throw new Error();
+          options.value = response.opcoes_equipamentos || [];
+          if (!options.value.some(e => Number(e.id) === Number(equipment.value))) equipment.value = options.value.length === 1 ? options.value[0].id : '';
+        } catch (_) { if (request === equipmentGeneration && !disposed) optionsError.value = 'Não foi possível carregar os equipamentos.'; }
+        finally { if (request === equipmentGeneration) optionsBusy.value = false; }
+      }
+      async function loadSensors() {
+        reset(); const request = ++optionGeneration;
+        sensorId.value = ''; sensors.value = []; optionsError.value = '';
+        if (!equipment.value) { optionsBusy.value = false; return; }
+        optionsBusy.value = true;
+        try {
+          let url = '/api/telemetria/sensores/?equipamento=' + equipment.value + '&escopo_operacional=true&limit=200';
+          const result = [];
+          while (url) {
+            const data = await props.api(url);
+            if (request !== optionGeneration || disposed) return;
+            if (!data) throw new Error();
+            result.push(...list(data)); url = data.next ? localPath(data.next) : '';
+          }
+          sensors.value = result;
+          if (result.length === 1) sensorId.value = result[0].id;
+        } catch (_) { if (request === optionGeneration && !disposed) optionsError.value = 'Não foi possível carregar os sensores.'; }
+        finally { if (request === optionGeneration) optionsBusy.value = false; }
+      }
+      function togglePause() { paused.value = !paused.value; if (paused.value) stop(); else start(); }
+      function fit() { envelope = null; render(chart(rows.value, sensor.value, null, minutes.value, null, compact.value, fitted.value, projected.value), false); }
+      function visibility() { if (document.hidden) stop(); else start(); }
+      watch([compact, showTrend], () => {
+        const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value);
+        envelope = next.domain ? { min:next.domain.min, max:next.domain.max } : null;
+        render(next, false);
+      });
+      watch(equipment, loadSensors);
+      watch([sensorId, minutes], () => { reset(); start(); });
+      watch(() => props.empresa, () => { reset(); ++optionGeneration; equipment.value = ''; sensorId.value = ''; sensors.value = []; loadOptions(); });
+      watch(() => props.equipamentos, loadOptions);
+      onMounted(() => { loadOptions(); document.addEventListener('visibilitychange', visibility); });
+      onUnmounted(() => { disposed = true; ++optionGeneration; ++equipmentGeneration; stop(); document.removeEventListener('visibilitychange', visibility); });
+      return { compact, showTrend, fitted, projected, equipment, sensorId, minutes, options, sensors, sensor, rows, displayed, busy, optionsBusy, paused, error, optionsError, updatedAt, truncated, latest, detail, age, selected,
+        refresh, loadOptions, loadSensors, togglePause, fit, number, date };
+    },
+    template: `
+      <section class="live-chart" aria-label="Acompanhamento de medições">
+        <div class="live-controls">
+          <label>Equipamento<select v-model="equipment" :disabled="optionsBusy"><option value="">Escolha o equipamento</option><option v-for="e in options" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
+          <label>Sensor<select v-model="sensorId" :disabled="!equipment || optionsBusy"><option value="">Escolha o sensor</option><option v-for="s in sensors" :key="s.id" :value="s.id">{{ s.nome }} · {{ s.unidade_medida }}{{ s.ativo ? '' : ' · inativo' }}</option></select></label>
+          <label>Janela<select v-model="minutes"><option value="auto">Automático — últimas 60 leituras</option><option value="5">5 minutos</option><option value="15">15 minutos</option><option value="60">1 hora</option><option value="360">6 horas</option><option value="1440">24 horas</option></select></label>
+          <div class="live-buttons"><button class="btn btn-ghost btn-sm" :disabled="!sensorId" @click="togglePause">{{ paused ? 'Retomar ao vivo' : 'Pausar' }}</button><button class="btn btn-ghost btn-sm" :disabled="!rows.length" @click="fit">Ajustar escala</button></div>
+        </div>
+        <p v-if="optionsError" class="telemetry-notice" role="alert">{{ optionsError }} <button class="btn btn-ghost btn-sm" @click="equipment ? loadSensors() : loadOptions()">Tentar novamente</button></p>
+        <p v-if="error" class="telemetry-notice" role="alert">{{ error }} <button class="btn btn-ghost btn-sm" :disabled="busy || paused" @click="refresh">Tentar novamente</button></p>
+        <div v-if="!sensorId" class="live-placeholder">{{ optionsBusy ? 'Carregando opções…' : equipment && !sensors.length ? 'Nenhum sensor disponível neste equipamento.' : 'Escolha um equipamento e um sensor para acompanhar as medições.' }}</div>
+        <template v-else>
+          <div class="live-status"><span :class="['live-state', {paused:paused || !sensor?.ativo, failed:!!error}]">{{ !sensor?.ativo ? 'Sensor inativo · consulta interrompida' : paused ? 'Acompanhamento pausado' : busy ? 'Consultando…' : 'Aguardando novas medições · consulta a cada 5 s' }}</span><span>Última consulta: {{ updatedAt ? date(updatedAt) : 'aguardando' }}</span></div>
+          <div v-if="rows.length" class="live-measure"><div><span>Última medição</span><strong>{{ number(latest.valor) }} <small>{{ sensor?.unidade_medida }}</small></strong></div><p>{{ date(latest.timestamp) }}<br>há {{ age }}</p></div>
+          <div v-if="rows.length" class="trend-chart-toolbar"><label class="trend-chart-toggle"><input type="checkbox" v-model="showTrend"> Mostrar tendência e projeção</label><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="showTrend"><i class="legend-trend"></i>Tendência da janela</span><span v-if="displayed.projection"><i class="legend-projection"></i>Projeção futura</span><span><i class="legend-limit"></i>Limites horizontais</span></div></div>
+          <p v-if="showTrend && rows.length" class="trend-chart-explanation">{{ fitted.length ? displayed.projection ? 'A linha azul termina na última medição. A continuação roxa na área sombreada é uma estimativa, se o ritmo continuar.' : 'A linha roxa resume esta janela; não há movimento consistente suficiente para desenhar uma projeção futura. A avaliação de alertas usa os critérios da página Tendências.' : 'Aguardando pelo menos 3 horários de medição diferentes para calcular a tendência desta janela.' }}</p>
+          <div v-if="rows.length" class="live-plot">
+            <svg :viewBox="'0 0 ' + displayed.width + ' 285'" role="img" :aria-label="'Medições de ' + sensor?.nome + ', unidade ' + sensor?.unidade_medida">
+              <defs><clipPath :id="'live-clip-' + $.uid"><rect :x="displayed.left-6" y="25" :width="displayed.right-displayed.left+12" height="212"/></clipPath></defs>
+              <text :x="displayed.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
+              <g v-if="displayed.projection" class="forecast-region">
+              <rect :x="displayed.projection.startX" y="36" :width="displayed.projection.width" height="200" class="forecast-shade"/>
+              <line :x1="displayed.projection.startX" y1="36" :x2="displayed.projection.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(displayed.projection.points[0].timestamp) }}</title></line>
+              <text v-if="!compact" :x="(displayed.left + displayed.projection.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Histórico observado</text>
+              <text v-if="displayed.projection.width > (compact ? 65 : 100)" :x="displayed.projection.startX + displayed.projection.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Estimativa' : 'Estimativa futura' }}</text>
+            </g>
+            <g v-for="tick in displayed.ticks" :key="tick.y"><line :x1="displayed.left" :y1="tick.y" :x2="displayed.right" :y2="tick.y" class="live-grid"/><text :x="displayed.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
+              <g v-for="limit in displayed.limits" :key="limit.name"><line :x1="displayed.left" :y1="limit.y" :x2="displayed.right" :y2="limit.y" :stroke="limit.color" :stroke-dasharray="limit.dash" stroke-width="1.5"/><text v-if="!compact" x="738" :y="limit.y+4" :fill="limit.color" class="live-limit-label">{{ limit.name }} · {{ number(limit.value) }}</text></g>
+              <g :clip-path="'url(#live-clip-' + $.uid + ')'">
+                <path :d="displayed.path" fill="none" stroke="var(--ice)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+                <path v-if="displayed.trendPath" :d="displayed.trendPath" class="trend-fit-line"/>
+<g v-if="displayed.projection">
+                <path :d="displayed.projection.path" class="trend-projection-line"/>
+                <circle :cx="displayed.projection.end.x" :cy="displayed.projection.end.y" r="5" class="forecast-endpoint" tabindex="0" :aria-label="(displayed.projection.reachesLimit ? 'Alcance estimado do limite: ' : 'Fim do trecho estimado: ') + number(displayed.projection.end.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(displayed.projection.end.timestamp)"><title>{{ displayed.projection.reachesLimit ? 'Alcance estimado do limite' : 'Fim do trecho estimado' }} · {{ number(displayed.projection.end.valor) }} {{ sensor?.unidade_medida }} · {{ date(displayed.projection.end.timestamp) }}</title></circle>
+              </g>
+                              <circle v-for="(point,index) in displayed.points" :key="point.id" :cx="point.x" :cy="point.y" :r="index === displayed.points.length-1 ? 5 : 3" fill="var(--ice)" class="live-point" tabindex="0" role="button" :aria-label="number(point.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(point.timestamp)" @mouseenter="selected=point" @mouseleave="selected=null" @focus="selected=point" @blur="selected=null" @click="selected=point" @keydown.enter="selected=point" @keydown.space.prevent="selected=point"><title>{{ number(point.valor) }} {{ sensor?.unidade_medida }} · {{ date(point.timestamp) }}</title></circle>
+              </g>
+              <text v-for="(time,i) in displayed.times" :key="i" :x="time.x" y="260" :text-anchor="i === 0 ? 'start' : i === 2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
+            </svg>
+            <div v-if="compact" class="live-legend"><span v-for="limit in displayed.limits" :key="limit.name" :style="{color:limit.color}">{{ limit.name }} · {{ number(limit.value) }} {{ sensor?.unidade_medida }}</span></div><p class="live-point-detail" aria-live="polite">{{ detail ? number(detail.valor) + ' ' + sensor?.unidade_medida + ' · ' + date(detail.timestamp) : '' }}</p>
+          </div>
+          <div v-else class="live-placeholder">{{ busy ? 'Consultando medições…' : sensor?.ativo ? 'Nenhuma medição registrada para este sensor.' : 'Selecione um sensor ativo para acompanhar.' }}</div>
+          <p v-if="displayed.projection" class="forecast-caption">Projeção de até {{ displayed.projection.horizonLabel }} após a última leitura, se o ritmo continuar.<span v-if="displayed.projection.limitOutside"> O limite fica além deste trecho.</span><span v-if="displayed.projection.reachesLimit"> O marcador indica o alcance estimado do limite.</span></p>
+          <footer v-if="rows.length" class="live-footer"><span>{{ rows.length }} medições · última leitura em {{ date(latest.timestamp) }}</span><span v-if="!displayed.limits.length">Limites operacionais indisponíveis</span></footer>
+          <p v-if="truncated" class="live-note">Exibindo as 1.000 medições mais recentes. A janela selecionada contém mais dados.</p>
+        </template>
+      </section>`
+  };
+  const sampleComponent = {
+    props: ['readings', 'sensor', 'analysis'],
+    setup(props) {
+      const compact = useCompact();
+      const fitted = Vue.computed(() => {
+        const a = props.analysis;
+        if (!a?.analysis_enabled || a.insufficient_data || a.data_quality !== 'valid') return [];
+        return (a.regression_line || []).filter(p => Number.isFinite(Number(p.valor)) && Number.isFinite(Date.parse(p.timestamp)));
+      });
+      const projected = Vue.computed(() => projectForward((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})), fitted.value, {analysis:props.analysis,limit:props.sensor?.limite_alerta}));
+      const estimate = Vue.computed(() => projectionSummary(props.analysis));
+      const fitMessage = Vue.computed(() => !props.analysis?.analysis_enabled ? 'Análise de tendência desativada para este sensor.' :
+        fitted.value.length ? projected.value ? 'A azul mostra o que foi medido. A roxa resume a tendência e continua à direita como estimativa, se o ritmo se mantiver.' : 'A linha roxa resume esta amostra. Não há movimento consistente suficiente para projetar um trecho futuro.' : 'Aguardando quantidade e tempo de observação suficientes para calcular a tendência.');
+      const plot = Vue.computed(() => {
+        const rows = normalize((props.readings || []).map((r,i) => ({ ...r, id:r.id ?? i })));
+        const limit = Number(props.sensor?.limite_alerta);
+        const values = rows.map(r => r.valor).concat(fitted.value.map(r => Number(r.valor)), Number.isFinite(limit) && limit > 0 ? [limit] : []);
+        if (!values.length) return chart([], null);
+        const min = Math.min(...values), max = Math.max(...values), pad = (max-min || 1)*.08;
+        const result = chart(rows, null, {min:min-pad,max:max+pad}, 'auto', null, compact.value, fitted.value, projected.value);
+        if (Number.isFinite(limit) && limit > 0 && result.domain) result.limits = [{name:'Limite superior',value:limit,y:230-(limit-result.domain.min)/(result.domain.max-result.domain.min)*188}];
+        return result;
+      });
+      return { compact, fitted, projected, estimate, fitMessage, plot, number, date, forecastDate };
+    },
+    template: `
+      <figure class="measurement-sample">
+        <figcaption>Amostra analisada · {{ sensor?.unidade_medida }} · mesmos horários para leituras e tendência</figcaption>
+        <div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="fitted.length"><i class="legend-trend"></i>Tendência calculada</span><span v-if="plot.projection"><i class="legend-projection"></i>Projeção futura</span><span v-if="plot.limits.length"><i class="legend-limit"></i>Limite superior</span></div>
+        <p class="trend-chart-explanation">{{ fitMessage }}</p>
+        <svg :viewBox="'0 0 ' + plot.width + ' 285'" role="img" :aria-label="'Leituras reais, tendência e projeção de ' + sensor?.nome">
+          <g v-if="plot.projection" class="forecast-region">
+              <rect :x="plot.projection.startX" y="36" :width="plot.projection.width" height="200" class="forecast-shade"/>
+              <line :x1="plot.projection.startX" y1="36" :x2="plot.projection.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(plot.projection.points[0].timestamp) }}</title></line>
+              <text v-if="!compact" :x="(plot.left + plot.projection.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Histórico observado</text>
+              <text v-if="plot.projection.width > (compact ? 65 : 100)" :x="plot.projection.startX + plot.projection.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Estimativa' : 'Estimativa futura' }}</text>
+            </g>
+            <g v-for="tick in plot.ticks" :key="tick.y"><line :x1="plot.left" :y1="tick.y" :x2="plot.right" :y2="tick.y" class="live-grid"/><text :x="plot.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
+          <text :x="plot.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
+          <g v-for="limit in plot.limits" :key="limit.name"><line :x1="plot.left" :y1="limit.y" :x2="plot.right" :y2="limit.y" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="12 4 2 4"/><text v-if="!compact" x="738" :y="limit.y+4" fill="var(--danger)" class="live-limit-label">Limite · {{ number(limit.value) }}</text></g>
+          <path :d="plot.path" fill="none" stroke="var(--ice)" stroke-width="2.5"/>
+          <path v-if="plot.trendPath" :d="plot.trendPath" class="trend-fit-line"/>
+<g v-if="plot.projection">
+                <path :d="plot.projection.path" class="trend-projection-line"/>
+                <circle :cx="plot.projection.end.x" :cy="plot.projection.end.y" r="5" class="forecast-endpoint" tabindex="0" :aria-label="(plot.projection.reachesLimit ? 'Alcance estimado do limite: ' : 'Fim do trecho estimado: ') + number(plot.projection.end.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(plot.projection.end.timestamp)"><title>{{ plot.projection.reachesLimit ? 'Alcance estimado do limite' : 'Fim do trecho estimado' }} · {{ number(plot.projection.end.valor) }} {{ sensor?.unidade_medida }} · {{ date(plot.projection.end.timestamp) }}</title></circle>
+              </g>
+                        <circle v-for="point in plot.points" :key="point.id" :cx="point.x" :cy="point.y" r="4" fill="var(--ice)" tabindex="0" :aria-label="number(point.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(point.timestamp)"><title>{{ number(point.valor) }} {{ sensor?.unidade_medida }} · {{ date(point.timestamp) }}</title></circle>
+          <text v-for="(time,i) in plot.times" :key="i" :x="time.x" y="260" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
+        </svg>
+        <p v-if="compact && plot.limits.length" class="live-note">Limite superior: {{ number(plot.limits[0].value) }} {{ sensor?.unidade_medida }}</p>
+        <div v-if="plot.points.length" class="live-footer"><span>Início observado: {{ date(plot.points[0].timestamp) }}</span><span>Última leitura real: {{ date(plot.points[plot.points.length-1].timestamp) }}</span></div>
+        <p v-if="plot.projection" class="forecast-caption">Projeção de até {{ plot.projection.horizonLabel }} após a última leitura, se o ritmo continuar.<span v-if="plot.projection.limitOutside"> O limite fica além deste trecho.</span><span v-if="plot.projection.reachesLimit"> O marcador indica o alcance estimado do limite.</span></p>
+        <details v-if="estimate" class="trend-estimate"><summary>Ver estimativa de horário até o limite</summary><strong>Por volta de {{ forecastDate(estimate.at) }}</strong><p>Aproximadamente {{ estimate.duration }} após a última medição, registrada em {{ date(estimate.reference) }}.</p><p>Cálculo com a última medição e o ritmo da tendência, se esse ritmo continuar. Estima o alcance do limite, não um horário de falha.</p></details>
+      </figure>`
+  };
+  root.NanaLiveChart = { normalize, thresholds, fitLine, projectionSummary, projectForward, horizonLabel, chart, readings, component, sampleComponent };
+})(globalThis);

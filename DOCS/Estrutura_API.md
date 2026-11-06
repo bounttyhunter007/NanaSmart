@@ -128,7 +128,7 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 | nome_servico          | String(200)    | -                       | Nome do serviço (ex: Troca de Óleo)            | Obrigatório                    |
 | descricao             | Text           | -                       | Descrição detalhada do serviço                 | Obrigatório                    |
 | intervalo_horas       | Float          | -                       | A cada quantas horas a O.S. será gerada        | Obrigatório                    |
-| prioridade            | String         | -                       | Prioridade (baixo, medio, critico)             | Obrigatório (default: medio)   |
+| prioridade            | String         | -                       | Prioridade ABC (A, B, C ou null)             | Herdada do equipamento na abertura   |
 | ativo                 | Boolean        | -                       | Se o plano está rodando                        | Obrigatório (default: True)    |
 | horimetro_ultima_os   | Float          | -                       | Horímetro do equipamento no último disparo     | Read-only (preenchido auto)    |
 | proximo_disparo_horas | Float          | -                       | Quando a próxima O.S. será gerada (calculado)  | Read-only (Serializer Method)  |
@@ -159,6 +159,8 @@ Esta é uma **API REST** desenvolvida em Django, com autenticação JWT, operaç
 
 ## Tendências de sensores
 
+API administrativa de demonstração: `GET/POST /api/telemetria/tendencias/demo/` e `GET/POST /api/telemetria/tendencias/demo/<uuid>/`, restrita a admin e à própria sessão. A análise também retorna `checks`, `threshold_per_hour` e `projected_breach_minutes`. Contratos, exemplos e migração: [Demonstração de tendências](DEMONSTRACAO_TENDENCIAS.md).
+
 Revisão de UX de 06/11/2026: sensores retornam `equipamento_nome`; leituras retornam `sensor_nome`, `equipamento_nome` e `unidade_medida` (todos somente leitura). Leituras aceitam `sensor__equipamento__empresa`; tendências aceitam `empresa_id`; configurações aceitam `sensor__isnull=true`, com ordenação pela mais recente. Os filtros sempre respeitam a visibilidade do usuário. Detalhes e testes: [Telemetria e tendências](TELEMETRIA_UX.md).
 
 Configurações: CRUD `/api/telemetria/trend-config/`. Consulta sem gravações: `GET /api/telemetria/tendencias/?sensor_id=1` ou lista com `?all=true`. A criação dos alertas e OS ocorre na ingestão ou por `python manage.py analisar_tendencias`.
@@ -169,53 +171,31 @@ A resposta de análise inclui `analysis_enabled`, `insufficient_data`, `data_qua
 
 Defaults, validações, exemplo JSON e critérios de aceitação: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md), revisão de 06/11/2026.
 
-## 🚨 Alertas (CRUD)
+## 🚨 Histórico de alertas (somente consulta)
 
-Especificação do ciclo de vida: [Alertas e Ordens de Serviço](FLUXO_ALERTAS_ORDENS_SERVICO.md). Novos alertas pela API têm origem `manual`; origens automáticas são controladas pelo backend.
+Especificação vigente: [Histórico de alertas](HISTORICO_ALERTAS.md). Ocorrências são geradas pelo monitoramento; problemas percebidos por pessoas são registrados diretamente em uma O.S.
 
-**Endpoints:**
-- `GET /api/alertas/`
-- `POST /api/alertas/`
-- `GET /api/alertas/{id}/`
-- `PUT /api/alertas/{id}/`
-- `PATCH /api/alertas/{id}/`
-- `DELETE /api/alertas/{id}/`
+- `GET /api/alertas/`: histórico paginado, com crítico → médio → baixo antes da paginação; `-data_alerta, -id` desempata dentro de cada nível. As exportações seguem essa mesma ordem.
+- `GET /api/alertas/{id}/`: ocorrência e evidências preservadas.
+- `POST`, `PUT`, `PATCH` e `DELETE`: `405 Method Not Allowed`, inclusive para administradores. Consultas exigem autenticação e respeitam a empresa.
 
-**Model:** `Alerta`
+Filtros compartilhados com `GET /api/exportar/alertas/{csv|excel|pdf}/`: `search`, `equipamento`, `sensor`, `origem`, `nivel`, `data_de`, `data_ate`, `equipamento__empresa` (ou `empresa`). Datas são ISO 8601, com início e fim inclusivos; a interface converte o horário local para UTC. `status` continua aceito para compatibilidade, sem controle de edição na interface.
 
-### Campos do modelo
+| Campo | Significado |
+| --- | --- |
+| `equipamento`, `sensor`, `equipamento_nome`, `sensor_nome` | Identificação; o nome do sensor usa a evidência se o cadastro tiver sido excluído. |
+| `origem` | `limite`, `tendencia` ou `manual` legado. |
+| `dados_deteccao` | Contexto preservado na abertura: nomes, unidade, limite, nível e descrição iniciais, leituras e análise/configuração utilizada. Não é reescrito pelo acompanhamento. |
+| `dados_analise`, `data_ultima_analise` | Último acompanhamento automático; não substituem a evidência inicial. |
+| `nivel` | Maior gravidade atingida pela ocorrência, inclusive nas tendências. |
+| `data_alerta`, `data_normalizacao` | Registro da ocorrência e normalização detectada; uma data desconhecida permanece nula. |
+| `ordem_servico_id` | Ordem exata que atende a ocorrência, quando disponível. |
+| `legado` | Informa que a abertura não possui evidência histórica preservada. |
+| `status`, `evento_chave` | Controle interno do episódio e compatibilidade. Não representam uma fila de atendimento. |
+| `analise_ia` | Explicação opcional; não decide a abertura nem altera as evidências. |
 
-| Campo        | Tipo        | PK / FK               | Descrição                                      | Observação                     |
-|--------------|-------------|-----------------------|------------------------------------------------|--------------------------------|
-| id           | Integer     | **PK**                | Identificador único                            | Auto-incrementado              |
-| equipamento  | Integer     | **FK** → Equipamento.id | Equipamento relacionado                      | Obrigatório                    |
-| tipo_alerta  | String(100) | -                     | Tipo do alerta                                 | Obrigatório                    |
-| nivel        | String      | -                     | Nível (baixo, medio, critico)                  | Obrigatório (default: baixo)   |
-| descricao    | Text        | -                     | Descrição do alerta                            | Obrigatório                    |
-| data_alerta  | DateTime    | -                     | Data e hora do alerta                          | Auto (auto_now_add)            |
-| status       | String      | -                     | Status (ativo, resolvido, ignorado)            | Obrigatório (default: ativo)   |
-| sensor       | Integer/null | **FK** → Sensor.id | Ponto de medição de origem | Deve pertencer ao equipamento |
-| origem       | String | - | manual, limite ou tendencia | Na criação pela API, somente manual |
-| evento_chave | String | - | Identidade da condição monitorada | Somente leitura na API |
-| dados_analise | JSON | - | Condição atual, pico e recuperação; ou indicadores preditivos | Somente leitura na API |
-| data_ultima_analise | DateTime/null | - | Última análise automática | Somente leitura |
-| analise_ia | Text | - | Explicação pelos recursos próprios de IA | Somente leitura neste CRUD |
-| ordem_servico_id | Integer/null | Relação derivada | O.S. que atende a ocorrência | Somente leitura; todas as origens |
+Limites mantêm os percentuais configurados por sensor (padrões 70/85/100). Duas novas leituras normais consecutivas confirmam recuperação. Tendências mantêm os critérios próprios. Cada episódio mantém uma ocorrência; recorrências de limite podem compartilhar uma O.S. ainda aberta do mesmo sensor. Recuperação não conclui a ordem, e conclusão/cancelamento não recria trabalho no mesmo episódio.
 
-### Regras de geração por limite operacional
-
-Alertas são gerados ao registrar novas telemetrias, com percentuais configurados por sensor. Os valores abaixo são os padrões quando a configuração estiver ausente:
-- **CRÍTICO**: Valor >= 100% do limite.
-- **MÉDIO**: Valor >= 85% do limite.
-- **BAIXO**: Valor >= 70% do limite (Próximo à falha).
-
-No alerta por limite, `nivel` é o maior nível registrado no episódio; `dados_analise.nivel_atual` é a condição atual. Duas novas leituras normais consecutivas confirmam recuperação. Alterar uma leitura existente não reexecuta o ciclo de ingestão.
-
-Alertas automáticos não permitem editar sensor, equipamento, tipo, nível ou descrição pelo CRUD. A origem é imutável. Alertas vinculados à O.S., inclusive manuais, não podem trocar de sensor/equipamento. Para alertas de limite, a API permite `ativo → ignorado`; a resolução depende das leituras. Não é permitido voltar um alerta resolvido/ignorado para ativo pela API.
-
-Todas as ocorrências manuais e de limite ativas podem gerar O.S. corretiva, inclusive nível baixo, conforme política existente. O fluxo de tendência é independente e só cria O.S. quando recomenda intervenção.
-
----
 
 ## 🛠️ Ordens de Serviço (CRUD)
 
@@ -242,7 +222,7 @@ Todas as ocorrências manuais e de limite ativas podem gerar O.S. corretiva, inc
 | descricao       | Text     | -                        | Descrição do problema/serviço                  | Obrigatório                         |
 | tipo_os         | String   | -                        | Tipo (corretiva, preditiva, preventiva)        | Obrigatório (default: preventiva)   |
 | status          | String   | -                        | Status (pendente, andamento, concluida, cancelada) | Obrigatório (default: pendente) |
-| prioridade      | String   | -                        | Prioridade (baixa, media, alta, urgente)       | Obrigatório (default: media)        |
+| prioridade      | String   | -                        | Prioridade legada do plano, somente leitura       | Não determina a prioridade de novas OS        |
 | data_abertura   | DateTime | -                        | Data de abertura                               | Auto (timezone.now)                 |
 | data_conclusao  | DateTime | -                        | Data de conclusão                              | Preenchido automaticamente         |
 
@@ -340,7 +320,9 @@ Retorna uma visão geral da empresa:
     - `mtbf_medio`: Tempo Médio Entre Falhas (horas).
     - `disponibilidade_media`: Percentual de uptime (calculado apenas sobre ativos com histórico).
     - `custo_total_manutencao`: Soma de todos os custos de peças e mão de obra.
-- **alertas_ativos**: Contagem de alertas por nível (critico, medio, baixo).
+- **alertas_24h**: Novas ocorrências das últimas 24 horas por nível e total, inclusive normalizadas.
+- **alertas_recentes**: Até seis ocorrências mais recentes dessa janela, em ordem cronológica decrescente.
+- **alertas_ativos**: Campo mantido para compatibilidade, com o significado anterior de episódios ainda ativos.
 - **os_abertas**: Quantidade de OS pendentes ou em andamento.
 - **detalhes_equipamentos**: Lista de todos os equipamentos com seus KPIs individuais.
 
@@ -402,3 +384,19 @@ O sistema utiliza **Role-Based Access Control** para garantir a segurança dos d
 A API possui uma estrutura completa e bem normalizada para **gestão de ativos industriais**, com forte foco em manutenção preditiva e corretiva, monitoramento IoT em tempo real e controle de custos. Todos os relacionamentos importantes estão mapeados via ForeignKey e OneToOneField, com regras claras de cascade e campos calculados.
 
 ---
+
+
+## Priorização ABC (06/11/2026)
+
+Equipamentos e OS usam A/B/C ou `null` (Não avaliada / A definir). Novas OS herdam a classe na abertura; reclassificação de equipamento e agravamento de alerta não recalculam ordens abertas. Ajustar ou restaurar exige ação específica de gestor/admin e justificativa. Enviar `prioridade` no formulário geral da OS retorna 400.
+
+| Método | Endpoint | Comportamento |
+|---|---|---|
+| GET | `/api/criterios-criticidade/atual/?empresa=ID` | Guia vigente ou sugestão ainda não validada |
+| GET/POST | `/api/criterios-criticidade/` | Consultar revisões / publicar nova revisão validada |
+| GET | `/api/historico-criticidade/?equipamento=ID` | Histórico do equipamento no escopo permitido |
+| POST | `/api/ordens-servico/ID/ajustar_prioridade/` | Ajustar A/B/C com justificativa |
+| POST | `/api/ordens-servico/ID/restaurar_prioridade/` | Restaurar herança conhecida com justificativa |
+| GET | `/api/ordens-servico/ID/historico_prioridade/` | Histórico paginado da prioridade |
+
+A listagem e a exportação de OS compartilham filtros e ordenação antes da paginação. Use `prioridade=a_definir` para localizar pendências. Consulte os contratos, exemplos e conversões em [Priorização ABC](PRIORIZACAO_ABC.md).

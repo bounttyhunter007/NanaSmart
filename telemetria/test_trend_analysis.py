@@ -295,3 +295,53 @@ class TrendAnalysisRulesTests(TestCase):
             result = analyze_sensor_trend(self.sensor.pk)
         self.assertFalse(result['insufficient_data'])
         self.assertEqual(result['sample_duration_minutes'], 60)
+
+class TrendPresentationTests(TestCase):
+    setUp = TrendAnalysisRulesTests.setUp
+    _readings = TrendAnalysisRulesTests._readings
+
+    def test_regression_line_uses_sample_times_and_centered_full_precision_fit(self):
+        start = timezone.now() - timedelta(hours=3)
+        self._readings([40, 61, 70], start=start, step_minutes=45)
+        result = analyze_sensor_trend(self.sensor.pk)
+        line = result['regression_line']
+        self.assertEqual(len(line), 2)
+        self.assertEqual(line[0]['timestamp'], result['readings_summary'][0]['timestamp'])
+        self.assertEqual(line[-1]['timestamp'], result['readings_summary'][-1]['timestamp'])
+        self.assertAlmostEqual((line[0]['valor'] + line[-1]['valor']) / 2, (40 + 61 + 70) / 3)
+        self.assertAlmostEqual(line[-1]['valor'] - line[0]['valor'], 30)
+
+    def test_forecast_date_is_anchored_to_last_measurement_not_query_clock(self):
+        clock = timezone.now()
+        self._readings([40, 50, 60], start=clock - timedelta(hours=2))
+        with patch('telemetria.trend_analysis.timezone.now', return_value=clock):
+            first = analyze_sensor_trend(self.sensor.pk)
+        with patch('telemetria.trend_analysis.timezone.now', return_value=clock + timedelta(minutes=10)):
+            later = analyze_sensor_trend(self.sensor.pk)
+        self.assertEqual(first['projected_breach_at'], (clock + timedelta(hours=1)).isoformat())
+        self.assertEqual(first['projected_breach_at'], later['projected_breach_at'])
+        self.assertEqual(first['regression_line'], later['regression_line'])
+
+    def test_insufficient_or_disabled_analysis_has_no_fitted_line_or_date(self):
+        self._readings([40, 41])
+        result = analyze_sensor_trend(self.sensor.pk)
+        self.assertIsNone(result['regression_line'])
+        self.assertIsNone(result['projected_breach_at'])
+        TrendConfig.objects.create(sensor=self.sensor, ativo=False)
+        result = analyze_sensor_trend(self.sensor.pk)
+        self.assertIsNone(result['regression_line'])
+        self.assertIsNone(result['projected_breach_at'])
+
+    def test_decreasing_constant_or_poor_fit_has_no_forecast_date(self):
+        for values in ([80, 70, 60], [50, 50, 50], [40, 60, 41, 59, 42]):
+            Telemetria.objects.filter(sensor=self.sensor).delete()
+            self._readings(values, start=timezone.now() - timedelta(hours=3))
+            result = analyze_sensor_trend(self.sensor.pk)
+            self.assertIsNotNone(result['regression_line'])
+            self.assertIsNone(result['projected_breach_at'])
+
+    def test_already_reached_limit_does_not_invent_future_date(self):
+        self._readings([80, 100, 120])
+        result = analyze_sensor_trend(self.sensor.pk)
+        self.assertEqual(result['projected_breach_hours'], 0)
+        self.assertIsNone(result['projected_breach_at'])

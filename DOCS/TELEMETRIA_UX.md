@@ -135,3 +135,10 @@ Revisão solicitada em 06/11/2026. A organização vigente substitui a incorpora
 - Trocar empresa limpa os contextos das duas páginas e invalida suas consultas pendentes separadamente. Logout limpa os dois estados. A configuração global continua exclusiva de administrador e o técnico continua somente consultando.
 
 Sem mudança de API, algoritmo ou banco. Não é necessária nova migração. Validação: **18 testes de frontend aprovados**, incluindo quatro regressões adicionais para independência entre páginas, opções de sensor por equipamento, atalhos intencionais e acesso pelo menu sem a antiga aba. Template completo compilado com Vue 3.4.21, sintaxe JavaScript e whitespace sem erros. Sem nova validação visual no navegador.
+
+
+## Gráfico e apresentação guiada
+
+Implementados gráfico de um único sensor selecionado, linha de limite superior, verificações de critérios calculadas no backend e ajuste rápido de duração no formulário. Todos os equipamentos mantém a visão geral sem múltiplos gráficos. A seleção de equipamento com um único sensor passa a selecioná-lo automaticamente; com vários, continua exigindo escolha explícita.
+
+A área expansível **Apresentação guiada · teste de tendência**, exclusiva de admin, cria dados identificados como [DEMO] em equipamento/sensor próprios e usa a ingestão real. A primeira fase usa sete leituras a cada dez segundos, mínimo de um minuto e acompanha alerta/OS. Também há fases de ultrapassagem/recuperação e cenários de estabilidade/pico. O gráfico é consultado a cada dois segundos durante a demonstração; a lista geral mantém seu monitor de trinta segundos. Critérios, fórmulas, diferenças entre observação e consulta, permissões, API, migração, limitações e roteiro estão em [Demonstração de tendências](DEMONSTRACAO_TENDENCIAS.md).

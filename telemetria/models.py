@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models, transaction
 from ativos.models import Equipamento
 
@@ -152,3 +154,19 @@ class TrendConfig(models.Model):
         if self.sensor:
             return f"TrendConfig: {self.sensor.nome} ({self.sensor.equipamento.nome})"
         return "TrendConfig: Global (padrão)"
+
+class TrendDemo(models.Model):
+    """Demonstração identificada, com relógio real e amostras limitadas pelo servidor."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey('accounts.Usuario', on_delete=models.CASCADE, related_name='trend_demos')
+    sensor = models.OneToOneField(Sensor, on_delete=models.CASCADE, related_name='demonstracao')
+    cenario = models.CharField(max_length=20, default='aumento', choices=(
+        ('aumento', 'Aumento gradual'), ('limite', 'Ultrapassar limite'),
+        ('recuperacao', 'Recuperação'), ('estavel', 'Valores estáveis'), ('pico', 'Pico isolado'),
+    ))
+    status = models.CharField(max_length=20, default='executando', choices=(
+        ('executando', 'Executando'), ('concluido', 'Concluído'), ('parado', 'Parado'),
+    ))
+    passo = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    ultima_leitura_em = models.DateTimeField()

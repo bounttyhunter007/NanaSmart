@@ -1,17 +1,40 @@
 from django.db import models
 from accounts.models import Empresa
 
+CRITICIDADE_ABC = (('A', 'A — Alta criticidade'), ('B', 'B — Média criticidade'), ('C', 'C — Baixa criticidade'))
+
+
+class CriteriosCriticidade(models.Model):
+    """Revisões publicadas e imutáveis do guia validado de cada empresa."""
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='criterios_criticidade')
+    revisao = models.PositiveIntegerField()
+    criterio_a = models.TextField()
+    criterio_b = models.TextField()
+    criterio_c = models.TextField()
+    representante_manutencao = models.CharField(max_length=200)
+    data_validacao = models.DateField()
+    criado_por = models.ForeignKey('accounts.Usuario', on_delete=models.SET_NULL, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-revisao']
+        constraints = [models.UniqueConstraint(fields=['empresa', 'revisao'], name='criterios_empresa_revisao_unica')]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            from django.core.exceptions import ValidationError
+            raise ValidationError('Publique uma nova revisão; critérios anteriores são imutáveis.')
+        super().save(*args, **kwargs)
+
 
 class TipoEquipamento(models.Model):
     """Catálogo por empresa usado apenas como sugestão, nunca como sobrescrita."""
 
-    CRITICIDADE_CHOICES = (
-        ('A', 'A — Crítica'), ('B', 'B — Alta'),
-        ('C', 'C — Moderada'), ('D', 'D — Baixa'),
-    )
+    CRITICIDADE_CHOICES = CRITICIDADE_ABC
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tipos_equipamento')
     nome = models.CharField(max_length=100)
     criticidade_padrao = models.CharField(max_length=1, choices=CRITICIDADE_CHOICES, blank=True, null=True)
+    criticidade_padrao_legada = models.CharField(max_length=20, blank=True, null=True, editable=False)
     descricao_criterios = models.TextField(blank=True, help_text='Critérios locais que justificam a sugestão.')
 
     class Meta:
@@ -62,18 +85,16 @@ class Equipamento(models.Model):
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ativo')
 
-    CRITICIDADE_CHOICES = (
-        ('A', 'A — Crítica'), ('B', 'B — Alta'),
-        ('C', 'C — Moderada'), ('D', 'D — Baixa'),
-    )
+    CRITICIDADE_CHOICES = CRITICIDADE_ABC
     ORIGEM_CRITICIDADE_CHOICES = (
         ('nao_avaliada', 'Não avaliada'), ('tipo', 'Sugerida pelo tipo'),
-        ('individual', 'Avaliação individual'),
+        ('individual', 'Avaliação individual'), ('migracao', 'Convertida do legado'),
     )
     criticidade = models.CharField(max_length=1, choices=CRITICIDADE_CHOICES, blank=True, null=True,
-                                   help_text='Classe A/B/C/D; nulo significa que a avaliação ainda não foi feita.')
+                                   help_text='Classe A/B/C; nulo significa não avaliada.')
     criticidade_origem = models.CharField(max_length=20, choices=ORIGEM_CRITICIDADE_CHOICES, default='nao_avaliada')
     justificativa_criticidade = models.TextField(blank=True, help_text='Justificativa da avaliação individual ou da sugestão aceita.')
+    criterios_criticidade = models.ForeignKey(CriteriosCriticidade, on_delete=models.PROTECT, null=True, blank=True)
     
     def __str__(self):
         return f"{self.nome} (SN: {self.numero_serie})"
@@ -86,6 +107,9 @@ class HistoricoCriticidadeEquipamento(models.Model):
     justificativa = models.TextField(blank=True)
     alterado_por = models.ForeignKey('accounts.Usuario', on_delete=models.SET_NULL, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    criterios_criticidade = models.ForeignKey(CriteriosCriticidade, on_delete=models.PROTECT, null=True, blank=True)
+    origem = models.CharField(max_length=20, default='individual')
+    dados_anteriores = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['-criado_em']

@@ -1,22 +1,24 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Alerta
 from .serializers import AlertaSerializer
-from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
+from rest_framework.permissions import IsAuthenticated
+from .filters import AlertaFilter, ordenar_historico
 
 
-class AlertaViewSet(viewsets.ModelViewSet):
+class AlertaViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AlertaSerializer
-    permission_classes = [IsAuthenticatedNoDeleteForTecnico]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['equipamento', 'equipamento__empresa', 'nivel', 'status']
-    search_fields = ['tipo_alerta', 'descricao']
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = AlertaFilter
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Alerta.objects.none()
         user = self.request.user
-        qs = Alerta.objects.select_related('equipamento', 'ordem_servico', 'ordem_servico_preditiva').order_by('-data_alerta')
+        qs = ordenar_historico(Alerta.objects.select_related(
+            'equipamento', 'sensor', 'ordem_servico', 'ordem_servico_preditiva',
+        ))
         if user.tipo_usuario == 'admin':
             return qs.all()
         if user.empresa:

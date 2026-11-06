@@ -13,6 +13,7 @@ from drf_spectacular.utils import extend_schema
 
 from .utils import ExportadorFactory
 
+from manutencao.views import OrdemServicoViewSet
 from manutencao.models import OrdemServico, HistoricoManutencao
 from ativos.models import Equipamento
 from alertas.models import Alerta
@@ -81,7 +82,7 @@ class ExportarOrdensServicoView(APIView):
 
     Query params opcionais:
         ?status=pendente
-        ?prioridade=critico
+        ?prioridade=A
         ?tipo_os=corretiva
         ?equipamento=1
         ?responsavel=2
@@ -90,42 +91,13 @@ class ExportarOrdensServicoView(APIView):
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
-        user = request.user
-        qs = OrdemServico.objects.select_related('equipamento', 'responsavel')
-
-        # Isolamento multi-tenant
-        if user.tipo_usuario == 'admin':
-            pass  # vê tudo
-        elif user.empresa:
-            qs = qs.filter(equipamento__empresa=user.empresa)
-        else:
-            return Response({'error': 'Usuário sem empresa vinculada.'}, status=400)
-
-        # Filtros opcionais
-        status = request.query_params.get('status')
-        prioridade = request.query_params.get('prioridade')
-        tipo_os = request.query_params.get('tipo_os')
-        equipamento_id = request.query_params.get('equipamento')
-        responsavel_id = request.query_params.get('responsavel')
-
-        if status:
-            qs = qs.filter(status=status)
-        if prioridade:
-            qs = qs.filter(prioridade=prioridade)
-        if tipo_os:
-            qs = qs.filter(tipo_os=tipo_os)
-        if equipamento_id:
-            qs = qs.filter(equipamento_id=equipamento_id)
-        if responsavel_id:
-            qs = qs.filter(responsavel_id=responsavel_id)
-        if user.tipo_usuario == 'admin' and request.query_params.get('empresa'):
-            qs = qs.filter(equipamento__empresa_id=request.query_params['empresa'])
-
-        qs = qs.order_by('-data_abertura')
+        view = OrdemServicoViewSet()
+        view.request, view.args, view.kwargs, view.action = request, (), {}, 'list'
+        qs = view.filter_queryset(view.get_queryset())
 
         colunas = [
             'ID', 'Título', 'Equipamento', 'Tipo OS', 'Status',
-            'Prioridade', 'Responsável', 'Data Abertura', 'Data Conclusão'
+            'Prioridade', 'Criticidade atual', 'Origem da prioridade', 'Responsável', 'Data Abertura', 'Data Conclusão'
         ]
 
         linhas = []
@@ -136,7 +108,9 @@ class ExportarOrdensServicoView(APIView):
                 os.equipamento.nome if os.equipamento else '—',
                 os.get_tipo_os_display(),
                 os.get_status_display(),
-                os.get_prioridade_display(),
+                os.get_prioridade_display() or 'A definir',
+                os.equipamento.get_criticidade_display() or 'Não avaliada',
+                os.get_prioridade_origem_display(),
                 os.responsavel.get_full_name() or os.responsavel.username if os.responsavel else 'Sem responsável',
                 _formatar_datetime(os.data_abertura),
                 _formatar_datetime(os.data_conclusao),
@@ -175,11 +149,17 @@ class ExportarEquipamentosView(APIView):
         if tipo:
             qs = qs.filter(tipo=tipo)
 
+        if request.query_params.get('criticidade'):
+            qs = qs.filter(criticidade=request.query_params['criticidade'])
+        if request.query_params.get('search'):
+            from django.db.models import Q
+            term = request.query_params['search']
+            qs = qs.filter(Q(nome__icontains=term) | Q(numero_serie__icontains=term) | Q(fabricante__icontains=term) | Q(modelo__icontains=term))
         qs = qs.order_by('nome')
 
         colunas = [
             'ID', 'Nome', 'Tipo', 'Fabricante', 'Modelo',
-            'Nº Série', 'Status', 'Horímetro (h)', 'Empresa'
+            'Nº Série', 'Status', 'Criticidade', 'Horímetro (h)', 'Empresa'
         ]
 
         linhas = []
@@ -192,6 +172,7 @@ class ExportarEquipamentosView(APIView):
                 eq.modelo or '—',
                 eq.numero_serie,
                 eq.get_status_display(),
+                eq.get_criticidade_display() or 'Não avaliada',
                 round(eq.horimetro, 1),
                 eq.empresa.nome if eq.empresa else '—',
             ])
@@ -200,65 +181,37 @@ class ExportarEquipamentosView(APIView):
 
 
 class ExportarAlertasView(APIView):
-    """
-    GET /api/exportar/alertas/{formato}/
-
-    Exporta Alertas em CSV, Excel ou PDF.
-
-    Query params opcionais:
-        ?nivel=critico
-        ?status=ativo
-        ?equipamento=1
-    """
+    """Exporta o mesmo histórico e os mesmos filtros de /api/alertas/."""
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
-        user = request.user
-        qs = Alerta.objects.select_related('equipamento')
-
-        # Isolamento multi-tenant
-        if user.tipo_usuario == 'admin':
-            pass
-        elif user.empresa:
-            qs = qs.filter(equipamento__empresa=user.empresa)
-        else:
-            return Response({'error': 'Usuário sem empresa vinculada.'}, status=400)
-
-        # Filtros opcionais
-        nivel = request.query_params.get('nivel')
-        status_param = request.query_params.get('status')
-        equipamento_id = request.query_params.get('equipamento')
-
-        if nivel:
-            qs = qs.filter(nivel=nivel)
-        if status_param:
-            qs = qs.filter(status=status_param)
-        if equipamento_id:
-            qs = qs.filter(equipamento_id=equipamento_id)
-        if user.tipo_usuario == 'admin' and request.query_params.get('empresa'):
-            qs = qs.filter(equipamento__empresa_id=request.query_params['empresa'])
-
-        qs = qs.order_by('-data_alerta')
-
-        colunas = [
-            'ID', 'Equipamento', 'Tipo Alerta', 'Nível',
-            'Descrição', 'Data Alerta', 'Status'
-        ]
-
+        from alertas.filters import AlertaFilter, ordenar_historico
+        from alertas.serializers import AlertaSerializer
+        qs = _filtrar_por_empresa(
+            Alerta.objects.select_related('equipamento', 'sensor', 'ordem_servico_preditiva'),
+            request.user, 'equipamento__empresa',
+        )
+        selection = AlertaFilter(request.query_params, queryset=qs)
+        if not selection.is_valid():
+            return Response(selection.errors, status=400)
+        qs = ordenar_historico(selection.qs)
+        colunas = ['ID', 'Equipamento', 'Sensor', 'Origem', 'Tipo Alerta', 'Nível inicial',
+                   'Nível máximo', 'Motivo da detecção', 'Data Alerta', 'Normalização detectada', 'O.S.', 'Legado']
         linhas = []
         for alerta in qs:
+            evidence = alerta.dados_deteccao or {}
+            legado = not evidence or evidence.get('legado', False)
             linhas.append([
-                alerta.id,
-                alerta.equipamento.nome if alerta.equipamento else '—',
-                alerta.tipo_alerta,
-                alerta.get_nivel_display(),
-                alerta.descricao[:100] + ('...' if len(alerta.descricao) > 100 else ''),
-                _formatar_datetime(alerta.data_alerta),
-                alerta.get_status_display(),
+                alerta.pk, evidence.get('equipamento_nome', alerta.equipamento.nome),
+                evidence.get('sensor_nome', alerta.sensor.nome if alerta.sensor_id else '—'),
+                alerta.get_origem_display(), evidence.get('tipo_alerta', alerta.tipo_alerta),
+                evidence.get('nivel', 'Não disponível'), alerta.get_nivel_display(),
+                evidence.get('descricao', alerta.descricao), _formatar_datetime(alerta.data_alerta),
+                _formatar_datetime(alerta.data_normalizacao),
+                AlertaSerializer().get_ordem_servico_id(alerta) or '—', 'Sim' if legado else 'Não',
             ])
-
-        return _despachar_formato(formato, 'alertas', 'Alertas', colunas, linhas)
+        return _despachar_formato(formato, 'alertas', 'Histórico de alertas', colunas, linhas)
 
 
 class ExportarTelemetriaView(APIView):
@@ -424,6 +377,11 @@ class ExportarDashboardView(APIView):
             return Response({'error': 'Usuário sem empresa vinculada.'}, status=400)
 
         equipamentos = Equipamento.objects.filter(**eq_filter)
+        if request.query_params.get('setor'):
+            equipamentos = equipamentos.filter(localizacao__setor=request.query_params['setor'])
+        if request.query_params.get('equipamento_id'):
+            equipamentos = equipamentos.filter(pk=request.query_params['equipamento_id'])
+
 
         # Base de OS concluídas
         os_base = OrdemServico.objects.filter(

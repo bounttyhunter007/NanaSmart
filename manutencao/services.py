@@ -4,60 +4,25 @@ from django.db import transaction
 from .models import OrdemServico
 
 
-PESO = {'baixa': 1, 'media': 2, 'alta': 3, 'critica': 4}
-
-
 class PrioridadeOSService:
-    """Único ponto de cálculo; sinais e serializers delegam a esta classe."""
-
-    MATRIZ = {
-        'A': {'baixa': 'media', 'moderada': 'alta', 'alta': 'alta'},
-        'B': {'baixa': 'media', 'moderada': 'media', 'alta': 'alta'},
-        'C': {'baixa': 'baixa', 'moderada': 'media', 'alta': 'alta'},
-        'D': {'baixa': 'baixa', 'moderada': 'baixa', 'alta': 'media'},
-    }
+    """A classe vigente do equipamento é copiada uma única vez na abertura."""
 
     @classmethod
-    def calcular(cls, equipamento, tipo_os, gravidade='ausente', risco_seguranca=False, prioridade_plano=None):
-        criticidade = equipamento.criticidade
-        if risco_seguranca or gravidade == 'critica':
-            return 'critica', 'Condição crítica ou risco de segurança informado; intervenção imediata.', criticidade
-
-        if tipo_os in ('preditiva', 'preventiva') and gravidade == 'ausente':
-            prioridade = prioridade_plano or 'media'
-            return prioridade, (
-                f'Prioridade {prioridade}: manutenção programada; a criticidade {criticidade or "não avaliada"} '
-                'não transforma sozinha uma atividade preventiva em emergência.'
-            ), criticidade
-
-        if gravidade == 'ausente':
-            return 'media', (
-                'Prioridade média: gravidade da condição não informada; requer triagem. '
-                'Nenhuma criticidade foi presumida para reduzir o atendimento.'
-            ), criticidade
-
-        if not criticidade:
-            return 'alta', (
-                f'Prioridade alta: condição de gravidade {gravidade} com equipamento sem criticidade avaliada; '
-                'a classificação deve ser concluída sem reduzir a resposta.'
-            ), None
-
-        prioridade = cls.MATRIZ[criticidade][gravidade]
-        return prioridade, (
-            f'Prioridade {prioridade}: equipamento de criticidade {criticidade} e condição de gravidade {gravidade}.'
-        ), criticidade
+    def calcular(cls, equipamento, tipo_os=None, gravidade='ausente', risco_seguranca=False, prioridade_plano=None):
+        classe = equipamento.criticidade if equipamento.criticidade in ('A', 'B', 'C') else None
+        motivo = (f'Prioridade {classe} herdada da criticidade do equipamento na abertura.' if classe
+                  else 'A definir: equipamento sem criticidade avaliada na abertura; requer triagem do gestor.')
+        return classe, motivo, classe
 
     @classmethod
     def preencher(cls, dados, equipamento, prioridade_plano=None):
-        prioridade, justificativa, criticidade = cls.calcular(
-            equipamento, dados.get('tipo_os', 'preventiva'), dados.get('gravidade_condicao', 'ausente'),
-            dados.get('risco_seguranca', False), prioridade_plano,
-        )
+        prioridade, justificativa, criticidade = cls.calcular(equipamento)
         dados.update({
             'prioridade': prioridade, 'prioridade_automatica': prioridade,
-            'justificativa_prioridade': justificativa,
-            'criticidade_na_abertura': criticidade,
+            'prioridade_origem': 'herdada', 'prioridade_herdada_conhecida': True,
+            'justificativa_prioridade': justificativa, 'criticidade_na_abertura': criticidade,
             'justificativa_criticidade_na_abertura': equipamento.justificativa_criticidade or '',
+            'criterios_criticidade_na_abertura_id': equipamento.criterios_criticidade_id,
             'prioridade_manual': False,
         })
         return dados
@@ -100,15 +65,9 @@ class PrioridadeOSService:
         peso_gravidade = {'ausente': 0, 'baixa': 1, 'moderada': 2, 'alta': 3, 'critica': 4}
         agravou = peso_gravidade[gravidade] > peso_gravidade[ordem.gravidade_condicao]
         nova_ocorrencia = alerta.ordem_servico_id != ordem.pk and ordem.alerta_origem_id != alerta.pk
-        prioridade_maior = PESO[dados['prioridade']] > PESO[ordem.prioridade_automatica or ordem.prioridade]
-        if agravou or nova_ocorrencia or prioridade_maior:
+        if agravou or nova_ocorrencia:
             if agravou:
                 ordem.gravidade_condicao = gravidade
-            if prioridade_maior:
-                ordem.prioridade_automatica = dados['prioridade']
-            if not ordem.prioridade_manual and PESO[dados['prioridade']] > PESO[ordem.prioridade]:
-                ordem.prioridade = dados['prioridade']
-                ordem.justificativa_prioridade = dados['justificativa_prioridade']
             ordem.descricao += f'\n\n[ATUALIZAÇÃO DO ALERTA #{alerta.pk}] {alerta.descricao}'
             ordem.save()
         return ordem
@@ -170,14 +129,44 @@ class PrioridadeOSService:
                         alerta.equipamento.justificativa_criticidade or ''
                     ),
                 )
-            elif ordem.status in ('pendente', 'andamento') and not ordem.prioridade_manual:
-                ordem.prioridade = prioridade
-                ordem.prioridade_automatica = prioridade
+            elif ordem.status in ('pendente', 'andamento'):
                 ordem.gravidade_condicao = gravidade
-                ordem.justificativa_prioridade = justificativa
                 ordem.descricao = descricao
                 ordem.save(update_fields=[
-                    'prioridade', 'prioridade_automatica', 'gravidade_condicao',
-                    'justificativa_prioridade', 'descricao',
+                    'gravidade_condicao', 'descricao',
                 ])
         return ordem
+
+
+@transaction.atomic
+def alterar_prioridade(ordem, usuario, justificativa, prioridade=None, restaurar=False):
+    from rest_framework.exceptions import ValidationError, PermissionDenied
+    from .models import HistoricoPrioridadeOS
+    if usuario.tipo_usuario not in ('admin', 'gestor'):
+        raise PermissionDenied('Somente gestor ou administrador pode ajustar a prioridade.')
+    ordem = OrdemServico.objects.select_for_update().get(pk=ordem.pk)
+    if usuario.tipo_usuario != 'admin' and ordem.equipamento.empresa_id != usuario.empresa_id:
+        raise PermissionDenied('A OS deve pertencer à sua empresa.')
+    if ordem.status not in ('pendente', 'andamento'):
+        raise ValidationError({'prioridade': 'Uma OS encerrada não pode mudar de prioridade.'})
+    justificativa = (justificativa or '').strip()
+    if not justificativa:
+        raise ValidationError({'justificativa': 'Informe o motivo da alteração.'})
+    if restaurar:
+        if not ordem.prioridade_herdada_conhecida:
+            raise ValidationError({'prioridade': 'A herança da OS legada não é conhecida. Faça um ajuste explícito.'})
+        prioridade = ordem.prioridade_automatica
+    elif prioridade not in ('A', 'B', 'C'):
+        raise ValidationError({'prioridade': 'Use A, B ou C.'})
+    anterior = ordem.prioridade
+    dados = {'origem': ordem.prioridade_origem, 'justificativa': ordem.justificativa_prioridade,
+             'prioridade_manual': ordem.prioridade_manual}
+    ordem.prioridade = prioridade
+    ordem.prioridade_manual = not restaurar
+    ordem.prioridade_origem = 'herdada' if restaurar else 'ajustada'
+    ordem.justificativa_prioridade = justificativa
+    ordem.save(update_fields=['prioridade', 'prioridade_manual', 'prioridade_origem', 'justificativa_prioridade'])
+    HistoricoPrioridadeOS.objects.create(ordem_servico=ordem, prioridade_anterior=anterior,
+        prioridade_nova=prioridade, justificativa=justificativa,
+        origem='restauracao' if restaurar else 'ajuste', alterado_por=usuario, dados_anteriores=dados)
+    return ordem
