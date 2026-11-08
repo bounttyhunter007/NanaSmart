@@ -5,7 +5,7 @@ from rest_framework import status as http_status
 from drf_spectacular.utils import extend_schema
 
 from .cliente import generate_content, is_gemini_available
-from .context_service import build_base_context, get_financial_summary
+from .facades import GeminiContextFacade
 from .models import PromptConfig
 from .prompt_builder import (
     build_system_instruction,
@@ -147,6 +147,7 @@ class GeminiBaseView(APIView):
     missing_api_suffix = "Adicione a variável GEMINI_API_KEY ao `.env` para habilitar este endpoint."
     forbidden_message = None
     requires_financial_summary = False
+    context_facade_class = GeminiContextFacade
 
     def get_missing_api_response(self):
         return {
@@ -170,6 +171,12 @@ class GeminiBaseView(APIView):
             temperature=self.temperature,
         )
 
+    def build_context(self, user):
+        return self.context_facade_class().build_context(
+            user,
+            include_financial_summary=self.requires_financial_summary,
+        )
+
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -184,9 +191,7 @@ class GeminiBaseView(APIView):
         if not is_gemini_available():
             return Response(self.get_missing_api_response())
 
-        context = build_base_context(user)
-        if self.requires_financial_summary:
-            context['financial_summary'] = get_financial_summary(user)
+        context = self.build_context(user)
 
         system_instruction = build_system_instruction(user, self.system_purpose)
         user_prompt = self.get_prompt(user, context, message)
