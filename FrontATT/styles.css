@@ -4638,6 +4638,7 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .trend-chart-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px; }
 .trend-chart-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--t2); cursor:pointer; }
 .trend-chart-toggle input { width:16px; height:16px; accent-color:var(--trend-line); cursor:pointer; }
+.trend-chart-toggle select { background:var(--s2); color:var(--t2); border:1px solid var(--edge); border-radius:6px; padding:6px 8px; font:inherit; }
 .trend-chart-legend { display:flex; align-items:center; gap:10px 20px; flex-wrap:wrap; color:var(--t3); font-size:12px; }
 .trend-chart-legend > span { display:inline-flex; align-items:center; gap:8px; }
 .trend-chart-legend i { display:inline-block; width:26px; height:0; border-top:2px solid; flex-shrink:0; }

@@ -7,9 +7,9 @@ const stamp = n => new Date(Date.UTC(2026, 10, 6, 12) + n * 1000).toISOString();
 const reading = (id, seconds, value = 40) => ({ id, sensor: 1, timestamp: stamp(seconds), valor: value });
 const sensor = { id: 1, nome: 'Temperatura', ativo: true, unidade_medida: '°C', limite_alerta: 100 };
 
-function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }]) {
+function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }], extraProps = {}) {
   const watchers = [], mounts = [], unmounts = [], timers = new Map(), listeners = new Map();
-  const urls = [];
+  const urls = [], requests = [];
   let id = 0;
   const context = {
     Vue: { ref: value => ({ value }), computed: getter => ({ get value() { return getter(); } }),
@@ -22,8 +22,9 @@ function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }]) {
   };
   vm.runInNewContext(source, context);
   const api = context.NanaLiveChart;
-  const props = { empresa: '', equipamentos: equipmentOptions, api: async url => {
+  const props = { empresa: '', equipamentos: equipmentOptions, ...extraProps, api: async (url,opts) => {
     urls.push(url);
+    requests.push({url,opts});
     if (url.includes('/sensores/')) return { results: [sensor] };
     return handler(url);
   } };
@@ -34,7 +35,7 @@ function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }]) {
       await Promise.resolve();
     }
   }
-  return { context, api, app, props, urls, timers, document: context.document, listeners, flush,
+  return { context, api, app, props, urls, requests, timers, document: context.document, listeners, flush,
     async mount() { mounts.forEach(fn => fn()); await flush(); }, unmount() { unmounts.forEach(fn => fn()); } };
 }
 
@@ -482,10 +483,10 @@ test('visual mode still requires three unique valid timestamps and matching fit 
 });
 
 test('live preview stays visible when the next sample becomes constant', async () => {
-  let batch=[reading(1,0,40),reading(2,600,50),reading(3,1200,60)];
+  let batch=[reading(1,0,40),reading(2,60,50),reading(3,120,60)];
   const f=fixture(() => ({results:[...batch].reverse()})); await f.mount();
   f.app.showTrend.value=true; await f.flush(); assert.ok(f.app.displayed.value.projection.path);
-  batch=[reading(4,1800,60),reading(5,2400,60),reading(6,3000,60)];
+  batch=[reading(4,180,60),reading(5,240,60),reading(6,300,60)];
   await f.app.refresh();
   assert.equal(f.app.projected.value.kind,'stable');
   assert.ok(f.app.displayed.value.projection.path);
@@ -523,4 +524,108 @@ test('fixed history window remains anchored to real measurement with a separate 
   assert.equal(plot.domain.to,Date.parse(stamp(180)));
   assert.equal(plot.points[2].timestamp,stamp(120));
   assert.ok((plot.projection.startX-plot.left)/(plot.right-plot.left)>=2/3);
+});
+
+test('live window excludes old seed history and slides as readings arrive', async () => {
+  let batch=[reading(1,-7200,120),reading(2,-3600,110),reading(3,0,70),reading(4,30,70.1),reading(5,60,70.2)];
+  const f=fixture(()=>({results:[...batch].reverse()})); await f.mount();
+  assert.deepEqual(Array.from(f.app.rows.value,r=>r.id),[3,4,5]);
+  assert.equal(f.app.displayed.value.domain.from,Date.parse(stamp(0)));
+  f.app.showTrend.value=true; await f.flush();
+  assert.ok(f.app.fitted.value[1].valor>f.app.fitted.value[0].valor);
+  batch.push(reading(6,350,71),reading(7,380,70.5),reading(8,410,70));
+  const previous=f.app.displayed.value;
+  await f.app.refresh();
+  assert.deepEqual(Array.from(f.app.rows.value,r=>r.id),[6,7,8]);
+  assert.ok(f.app.fitted.value[1].valor<f.app.fitted.value[0].valor);
+  assert.equal(f.app.projected.value.points[0].timestamp,stamp(410));
+  assert.ok(f.app.displayed.value.domain.from>previous.domain.from);
+  assert.equal(f.app.received.value,3);
+  assert.ok(f.requests.filter(r=>r.url.includes('/leituras/')).every(r=>r.opts.cache==='no-store'));
+  await f.app.refresh(); assert.equal(f.app.received.value,0);
+  f.unmount();
+});
+
+test('focus scale keeps small changes near a limit readable and labels distant thresholds separately', () => {
+  const {api}=fixture(()=>({}));
+  const rows=[reading(1,0,70),reading(2,5,70.01),reading(3,10,70.03)];
+  const focused=api.chart(rows,sensor,null,'auto',null,false,[],null,{focus:true});
+  assert.ok(focused.domain.max-focused.domain.min<.3);
+  assert.ok(Math.abs(focused.points[0].y-focused.points[2].y)>20);
+  assert.equal(focused.limits.find(t=>t.name==='Baixo').visible,true);
+  assert.deepEqual(Array.from(focused.offscaleLimits,t=>t.name),['Médio','Crítico']);
+  assert.ok(focused.offscaleLimits.every(t=>t.position==='acima'));
+  const full=api.chart(rows,sensor);
+  assert.ok(full.limits.every(t=>t.visible)); assert.ok(full.domain.max>100);
+});
+
+test('a peak outside the current window cannot keep the focused scale compressed', () => {
+  const {api}=fixture(()=>({}));
+  const rows=[reading(1,0,40),reading(2,5,40.1),reading(3,10,40.2)];
+  const plot=api.chart(rows,sensor,{min:0,max:1000},'auto',null,false,[],null,{focus:true});
+  assert.ok(plot.domain.max-plot.domain.min<1);
+  assert.ok(plot.points[0].y-plot.points[2].y>100);
+});
+
+test('very small sensor changes have distinct readable axis labels', () => {
+  const {api}=fixture(()=>({}));
+  const rows=[reading(1,0,.005),reading(2,5,.00501),reading(3,10,.00502)];
+  const plot=api.chart(rows,{...sensor,limite_alerta:.01},null,'auto',null,true,[],null,{focus:true});
+  assert.equal(new Set(Array.from(plot.ticks,t=>t.label)).size,5);
+  assert.ok(plot.points.every(p=>Number.isFinite(p.y)));
+  assert.ok(plot.points[0].y-plot.points[2].y>100);
+});
+
+test('selected trend sensor uses the live polling component and refreshes its local fit every five seconds', async () => {
+  let batch=[reading(1,0,40),reading(2,10,41),reading(3,20,42)];
+  const f=fixture(()=>({results:[...batch].reverse()}),null,{selectedSensor:sensor});
+  await f.mount();
+  assert.equal(f.app.showTrend.value,true);
+  assert.ok(f.app.displayed.value.projection);
+  assert.ok(f.urls.every(url=>url.includes('/leituras/')));
+  const poll=[...f.timers.values()].find(timer=>timer.ms===5000);
+  assert.ok(poll);
+  batch.push(reading(4,30,43)); await poll.fn();
+  assert.equal(f.app.latest.value.id,4);
+  assert.equal(f.app.projected.value.points[0].timestamp,stamp(30));
+  assert.equal(f.app.received.value,1);
+  f.app.scale.value='limits'; await f.flush();
+  assert.ok(f.app.displayed.value.limits.every(t=>t.visible));
+  assert.ok(f.app.displayed.value.domain.max>100);
+  f.unmount(); assert.equal(f.timers.size,0);
+});
+
+test('a full live window advances timestamps and reports arrivals even when all values are equal', async () => {
+  let batch=Array.from({length:60},(_,i)=>reading(i+1,i*5,70));
+  const f=fixture(()=>({results:[...batch].reverse().slice(0,60)})); await f.mount();
+  f.app.showTrend.value=true; await f.flush();
+  const previous=f.app.displayed.value;
+  batch.push(reading(61,300,70)); await f.app.refresh();
+  assert.equal(f.app.rows.value.length,60);
+  assert.equal(f.app.rows.value[0].id,2);
+  assert.equal(f.app.latest.value.id,61);
+  assert.equal(f.app.received.value,1);
+  assert.ok(f.app.displayed.value.domain.from>previous.domain.from);
+  assert.ok(f.app.displayed.value.domain.to>previous.domain.to);
+  assert.equal(f.app.projected.value.kind,'stable');
+  assert.equal(f.app.projected.value.points[0].timestamp,stamp(300));
+  const unchanged=f.app.displayed.value;
+  await f.app.refresh(); assert.equal(f.app.displayed.value,unchanged);
+  assert.equal(f.app.received.value,0);
+  f.unmount();
+});
+
+test('switching the selected live sensor discards a pending response and restarts the sample', async () => {
+  let pending=false,release;
+  const f=fixture(url=>{
+    if(url.includes('sensor=2')) return {results:[{...reading(10,30,20),sensor:2}]};
+    return pending?new Promise(resolve=>{release=resolve;}):{results:[reading(1,0,50)]};
+  },null,{selectedSensor:sensor});
+  await f.mount(); pending=true; const old=f.app.refresh();
+  f.props.selectedSensor={...sensor,id:2}; await f.flush();
+  release({results:[reading(99,100,999)]}); await old;
+  assert.equal(f.app.rows.value[0].id,10);
+  assert.equal(f.app.received.value,0);
+  assert.ok(f.app.displayed.value.domain.max<30);
+  f.unmount();
 });

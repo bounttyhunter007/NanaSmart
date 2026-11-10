@@ -85,6 +85,14 @@ Conferência manual restante: abrir o frontend com a API atualizada; navegar pel
 
 Limitação conhecida: tendências ainda calcula e devolve todas as análises visíveis antes da paginação local; para volumes elevados, a evolução adequada é paginação/cálculo em lote no backend. Esta entrega não introduz processamento em background ou dados simulados.
 
+## Acompanhamento recente e escala (10/11/2026)
+
+Dashboard, Telemetria e o gráfico principal do sensor em Tendências usam o componente `LiveChart`. Na página Tendências, equipamento/sensor ficam fixados pela seleção da página, sem repetir os seletores dentro do gráfico. Leituras e ajuste visual são atualizados por consulta a cada 5 segundos, sem cache. A lista e as evidências operacionais mantêm o monitoramento de 30 segundos; a amostra usada pelo servidor continua disponível nos detalhes do cálculo.
+
+O modo inicial “Ao vivo” exibe até 60 leituras dentro dos últimos 5 minutos em relação à última medição. Ao receber novas leituras, a janela descarta as antigas e recalcula a inclinação da amostra exibida. Isso evita misturar meses/horas do seed com poucos segundos de coleta recente. O horário e a contagem de novas medições distinguem consulta sem novidade de chegada de dados. Pausar, ocultar a página, trocar sensor/empresa e desmontar continuam interrompendo ou invalidando consultas conforme o contexto. Não se fabricam pontos nem horários ao esperar novas medições.
+
+A escala padrão “Acompanhar variação” considera dados e projeção, com margem e precisão decimal adaptadas. Limites fora do intervalo visível aparecem identificados abaixo, sem linhas posicionadas artificialmente na borda. “Incluir todos os limites” oferece a escala geral. No modo focado, o desktop usa mais largura para as curvas; os valores dos limites ficam nas legendas abaixo. As janelas maiores continuam disponíveis para consultar histórico.
+
 ## Ajuda expansível na aba Tendências
 
 Adicionada uma caixa informativa **Como funcionam as tendências?**, antes dos cards de resumo. Usa `details`/`summary` nativos: inicia fechada, abre/fecha por clique ou teclado e volta fechada ao sair e retornar à aba. O conteúdo é estático e sua abertura não consulta a API nem altera configurações.
