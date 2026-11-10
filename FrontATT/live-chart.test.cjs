@@ -208,15 +208,16 @@ test('live trend is optional, uses the displayed window and adds no polling requ
   f.app.showTrend.value=false; await f.flush(); assert.equal(f.app.displayed.value.trendPath,''); f.unmount();
 });
 
-test('official sample keeps a preliminary fit while awaiting operational criteria', () => {
+test('official sample shows a preliminary preview while awaiting operational criteria', () => {
   const { api }=fixture(() => ({}));
   const rows=[reading(1,0,40),reading(2,600,45),reading(3,1800,55)];
   const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',regression_line:api.fitLine(rows)};
   const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
-  assert.equal(sample.fitted.value.length,2); assert.ok(sample.plot.value.trendPath);
+  assert.equal(sample.fitted.value.length,2); assert.ok(sample.plot.value.projection.path);
   assert.equal(sample.plot.value.domain.to,Date.parse(stamp(2700)));
   analysis.insufficient_data=true; analysis.regression_line=null;
-  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.projection,null);
+  assert.ok(sample.plot.value.projection.path); assert.equal(sample.plot.value.projection.kind,'preliminary');
+  assert.equal(sample.plot.value.projection.reachesLimit,false);
   assert.match(sample.fitMessage.value,/preliminar/);
   analysis.insufficient_data=false; analysis.analysis_enabled=false;
   assert.equal(sample.plot.value.trendPath,''); assert.match(sample.fitMessage.value,/desativada/);
@@ -234,9 +235,9 @@ test('future area stays reserved when a confirmed trend stabilizes or awaits dat
   sample.showHistoryFit.value=false;
   analysis.direction='stable';
   assert.equal(sample.plot.value.domain.to,end); assert.equal(sample.plot.value.future.startX,divider);
-  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.projection,null);
+  assert.equal(sample.plot.value.trendPath,''); assert.equal(sample.plot.value.projection.kind,'preliminary');
   analysis.insufficient_data=true; analysis.regression_line=null;
-  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.domain.to,end);
+  assert.ok(sample.plot.value.projection.path); assert.equal(sample.plot.value.domain.to,end);
 });
 
 test('forecast and limit leave vertical headroom and remain visible after real exceedance', () => {
@@ -266,7 +267,8 @@ test('sample uses sensor-specific alarm thresholds independently of forecast', (
     analysis:{analysis_enabled:true,insufficient_data:true}});
   assert.deepEqual(Array.from(sample.limits.value,t=>t.value),[60,75,90]);
   assert.equal(sample.plot.value.limits.length,1); assert.equal(sample.plot.value.limits[0].value,100);
-  assert.equal(sample.plot.value.projection,null);
+  assert.equal(sample.plot.value.projection.kind,'stable');
+  assert.equal(sample.plot.value.projection.reachesLimit,false);
 });
 
 test('forecast time is shown only for a valid future projection anchored to the last sample', () => {
@@ -367,8 +369,92 @@ test('official sample uses backend direction and keeps observed timestamps outsi
   assert.equal(sample.plot.value.points.length,rows.length);
   assert.equal(sample.plot.value.points[2].timestamp,stamp(7200));
   analysis.direction='stable';
-  assert.equal(sample.plot.value.projection,null);
-  assert.ok(sample.plot.value.trendPath);
+  assert.equal(sample.plot.value.projection.kind,'preliminary');
+  assert.ok(sample.plot.value.projection.path);
+  assert.equal(sample.plot.value.projection.reachesLimit,false);
+});
+
+test('visual preview includes slow trends even before the minimum duration or sensitivity', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,10,40.001),reading(3,20,40.002)];
+  const analysis={analysis_enabled:true,insufficient_data:true,data_quality:'insufficient',direction:'stable',
+    config_used:{minimo_leituras:7,duracao_minima_minutos:30}};
+  const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
+  assert.equal(sample.projected.value.kind,'preliminary');
+  assert.ok(sample.projected.value.points[1].valor>40.002);
+  assert.equal(sample.projected.value.points[0].timestamp,rows[2].timestamp);
+  assert.match(sample.fitMessage.value,/7 leituras cobrindo 30 min/);
+  assert.equal(sample.estimate.value,null);
+  analysis.insufficient_data=false; analysis.data_quality='valid';
+  assert.equal(sample.projected.value.kind,'preliminary');
+  assert.ok(sample.plot.value.projection.path);
+  assert.equal(analysis.direction,'stable'); assert.equal(analysis.insufficient_data,false);
+});
+
+test('flat readings produce a horizontal visual preview without a breach prediction', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,60),reading(2,600,60),reading(3,1200,60)];
+  const preview=api.projectForward(rows,api.fitLine(rows),{visual:true,limit:100});
+  assert.equal(preview.kind,'stable');
+  assert.equal(preview.points[0].valor,60); assert.equal(preview.points[1].valor,60);
+  assert.equal(preview.reachesLimit,false); assert.equal(preview.limitOutside,false);
+  assert.match(api.projectionExplanation(preview),/horizontal/);
+  const plot=api.chart(rows,sensor,null,'auto',null,false,[],preview);
+  assert.equal(plot.projection.points[0].y,plot.projection.points[1].y);
+});
+
+test('oscillating readings show a shorter exploratory preview without a time-to-limit claim', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[40,60,41,59,42].map((valor,i)=>reading(i+1,i*600,valor));
+  const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',direction:'stable',
+    regression_line:api.fitLine(rows)};
+  const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
+  assert.equal(sample.projected.value.kind,'low_confidence');
+  assert.equal(sample.projected.value.horizon,600000);
+  assert.ok(sample.plot.value.projection.path);
+  assert.equal(sample.projected.value.reachesLimit,false);
+  assert.equal(sample.estimate.value,null);
+  assert.match(sample.fitMessage.value,/baixa consistência/);
+});
+
+test('preview preserves source-quality failures and upgrades only after server confirmation', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,600,60),reading(3,1200,80)];
+  const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',direction:'stable',
+    regression_line:api.fitLine(rows),source_r_squared:.3,source_persistence_ratio:.5};
+  const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
+  assert.equal(sample.projected.value.kind,'low_confidence');
+  assert.equal(sample.projected.value.reachesLimit,false);
+  Object.assign(analysis,{direction:'increasing',source_r_squared:1,source_persistence_ratio:1});
+  assert.equal(sample.projected.value.kind,'confirmed');
+  assert.equal(sample.projected.value.reachesLimit,true);
+  assert.equal(sample.projected.value.points[1].valor,100);
+  analysis.analysis_enabled=false;
+  assert.equal(sample.projected.value,null);
+  assert.match(sample.fitMessage.value,/desativada/);
+});
+
+test('visual mode still requires three unique valid timestamps and matching fit endpoints', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,10,50),reading(3,20,60)],fit=api.fitLine(rows);
+  for(const sample of [[],rows.slice(0,2),[rows[0],rows[1],{...rows[1],id:9}],
+    [rows[0],rows[1],{...rows[2],valor:null}]]) {
+    assert.equal(api.projectForward(sample,fit,{visual:true}),null);
+  }
+  assert.equal(api.projectForward(rows,[{...fit[0],timestamp:stamp(-10)},fit[1]],{visual:true}),null);
+  assert.equal(api.projectForward(rows,fit,{visual:true,analysis:{analysis_enabled:false}}),null);
+});
+
+test('live preview stays visible when the next sample becomes constant', async () => {
+  let batch=[reading(1,0,40),reading(2,600,50),reading(3,1200,60)];
+  const f=fixture(() => ({results:[...batch].reverse()})); await f.mount();
+  f.app.showTrend.value=true; await f.flush(); assert.ok(f.app.displayed.value.projection.path);
+  batch=[reading(4,1800,60),reading(5,2400,60),reading(6,3000,60)];
+  await f.app.refresh();
+  assert.equal(f.app.projected.value.kind,'stable');
+  assert.ok(f.app.displayed.value.projection.path);
+  assert.equal(f.app.displayed.value.points.length,3);
+  f.unmount();
 });
 
 test('animated projection stays synchronized with real points and final time domain', async () => {

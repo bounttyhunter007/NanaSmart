@@ -4663,6 +4663,7 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .forecast-region-label { fill:var(--t4); font-size:11px; font-family:var(--body); }
 .trend-fit-line { opacity:.65; stroke-width:2; stroke-dasharray:10 6; }
 .trend-projection-line { fill:none; stroke:var(--trend-line); stroke-width:3; stroke-dasharray:8 5; vector-effect:non-scaling-stroke; pointer-events:none; }
+.trend-projection-line.forecast-uncertain { opacity:.65; }
 .forecast-endpoint { fill:var(--s2); stroke:var(--trend-line); stroke-width:2.5; vector-effect:non-scaling-stroke; }
 .forecast-endpoint:focus { outline:none; stroke-width:4; }
 .trend-chart-legend .legend-projection { border-color:var(--trend-line); border-top-style:dashed; border-top-width:3px; }
