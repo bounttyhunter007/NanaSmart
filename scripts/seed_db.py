@@ -7,6 +7,7 @@ import os
 import sys
 import django
 import random
+import math
 import re
 import argparse
 import time
@@ -24,6 +25,8 @@ from accounts.models import Empresa, Usuario
 from ativos.models import Equipamento, EquipamentoLocalizacao, PlanoManutencao, TipoEquipamento, CriteriosCriticidade
 from ativos.services import aplicar_criticidade, CRITERIOS_SUGERIDOS
 from telemetria.models import Sensor, Telemetria, TrendConfig
+from telemetria.predictive_service import sync_sensor_trend
+from telemetria.limit_service import sync_limit_reading
 from manutencao.models import OrdemServico, HistoricoManutencao
 from manutencao.services import PrioridadeOSService
 from alertas.models import Alerta
@@ -212,6 +215,41 @@ def salvar_telemetria_bulk(leituras):
     for leitura, timestamp in zip(leituras, timestamps):
         leitura.timestamp = timestamp
     Telemetria.objects.bulk_update(leituras, ['timestamp'], batch_size=5000)
+
+
+def gerar_historico_sensor(minimo, limite, inicio, fim, perfil='estavel', rng=None):
+    """Histórico sintético suave, com horários irregulares e escala do sensor.
+
+    A mudança de regime ocorre nas últimas 24 horas, sem acumular desgaste
+    durante meses até todas as leituras ficarem presas no teto.
+    """
+    if perfil not in ('estavel', 'crescente', 'recuperacao'):
+        raise ValueError('Perfil de telemetria desconhecido.')
+    rng = rng or random
+    if perfil == 'crescente':
+        base = rng.uniform(.40, .48) * limite
+        mudanca = rng.uniform(.54, .60) * limite
+    elif perfil == 'recuperacao':
+        base = rng.uniform(.68, .76) * limite
+        mudanca = -rng.uniform(.25, .35) * limite
+    else:
+        base = rng.uniform(.48, .62) * limite
+        mudanca = 0
+    fase = rng.uniform(0, math.tau)
+    periodo = rng.uniform(18, 30)
+    horarios = []
+    ponto = fim - timedelta(minutes=rng.uniform(2, 12))
+    while ponto >= inicio:
+        horarios.append(ponto)
+        ponto -= timedelta(minutes=rng.uniform(40, 85))
+    for ponto in reversed(horarios):
+        horas = (ponto - inicio).total_seconds() / 3600
+        progresso = max(0, min(1, 1 - (fim - ponto).total_seconds() / 86400))
+        oscilacao = math.sin(math.tau * horas / periodo + fase) * limite * .012
+        ruido = rng.uniform(-.003, .003) * limite
+        valor = base + mudanca * progresso + oscilacao + ruido
+        # O ruído é proporcional à grandeza: não domina sensores de escala pequena.
+        yield ponto, round(max(minimo * .8, min(valor, limite * 1.1)), 4)
 
 # ---------------------------------------------------------------------------
 # Lógica Principal
@@ -446,22 +484,15 @@ def run_seed(
     t_start = time.time()
     print(f"\n[TELEMETRY] Gerando histórico de telemetria ({dias_historico} dias)...")
     leituras_bulk = []
-    total_horas = dias_historico * 24
+    perfis = ['estavel', 'estavel', 'estavel', 'crescente', 'recuperacao']
+    random.shuffle(perfis)
+    contagem_perfis = {perfil: 0 for perfil in perfis}
     
-    for sensor, min_v, max_v in todos_sensores:
-        base_val = random.uniform(min_v, (min_v + max_v) / 2)
-        trend = random.uniform(-0.005, 0.03) # Tendência sutil de desgaste
-        
-        # Gerar 1 leitura por hora
-        for h in range(total_horas):
-            ponto = inicio_historico + timedelta(hours=h)
-            fluctuacao = random.uniform(-0.4, 0.4)
-            val = base_val + (h * trend) + fluctuacao
-            
-            # Garantir limites seguros
-            val = max(min_v * 0.8, min(val, max_v * 1.4))
-            
-            leituras_bulk.append(Telemetria(sensor=sensor, valor=round(val, 2), timestamp=ponto))
+    for index, (sensor, min_v, max_v) in enumerate(todos_sensores):
+        perfil = perfis[index % len(perfis)]
+        contagem_perfis[perfil] += 1
+        for ponto, valor in gerar_historico_sensor(min_v, max_v, inicio_historico, now, perfil):
+            leituras_bulk.append(Telemetria(sensor=sensor, valor=valor, timestamp=ponto))
             
             if len(leituras_bulk) >= 5000:
                 salvar_telemetria_bulk(leituras_bulk)
@@ -470,6 +501,7 @@ def run_seed(
     if leituras_bulk: 
         salvar_telemetria_bulk(leituras_bulk)
     print(f"OK: {Telemetria.objects.count()} registros de telemetria gerados. (Duração: {time.time() - t_start:.2f}s)")
+    print(f"[TELEMETRY] Intervalos de 40 a 85 min; perfis por sensor: {contagem_perfis}")
 
     # 7. Ordens de Serviço, Histórico e Alertas
     t_start = time.time()
@@ -569,15 +601,13 @@ def run_seed(
             if data_os > now:
                 data_os = now - timedelta(days=random.randint(1, 5), hours=random.randint(0, 12))
 
-        # As ocorrências de exemplo passam pelo monitoramento real. Não há
-        # cadastro manual de alertas nem evidências inventadas pelo seed.
-        if eq.status == 'manutencao' or random.random() > 0.8:
-            sensor = Sensor.objects.filter(equipamento=eq, ativo=True).first()
-            if sensor and sensor.limite_alerta > 0:
-                Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 1.1)
-                if eq.status != 'manutencao':
-                    Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 0.3)
-                    Telemetria.objects.create(sensor=sensor, valor=sensor.limite_alerta * 0.3)
+        # Bulk não dispara sinais. Avaliar os dados gerados, sem acrescentar
+        # picos de 110% seguidos de quedas a 30% apenas para fabricar exemplos.
+        for sensor in Sensor.objects.filter(equipamento=eq, ativo=True):
+            sync_sensor_trend(sensor.pk)
+            ultima = Telemetria.objects.filter(sensor=sensor).order_by('-timestamp', '-pk').first()
+            if ultima is not None:
+                sync_limit_reading(ultima)
 
         log_progresso("Manutenção & Alertas", idx + 1, total_equips)
     print(f"OK (Duração: {time.time() - t_start:.2f}s)")
