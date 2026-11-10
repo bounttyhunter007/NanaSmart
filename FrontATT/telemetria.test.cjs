@@ -409,7 +409,10 @@ test('abrir O.S. consulta exclusivamente o vínculo sem assumir nem alterar a or
   });
   await app.openAlertaOS({ id: 8, equipamento: 3, ordem_servico_id: 42 });
   assert.ok(urls.some(url => url.includes('/api/ordens-servico/42/')));
-  assert.equal(app.equipModal.currentOS.id, 42);
+  assert.equal(app.orderDetail.order.id, 42);
+  assert.equal(app.orderDetail.open, true);
+  assert.equal(app.equipModal.open, false);
+  assert.equal(urls.length, 1);
   assert.ok(methods.every(method => method === 'GET'));
 });
 

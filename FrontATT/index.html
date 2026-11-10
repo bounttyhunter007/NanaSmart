@@ -407,17 +407,19 @@
 
         <!-- Ordens: uma única fila filtrada e ordenada pelo servidor. -->
         <section v-if="view==='ordens'" class="abc-orders">
-          <header class="abc-heading"><div><p class="dashboard-eyebrow">PLANEJAMENTO DA MANUTENÇÃO</p><h1>Ordens de serviço</h1><p>Prioridade A, B e C, da mais alta à mais baixa. Dentro de cada classe, as mais antigas aparecem primeiro.</p></div><button class="btn btn-primary" @click="openModal('ordem')">+ Nova OS</button></header>
+          <header class="abc-heading"><div><p class="dashboard-eyebrow">PLANEJAMENTO DA MANUTENÇÃO</p><h1>Ordens de serviço</h1><p>Selecione uma O.S. para consultar os detalhes e acompanhar o atendimento.</p></div><button class="btn btn-primary" @click="openModal('ordem')">+ Nova O.S.</button></header>
           <div class="os-priority-tabs" role="group" aria-label="Filtrar prioridade da OS">
             <button v-for="p in [{value:'',label:'Todas'},{value:'A',label:'A — Alta'},{value:'B',label:'B — Média'},{value:'C',label:'C — Baixa'},{value:'a_definir',label:'A definir'}]" :key="p.value" class="os-priority-tab" :class="{active: filters.ordens.prioridade===p.value}" :aria-pressed="filters.ordens.prioridade===p.value" @click="selectOrderPriority(p.value)">{{ p.label }}</button>
           </div>
-          <div class="filter-bar">
+          <div class="filter-bar order-filters">
             <input class="filter-input" v-model="filters.ordens.search" aria-label="Buscar OS" placeholder="Buscar título ou descrição…" @input="debouncedFetch('or',fetchOrdens)" />
             <select class="filter-select" v-model="filters.ordens.status" aria-label="Status da OS" @change="fetchOrdens()"><option value="abertas">Abertas</option><option value="">Todos os status</option><option value="pendente">Pendentes</option><option value="andamento">Em andamento</option><option value="concluida">Concluídas</option><option value="cancelada">Canceladas</option></select>
-            <select class="filter-select" v-model="filters.ordens.tipo_os" aria-label="Tipo de OS" @change="fetchOrdens()"><option value="">Todos os tipos</option><option value="preventiva">Preventiva</option><option value="corretiva">Corretiva</option><option value="preditiva">Preditiva</option></select>
-            <select class="filter-select" v-model="filters.ordens.responsavel_escopo" aria-label="Responsável pela OS" @change="fetchOrdens()"><option value="">Todos os responsáveis</option><option value="minhas">Minhas OS</option><option value="livres">Sem responsável</option></select>
+            <details class="order-extra-filters"><summary>Mais filtros <span v-if="orderExtraFilters">({{ orderExtraFilters }} ativos)</span></summary><div>
+              <label>Tipo de serviço<select class="filter-select" v-model="filters.ordens.tipo_os" @change="fetchOrdens()"><option value="">Todos os tipos</option><option value="preventiva">Preventiva</option><option value="corretiva">Corretiva</option><option value="preditiva">Preditiva</option></select></label>
+              <label>Responsável<select class="filter-select" v-model="filters.ordens.responsavel_escopo" @change="fetchOrdens()"><option value="">Todos os responsáveis</option><option value="minhas">Minhas O.S.</option><option value="livres">Sem responsável</option></select></label>
+            </div></details>
             <button class="btn btn-ghost btn-sm" @click="clearOrderFilters">Limpar filtros</button>
-            <div class="export-btns" v-if="isAdminOrGestor"><span class="export-label">Exportar fila filtrada:</span><button class="btn-export pdf" @click="exportData('ordens-servico','pdf')">PDF</button><button class="btn-export excel" @click="exportData('ordens-servico','excel')">Excel</button><button class="btn-export csv" @click="exportData('ordens-servico','csv')">CSV</button></div>
+            <details v-if="isAdminOrGestor" class="dashboard-export order-export"><summary class="btn btn-ghost btn-sm">Exportar ↓</summary><div><button class="btn btn-ghost btn-sm" @click="exportData('ordens-servico','pdf')">PDF</button><button class="btn btn-ghost btn-sm" @click="exportData('ordens-servico','excel')">Excel</button><button class="btn btn-ghost btn-sm" @click="exportData('ordens-servico','csv')">CSV</button></div></details>
           </div>
           <p v-if="filters.ordens.equipamento || filters.ordens.setor" class="abc-note">Recorte atual: {{ filters.ordens.equipamento ? 'equipamento #' + filters.ordens.equipamento : '' }} {{ filters.ordens.setor }}. Use Limpar filtros para consultar os demais.</p>
           <p v-if="orderState.triage && !orderState.busy" class="abc-notice" role="status">{{ orderState.triage }} OS {{ orderState.triage===1 ? 'aguarda' : 'aguardam' }} definição de prioridade nos filtros atuais. A ausência de classe requer revisão do gestor.</p>
@@ -425,11 +427,24 @@
           <div v-else-if="orderState.busy" class="loading" role="status">Carregando ordens de serviço…</div>
           <div v-else-if="!lists.ordens.length" class="empty"><p>{{ orderState.total===0 ? 'Nenhuma OS cadastrada.' : 'Nenhuma OS corresponde a estes filtros.' }}</p><button v-if="orderState.total" class="btn btn-ghost" @click="clearOrderFilters">Limpar filtros</button></div>
           <template v-else>
-            <div class="table-wrap abc-orders-table"><table><thead><tr><th>Prioridade da OS</th><th>Ordem / equipamento</th><th>Criticidade atual</th><th>Status / responsável</th><th>Abertura</th><th>Ações</th></tr></thead><tbody>
-              <tr v-for="o in lists.ordens" :key="o.id"><td><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span><small>{{ priorityOrigin(o.prioridade_origem) }}</small></td><td><button class="abc-text-button" @click="openEquipamentoDetails(o.equipamento,o)">#{{ o.id }} — {{ o.titulo }}</button><small>{{ o.equipamento_nome }} · {{ o.tipo_os }}</small><small v-if="o.risco_seguranca" class="abc-risk">Risco de segurança informado</small><small v-if="o.gravidade_condicao==='critica'" class="abc-risk">Condição crítica informada</small></td><td>{{ criticidadeLabel(o.criticidade_atual) }}</td><td>{{ ({pendente:'Pendente',andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'}[o.status]) }}<small>{{ o.responsavel_nome || 'Sem responsável' }}</small></td><td class="abc-nowrap">{{ fmtDate(o.data_abertura) }}</td><td><div class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openPriority(o)">Prioridade e histórico</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento,o)">Ver OS</button><button v-if="!o.responsavel && ['pendente','andamento'].includes(o.status)" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="assumirOS(o)">Assumir</button><button v-if="o.responsavel===me?.id && o.status==='pendente'" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="iniciarAtendimento(o)">Iniciar</button><button v-if="o.responsavel===me?.id && o.status==='andamento'" class="btn btn-success btn-sm" @click="openEncerrarOS(o)">Encerrar</button></div></td></tr>
+            <p class="order-sort-note">Prioridade A → B → C · Mais antigas primeiro em cada classe.</p>
+            <div class="table-wrap abc-orders-table"><table><thead><tr><th scope="col">Prioridade</th><th scope="col">Ordem de serviço</th><th scope="col">Atendimento</th><th scope="col">Abertura</th><th scope="col">Consulta</th></tr></thead><tbody>
+              <tr v-for="o in lists.ordens" :key="o.id">
+                <td><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span></td>
+                <td class="order-list-title"><button class="abc-text-button" @click="openOrderDetails(o)">#{{ o.id }} — {{ o.titulo }}</button><small>{{ o.equipamento_nome }} · {{ orderTypeLabel(o.tipo_os) }}</small><small v-if="o.risco_seguranca || o.gravidade_condicao==='critica'" class="abc-risk">{{ o.risco_seguranca ? 'Risco de segurança' : 'Condição crítica' }}</small></td>
+                <td><span class="order-status" :class="'is-' + o.status">{{ orderStatusLabel(o.status) }}</span><small>{{ o.responsavel_nome || 'Sem responsável' }}</small></td>
+                <td class="abc-nowrap">{{ fmtDate(o.data_abertura) }}</td>
+                <td><div class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openOrderDetails(o)" :aria-label="'Ver O.S. #' + o.id">Ver O.S.</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento)" :aria-label="'Ver equipamento da O.S. #' + o.id">Equipamento ↗</button></div></td>
+              </tr>
             </tbody></table></div>
             <div class="abc-orders-mobile">
-              <article v-for="o in lists.ordens" :key="o.id" class="os-card"><header class="os-card-header"><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span><span>#{{ o.id }}</span></header><h2>{{ o.titulo }}</h2><p>{{ o.equipamento_nome }}</p><p>Criticidade atual: {{ criticidadeLabel(o.criticidade_atual) }}</p><p>{{ priorityOrigin(o.prioridade_origem) }} · {{ ({pendente:'Pendente',andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'}[o.status]) }}</p><p>{{ o.responsavel_nome || 'Sem responsável' }} · {{ fmtDate(o.data_abertura) }}</p><p v-if="o.risco_seguranca || o.gravidade_condicao==='critica'" class="abc-risk">{{ o.risco_seguranca ? 'Risco de segurança informado' : 'Condição crítica informada' }}</p><footer class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openPriority(o)">Prioridade e histórico</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento,o)">Ver OS</button><button v-if="!o.responsavel && ['pendente','andamento'].includes(o.status)" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="assumirOS(o)">Assumir</button><button v-if="o.responsavel===me?.id && o.status==='pendente'" class="btn btn-primary btn-sm" :disabled="o._assumindo" @click="iniciarAtendimento(o)">Iniciar</button><button v-if="o.responsavel===me?.id && o.status==='andamento'" class="btn btn-success btn-sm" @click="openEncerrarOS(o)">Encerrar</button></footer></article>
+              <article v-for="o in lists.ordens" :key="o.id" class="os-card order-list-card">
+                <header class="os-card-header"><span class="badge" :class="prioridadeBadge(o.prioridade)">{{ prioridadeLabel(o.prioridade) }}</span><span class="order-status" :class="'is-' + o.status">{{ orderStatusLabel(o.status) }}</span></header>
+                <h2><button class="abc-text-button" @click="openOrderDetails(o)">#{{ o.id }} — {{ o.titulo }}</button></h2><p>{{ o.equipamento_nome }} · {{ orderTypeLabel(o.tipo_os) }}</p>
+                <p>{{ o.responsavel_nome || 'Sem responsável' }}<small>Aberta em {{ fmtDate(o.data_abertura) }}</small></p>
+                <p v-if="o.risco_seguranca || o.gravidade_condicao==='critica'" class="abc-risk">{{ o.risco_seguranca ? 'Risco de segurança' : 'Condição crítica' }}</p>
+                <footer class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openOrderDetails(o)" :aria-label="'Ver O.S. #' + o.id">Ver O.S.</button><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(o.equipamento)" :aria-label="'Ver equipamento da O.S. #' + o.id">Equipamento ↗</button></footer>
+              </article>
             </div>
             <div class="pagination"><button class="page-btn" :disabled="!pages.ordens.prev || orderState.busy" @click="fetchOrdens(pages.ordens.prev)">← Anterior</button><span class="page-info">{{ orderState.count }} OS · {{ lists.ordens.length }} nesta página</span><button class="page-btn" :disabled="!pages.ordens.next || orderState.busy" @click="fetchOrdens(pages.ordens.next)">Próxima →</button></div>
           </template>
@@ -482,16 +497,19 @@
           </div>
           <section v-if="trendPage.equipment && !selectedTrend" class="telemetry-panel"><h2>Escolha o sensor para ver o gráfico</h2><p>Um equipamento pode medir temperatura, pressão e outras grandezas. Selecione um sensor acima para acompanhar um único gráfico com a unidade correta.</p></section>
           <section v-if="selectedTrend" id="trend-live-monitor" class="telemetry-panel trend-live-panel">
-            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">EVOLUÇÃO DO SENSOR SELECIONADO</div><h2>{{ selectedTrend.sensor_info.nome }} · {{ selectedTrend.sensor_info.equipamento_nome }}</h2><p>Compare as leituras reais com a tendência calculada sobre a mesma amostra. O limite superior permanece como referência horizontal.</p></div><button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openTrendConfig(selectedTrend.sensor_id,selectedTrend.sensor_info.equipamento_id)">Ajustar tempo e critérios</button></div>
+            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">EVOLUÇÃO DO SENSOR SELECIONADO</div><h2>{{ selectedTrend.sensor_info.nome }} · {{ selectedTrend.sensor_info.equipamento_nome }}</h2><p>Leituras reais à esquerda e projeção à direita. A linha horizontal marca o limite superior cadastrado.</p></div><button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openTrendConfig(selectedTrend.sensor_id,selectedTrend.sensor_info.equipamento_id)">Ajustar tempo e critérios</button></div>
             <span :class="['telemetry-condition',trendCondition(selectedTrend)]">{{ trendConditionLabel(selectedTrend) }}</span><span v-if="trendDemo.session && trendDemo.session.sensor_id === selectedTrend.sensor_id" class="telemetry-condition">[DEMO] Leitura {{ trendDemo.session.passo }} / {{ trendDemo.session.total_passos }}</span>
             <measurement-sample v-if="selectedTrend.readings_summary.length" :readings="selectedTrend.readings_summary" :sensor="selectedTrend.sensor_info" :analysis="selectedTrend"></measurement-sample><p v-else>A configuração está desativada ou não há amostra disponível para desenhar. O gráfico aparece com as primeiras leituras; a confirmação de tendência pode acontecer depois.</p>
             <div class="telemetry-evidence trend-sample-evidence"><div><span>Leituras disponíveis / mínimo</span><strong>{{ selectedTrend.readings_count }} / {{ selectedTrend.config_used.minimo_leituras }}</strong></div><div><span>Tempo observado / mínimo</span><strong>{{ Number(selectedTrend.sample_duration_minutes).toFixed(2) }} / {{ selectedTrend.config_used.duracao_minima_minutos }} min</strong></div><div><span>Ritmo medido</span><strong>{{ selectedTrend.insufficient_data || !selectedTrend.analysis_enabled ? 'Aguardando amostra' : Number(selectedTrend.slope_per_hour / 60).toFixed(2) + ' ' + selectedTrend.sensor_info.unidade_medida + '/min' }}</strong></div></div>
-            <div class="telemetry-guide-callout"><strong>Preciso esperar 30 minutos?</strong><p>Não é um cronômetro iniciado ao abrir a página. É a distância mínima entre a primeira e a última leitura da amostra. Se já houver histórico suficiente, a análise pode ser imediata. Se o sensor acabou de começar, o gráfico já mostra suas leituras, mas o alerta de tendência aguarda quantidade e tempo suficientes.</p><p>Este sensor pede <strong>{{ selectedTrend.config_used.duracao_minima_minutos }} minuto(s)</strong>. Você pode ajustar esse tempo no botão acima. Para a apresentação, o teste usa um minuto só no sensor [DEMO]. As leituras por limite continuam sendo avaliadas independentemente.</p></div>
+            <div class="trend-automation" aria-label="Quando o sistema gera alertas e ordens"><div><strong>Tendência anormal confirmada</strong><p>Gera alerta e OS preditiva de inspeção, mesmo antes do limite. Exige quantidade, duração e consistência configuradas.</p></div><div><strong>Leitura real na faixa de alarme</strong><p>Gera alerta por limite e OS corretiva. As faixas acima são inclusivas: ao atingir o valor, a regra já vale. Independe da tendência.</p></div><div><strong>Projeção e recuperação</strong><p>O tracejado é uma estimativa. Alertas e OS são processados no servidor a cada nova leitura, mesmo com a tela fechada. A normalização do alerta não encerra a OS.</p></div></div>
+            <div v-if="selectedTrend.limit_alert" class="telemetry-notice" role="status"><strong>Alerta por limite #{{ selectedTrend.limit_alert.id }}</strong> · maior nível {{ {baixo:'baixo',medio:'médio',critico:'crítico'}[selectedTrend.limit_alert.level] }}<span v-if="selectedTrend.limit_alert.current_level === 'normal'"> · aguardando confirmação de recuperação</span><span v-if="selectedTrend.limit_alert.work_order"> · OS corretiva #{{ selectedTrend.limit_alert.work_order.id }} ({{ selectedTrend.limit_alert.work_order.status }})</span><div class="telemetry-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.limit_alert.id})">Ver alerta</button><button v-if="selectedTrend.limit_alert.work_order" class="btn btn-ghost btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.limit_alert.work_order.id})">Ver OS corretiva</button></div></div>
+            <details class="telemetry-advanced"><summary>Tempo de observação e detalhes do cálculo</summary><p>Este sensor exige {{ selectedTrend.config_used.duracao_minima_minutos }} minuto(s) entre a primeira e a última leitura. Esse tempo vem do histórico, sem depender de quando a tela foi aberta. Se a coleta for rápida, a amostra é distribuída no tempo para preservar essa duração.</p>
             <div class="trend-checks"><span v-for="check in selectedTrend.checks || []" :key="check.label" :class="{passed:check.passed}">{{ check.passed ? '✓' : '○' }} {{ check.label }}</span></div>
             <p v-if="selectedTrend.insufficient_data">Os demais critérios serão calculados quando a amostra atingir os mínimos acima. O ritmo exibido antes disso não é uma tendência confirmada.</p>
             <p v-else-if="selectedTrend.is_anomalous"><strong>Por que preocupa?</strong> A amostra tem quantidade e duração suficientes; o ritmo superou {{ selectedTrend.threshold_per_hour }} {{ selectedTrend.sensor_info.unidade_medida }}/h, o movimento atende à persistência e ao R² configurados e segue o sentido considerado anormal.</p>
             <p v-if="selectedTrend.projected_breach_minutes !== null && selectedTrend.projected_breach_minutes !== undefined" class="telemetry-formula">Tempo até o limite = máximo entre 0 e ({{ selectedTrend.sensor_info.limite_alerta }} − {{ selectedTrend.current_value }}) ÷ ritmo por minuto ≈ {{ selectedTrend.projected_breach_minutes }} minuto(s), se o ritmo continuar.<span v-if="selectedTrend.current_value >= selectedTrend.sensor_info.limite_alerta"> O limite já foi atingido; a estimativa fica em zero.</span></p>
-            <div v-if="selectedTrend.active_alert_id" class="telemetry-notice" role="status">Alerta de tendência #{{ selectedTrend.active_alert_id }}<span v-if="selectedTrend.predictive_work_order"> · OS preditiva #{{ selectedTrend.predictive_work_order.id }} ({{ selectedTrend.predictive_work_order.status }})</span></div><p><strong>Método:</strong> regressão linear, persistência e regras configuráveis calculadas no backend. A regra é determinística: os mesmos dados e critérios levam ao mesmo resultado. A detecção não usa um modelo de IA treinado para prever falhas. A IA opcional só ajuda a explicar os dados; atingir o limite não garante uma quebra.</p>
+            <p><strong>Método:</strong> regressão linear, persistência e critérios configuráveis. A projeção estima o alcance do limite se o ritmo continuar; não estima uma data de quebra.</p></details>
+            <div v-if="selectedTrend.active_alert_id" class="telemetry-notice" role="status">Alerta de tendência #{{ selectedTrend.active_alert_id }}<span v-if="selectedTrend.predictive_work_order"> · OS preditiva #{{ selectedTrend.predictive_work_order.id }} ({{ selectedTrend.predictive_work_order.status }})</span><div class="telemetry-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.active_alert_id})">Ver alerta</button><button v-if="selectedTrend.predictive_work_order" class="btn btn-ghost btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.predictive_work_order.id})">Ver OS preditiva</button></div></div>
           </section>
           <details v-if="isAdmin" class="telemetry-guide trend-demo-panel">
             <summary><span class="telemetry-guide-icon" aria-hidden="true">▶</span><span><strong>Apresentação guiada · teste de tendência</strong><small>Veja a temperatura subir e acompanhe o motivo do alerta e a OS gerada.</small></span><span class="telemetry-guide-toggle" aria-hidden="true"></span></summary>
@@ -595,7 +613,7 @@
                   <tr><td>Sensibilidade</td><td>Alta percebe ritmos menores de mudança; baixa exige mudanças mais fortes. Os outros critérios continuam obrigatórios.</td><td>Média</td></tr>
                 </tbody></table></div>
                 <p><strong>Exemplo de ajuste:</strong> se você quer observar pelo menos 1 hora e receber leituras a cada 10 minutos, pode escolher mínimo de 7 leituras, máximo de 50 e duração mínima de 60 minutos. Sete leituras distribuídas de 13h a 14h, a cada 10 minutos, cobrem essa hora. Os demais critérios também precisam ser atendidos.</p>
-                <p><strong>Quantidade não substitui tempo:</strong> 50 leituras a cada segundo cobrem cerca de 49 segundos. Com duração mínima de 30 minutos, o sistema continuará aguardando dados, porque só usa as leituras mais recentes até o máximo escolhido. Ajuste a coleta ou os critérios para que a amostra consiga cobrir o tempo exigido.</p>
+                <p><strong>Quantidade não substitui tempo:</strong> 50 leituras a cada segundo cobrem cerca de 49 segundos. Se já houver 30 minutos de histórico válido, o sistema distribui até 50 leituras reais nesse período e verifica também a consistência das leituras originais. Se o sensor acabou de começar, ainda precisa completar a duração mínima.</p>
                 <p><strong>Configuração do sensor ou global?</strong> A específica do sensor vale primeiro. Se não existir, ele herda a global mais recente; sem global, usa os padrões acima. Salvar os critérios herdados cria uma configuração específica. Somente o administrador altera a global, que afeta todos os sensores que a herdam, inclusive de outras empresas.</p>
               </section>
               <section>
@@ -859,6 +877,52 @@
   <!-- ══════════════════════════════════════
        MODAL
   ══════════════════════════════════════ -->
+  <!-- Consulta da O.S.: dados essenciais primeiro, informações técnicas sob demanda. -->
+  <div v-if="orderDetail.open" class="modal-backdrop order-detail-backdrop" @click.self="closeOrderDetails" @keydown="orderDetailKeydown">
+    <section class="modal order-detail-modal" role="dialog" aria-modal="true" aria-labelledby="order-detail-title" :aria-busy="orderDetail.busy">
+      <header class="modal-header order-detail-header">
+        <div><p class="order-detail-eyebrow">ORDEM DE SERVIÇO #{{ orderDetail.id }}</p><h2 id="order-detail-title">{{ orderDetail.order?.titulo || 'Detalhes da O.S.' }}</h2></div>
+        <button id="order-detail-close" class="modal-close" aria-label="Fechar ordem de serviço" @click="closeOrderDetails">×</button>
+      </header>
+      <div class="modal-body order-detail-body">
+        <p v-if="orderDetail.busy" class="order-detail-loading" role="status">Carregando ordem de serviço…</p>
+        <div v-else-if="orderDetail.error" class="abc-error" role="alert">{{ orderDetail.error }} <button class="btn btn-ghost btn-sm" @click="openOrderDetails({id:orderDetail.id})">Tentar novamente</button></div>
+        <template v-else-if="orderDetail.order">
+          <div class="order-detail-badges"><span class="order-status" :class="'is-' + orderDetail.order.status">{{ orderStatusLabel(orderDetail.order.status) }}</span><span class="badge" :class="prioridadeBadge(orderDetail.order.prioridade)">{{ prioridadeLabel(orderDetail.order.prioridade) }}</span></div>
+          <div v-if="orderDetail.order.risco_seguranca || orderDetail.order.gravidade_condicao==='critica'" class="abc-notice order-safety" role="note"><strong v-if="orderDetail.order.risco_seguranca">Risco de segurança informado.</strong><strong v-if="orderDetail.order.gravidade_condicao==='critica'">Condição crítica informada.</strong> Avalie as condições antes de iniciar o atendimento.</div>
+          <dl class="order-detail-facts">
+            <div><dt>Responsável</dt><dd>{{ orderDetail.order.responsavel_nome || usuarioNome(orderDetail.order.responsavel) || 'Sem responsável' }}</dd></div>
+            <div><dt>Tipo de serviço</dt><dd>{{ orderTypeLabel(orderDetail.order.tipo_os) }}</dd></div>
+            <div><dt>Aberta em</dt><dd>{{ fmtDate(orderDetail.order.data_abertura) }}</dd></div>
+            <div v-if="orderDetail.order.data_conclusao"><dt>Concluída em</dt><dd>{{ fmtDate(orderDetail.order.data_conclusao) }}</dd></div>
+          </dl>
+          <section class="order-description"><h3>Descrição da O.S.</h3><p>{{ orderDetail.order.descricao || 'Nenhuma descrição informada.' }}</p></section>
+          <section class="order-equipment-link"><div><span>Equipamento</span><strong>{{ orderDetail.order.equipamento_nome || eqNome(orderDetail.order.equipamento) }}</strong></div><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(orderDetail.order.equipamento)">Ver equipamento ↗</button></section>
+          <details :key="orderDetail.id" class="order-technical-details"><summary>Prioridade e informações técnicas</summary><div>
+            <dl class="order-detail-facts">
+              <div><dt>Origem da prioridade</dt><dd>{{ priorityOrigin(orderDetail.order.prioridade_origem) }}</dd></div>
+              <div><dt>Criticidade atual do equipamento</dt><dd>{{ criticidadeLabel(orderDetail.order.criticidade_atual) }}</dd></div>
+              <div><dt>Criticidade na abertura</dt><dd>{{ criticidadeLabel(orderDetail.order.criticidade_na_abertura,!orderDetail.order.prioridade_herdada_conhecida) }}</dd></div>
+              <div><dt>Gravidade da condição</dt><dd>{{ {ausente:'Não informada',baixa:'Baixa',moderada:'Moderada',alta:'Alta',critica:'Crítica'}[orderDetail.order.gravidade_condicao] || 'Não informada' }}</dd></div>
+            </dl>
+            <p v-if="orderDetail.order.justificativa_prioridade" class="order-priority-reason">{{ orderDetail.order.justificativa_prioridade }}</p>
+            <div class="abc-row-actions"><button class="btn btn-ghost btn-sm" @click="openPriority(orderDetail.order)">Consultar prioridade e histórico</button><button v-if="orderDetail.order.alerta_origem" class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:orderDetail.order.alerta_origem})">Ver alerta de origem</button></div>
+          </div></details>
+        </template>
+      </div>
+      <footer v-if="orderDetail.order && !orderDetail.busy" class="order-detail-footer">
+        <button v-if="['pendente','andamento'].includes(orderDetail.order.status) && (isAdminOrGestor || !orderDetail.order.responsavel || orderDetail.order.responsavel===me?.id)" class="btn btn-ghost" :disabled="orderDetail.order._assumindo" @click="editItem('ordem',orderDetail.order)">Editar O.S.</button>
+        <div class="abc-row-actions">
+          <span v-if="['concluida','cancelada'].includes(orderDetail.order.status)" class="abc-note">Atendimento {{ orderDetail.order.status==='concluida' ? 'concluído' : 'cancelado' }}.</span>
+          <button v-if="!orderDetail.order.responsavel && ['pendente','andamento'].includes(orderDetail.order.status)" class="btn btn-primary" :disabled="orderDetail.order._assumindo" @click="assumirOS(orderDetail.order)">{{ orderDetail.order._assumindo ? 'Assumindo…' : 'Assumir O.S.' }}</button>
+          <button v-if="orderDetail.order.responsavel===me?.id && orderDetail.order.status==='pendente'" class="btn btn-primary" :disabled="orderDetail.order._assumindo" @click="iniciarAtendimento(orderDetail.order)">{{ orderDetail.order._assumindo ? 'Iniciando…' : 'Iniciar atendimento' }}</button>
+          <button v-if="orderDetail.order.responsavel===me?.id && orderDetail.order.status==='andamento'" class="btn btn-success" @click="openEncerrarOS(orderDetail.order)">Encerrar O.S.</button>
+          <button class="btn btn-ghost" @click="closeOrderDetails">Fechar</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+
   <div v-if="modal.open" class="modal-backdrop" @click.self="modal.open=false">
     <div class="modal">
       <div class="modal-header">
@@ -1446,44 +1510,6 @@
         </div>
 
         <section class="abc-guide"><h3>Criticidade do equipamento</h3><p><strong>{{ criticidadeLabel(equipModal.equipamento?.criticidade) }}</strong></p><p>{{ equipModal.equipamento?.justificativa_criticidade || 'Ainda não há justificativa de avaliação registrada.' }}</p><details v-if="equipModal.equipamento?.criterios_utilizados"><summary>Critérios utilizados · revisão {{ equipModal.equipamento.criterios_utilizados.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter"><strong>{{ letter.toUpperCase() }}:</strong> {{ equipModal.equipamento.criterios_utilizados['criterio_'+letter] }}</p><p>Validados por {{ equipModal.equipamento.criterios_utilizados.representante_manutencao }} em {{ equipModal.equipamento.criterios_utilizados.data_validacao }}.</p></details><p v-else class="abc-note">Não há revisão de critérios registrada para esta avaliação.</p><div class="abc-row-actions"><button type="button" class="btn btn-ghost btn-sm" @click="openCriteria(equipModal.equipamento.empresa)">Consultar critérios da empresa</button><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="editItem('equipamento',equipModal.equipamento)">Revisar classificação</button></div><details><summary>Histórico de criticidade</summary><p v-if="equipmentAssessment.busy" role="status">Carregando histórico…</p><p v-if="equipmentAssessment.error" role="alert">{{ equipmentAssessment.error }}</p><p v-if="!equipmentAssessment.busy && !equipmentAssessment.error && !equipmentAssessment.history.length">Sem avaliações registradas.</p><article v-for="h in equipmentAssessment.history" :key="h.id" class="abc-history"><strong>{{ criticidadeLabel(h.criticidade_anterior,h.origem==='migracao'||h.origem==='legado') }} → {{ criticidadeLabel(h.criticidade_nova,h.origem==='legado') }}</strong><p>{{ h.justificativa }}</p><small>{{ h.alterado_por_nome || 'Sistema / legado' }} · {{ fmtDate(h.criado_em) }} · {{ h.origem }}</small><details v-if="h.criterios_utilizados"><summary>Critérios da avaliação · revisão {{ h.criterios_utilizados.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter">{{ letter.toUpperCase() }}: {{ h.criterios_utilizados['criterio_'+letter] }}</p></details></article></details></section>
-        <div v-if="equipModal.currentOS" class="detail-os-card" style="margin-top:16px; padding:16px; border:1px solid rgba(0,212,170,0.18); border-radius:12px; background:rgba(0,212,170,0.05);">
-          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start;">
-            <div style="flex:2; min-width:220px;">
-              <div class="detail-card-label">Ordem de Serviço vinculada</div>
-              <div class="detail-card-value" style="font-size:15px; font-weight:700; color:var(--t1);">
-                #{{ equipModal.currentOS.id }} — {{ equipModal.currentOS.titulo }}
-              </div>
-            </div>
-            <div style="display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); width:100%;">
-              <div class="detail-card">
-                <div class="detail-card-label">Status</div>
-                <div class="detail-card-value">{{ equipModal.currentOS.status || '—' }}</div>
-              </div>
-              <div class="detail-card">
-                <div class="detail-card-label">Prioridade</div>
-                <div class="detail-card-value">{{ prioridadeLabel(equipModal.currentOS.prioridade) }}</div>
-              </div>
-              <div class="detail-card">
-                <div class="detail-card-label">Tipo</div>
-                <div class="detail-card-value">{{ equipModal.currentOS.tipo_os || '—' }}</div>
-              </div>
-              <div class="detail-card">
-                <div class="detail-card-label">Abertura</div>
-                <div class="detail-card-value">{{ fmtDate(equipModal.currentOS.data_abertura || equipModal.currentOS.criado_em) }}</div>
-              </div>
-              <div class="detail-card">
-                <div class="detail-card-label">Responsável</div>
-                <div class="detail-card-value">{{ usuarioNome(equipModal.currentOS.responsavel) || '—' }}</div>
-              </div>
-            </div>
-            <div v-if="equipModal.currentOS.justificativa_prioridade" style="width:100%; font-size:12px; color:var(--t2);">
-              <p>{{ priorityOrigin(equipModal.currentOS.prioridade_origem) }} · Criticidade na abertura: {{ criticidadeLabel(equipModal.currentOS.criticidade_na_abertura,!equipModal.currentOS.prioridade_herdada_conhecida) }}</p>
-              <strong>Motivo da prioridade:</strong> {{ equipModal.currentOS.justificativa_prioridade }}
-            </div>
-          </div>
-        </div>
-
-        <div v-if="equipModal.currentOS" class="alert-linked-order-actions"><button class="btn btn-ghost" @click="openPriority(equipModal.currentOS)">Prioridade e histórico</button><button class="btn btn-primary" @click="editItem('ordem',equipModal.currentOS);closeEquipModal()">Gerenciar esta O.S.</button><button v-if="equipModal.currentOS.alerta_origem" class="btn btn-ghost" @click="openAlertaDetails({id:equipModal.currentOS.alerta_origem})">Ver detecção de origem</button></div>
         <div class="detail-filter-row" style="flex-wrap: wrap;">
           <div style="display:flex; align-items:center; gap:8px;">
             <label class="filter-label">Sensor</label>
@@ -1642,8 +1668,8 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="os in equipModalFilteredOrdens" :key="os.id" class="clickable-row" @click="editItem('ordem', os)">
-                  <td style="color:var(--t1); font-weight:600;">{{ os.titulo }}</td>
+                <tr v-for="os in equipModalFilteredOrdens" :key="os.id" class="clickable-row" @click="openOrderDetails(os)">
+                  <td><button class="abc-text-button" @click.stop="openOrderDetails(os)">#{{ os.id }} — {{ os.titulo }}</button></td>
                   <td>{{ fmtDate(os.created_at || os.data_abertura || os.updated_at) }}</td>
                   <td>{{ usuarioNome(os.responsavel) || '—' }}</td>
                   <td>

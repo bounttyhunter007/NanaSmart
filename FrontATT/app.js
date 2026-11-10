@@ -155,7 +155,6 @@ createApp({
     const equipModal = reactive({
       open: false,
       equipamento: null,
-      currentOS: null,
       sensors: [],
       selectedSensor: null,
       readings: [],
@@ -332,8 +331,7 @@ createApp({
       return navigate('ordens');
     }
     async function openDashboardOrder(order) {
-      try { const current = await api('/api/ordens-servico/' + order.id + '/'); if (current) await openEquipamentoDetails(current.equipamento, current); }
-      catch (_) { toast('Não foi possível abrir esta ordem. Atualize as prioridades.', 'error'); }
+      return openOrderDetails(order);
     }
     function dashboardAction(action) {
       if (action === 'alertas') {
@@ -938,15 +936,7 @@ createApp({
     }
     async function openAlertaOS(alerta) {
       if (!alerta.ordem_servico_id) return;
-      const company = globalEmpresa.value;
-      const session = token.value;
-      try {
-        const ordem = await api('/api/ordens-servico/' + alerta.ordem_servico_id + '/');
-        if (company !== globalEmpresa.value || session !== token.value) return;
-        if (!ordem) throw new Error('Ordem indisponível');
-        closeAlertaDetails();
-        await openEquipamentoDetails(ordem.equipamento, ordem);
-      } catch { toast('Não foi possível acessar a O.S. vinculada.', 'error'); }
+      return openOrderDetails({ id: alerta.ordem_servico_id });
     }
     async function openAlertaSensor(alerta) {
       if (!alerta.sensor) return;
@@ -963,6 +953,55 @@ createApp({
     }
 
     const orderState = reactive({ busy: false, error: '', count: 0, total: 0, triage: 0 });
+    const orderDetail = reactive({ open: false, id: null, order: null, busy: false, error: '' });
+    const orderExtraFilters = computed(() => [filters.ordens.tipo_os, filters.ordens.responsavel_escopo].filter(Boolean).length);
+    let orderDetailRequest = 0;
+    let orderDetailTrigger = null;
+    const orderStatusLabel = status => ({ pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[status] || '—');
+    const orderTypeLabel = type => ({ preventiva: 'Preventiva', corretiva: 'Corretiva', preditiva: 'Preditiva' }[type] || '—');
+    function focusOrderDetails() {
+      nextTick(() => document.getElementById('order-detail-close')?.focus());
+    }
+    async function openOrderDetails(order) {
+      const request = ++orderDetailRequest;
+      const company = globalEmpresa.value;
+      const actor = me.value?.id;
+      if (!orderDetail.open) orderDetailTrigger = document.activeElement;
+      if (equipModal.open) closeEquipModal();
+      if (alertHistory.detail) closeAlertaDetails();
+      Object.assign(orderDetail, { open: true, id: order.id, order: null, busy: true, error: '' });
+      focusOrderDetails();
+      try {
+        const current = await api('/api/ordens-servico/' + order.id + '/');
+        if (request !== orderDetailRequest || company !== globalEmpresa.value || actor !== me.value?.id) return;
+        if (!current?.id) throw new Error('Ordem indisponível');
+        orderDetail.order = current;
+      } catch {
+        if (request === orderDetailRequest) orderDetail.error = 'Não foi possível carregar esta O.S. Tente novamente.';
+      } finally { if (request === orderDetailRequest) orderDetail.busy = false; }
+    }
+    function closeOrderDetails() {
+      ++orderDetailRequest;
+      Object.assign(orderDetail, { open: false, id: null, order: null, busy: false, error: '' });
+      const trigger = orderDetailTrigger;
+      orderDetailTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); });
+    }
+    function orderDetailKeydown(event) {
+      if (event.key === 'Escape') { event.stopPropagation(); closeOrderDetails(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), summary, [href], [tabindex="0"]')]
+        .filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    function syncOrderDetails(saved) {
+      if (!saved?.id) return;
+      if (orderDetail.order?.id === saved.id) orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
+      const listed = lists.ordens.find(order => order.id === saved.id);
+      if (listed) Object.assign(listed, saved);
+    }
     let orderRequest = 0;
     function orderParams() {
       const p = new URLSearchParams();
@@ -1088,7 +1127,7 @@ createApp({
         if (!restore) payload.prioridade = priorityModal.choice;
         const saved = await api('/api/ordens-servico/' + priorityModal.order.id + '/' + (restore ? 'restaurar_prioridade' : 'ajustar_prioridade') + '/', { method: 'POST', body: JSON.stringify(payload) });
         if (!saved || request !== priorityRequest || actor !== me.value?.id || !priorityModal.open) return;
-        if (equipModal.currentOS?.id === saved.id) equipModal.currentOS = saved;
+        syncOrderDetails(saved);
         if (equipModal.open) await fetchEquipamentoOrdens(equipModal.equipamento.id);
         await openPriority(saved);
         if (view.value === 'ordens') await fetchOrdens();
@@ -1098,6 +1137,7 @@ createApp({
       finally { priorityModal.saving = false; }
     }
     function closeABC() {
+      closeOrderDetails();
       ++guideRequest; ++criteriaRequest; ++assessmentRequest; ++priorityRequest; ++orderRequest;
       criteriaModal.open = false; priorityModal.open = false; modal.open = false;
       equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.busy = false;
@@ -1684,10 +1724,11 @@ createApp({
 
         let createdOsId = modal.editId;
         if (modal.editId) {
-          await api(cfg.endpoint + modal.editId + '/', {
+          const saved = await api(cfg.endpoint + modal.editId + '/', {
             method: 'PUT',
             body: JSON.stringify(payload),
           });
+          if (modal.type === 'ordem' || modal.type === 'encerrar_os') syncOrderDetails(saved);
         } else {
           const res = await api(cfg.endpoint, { method: 'POST', body: JSON.stringify(payload) });
           if ((modal.type === 'ordem' || modal.type === 'encerrar_os') && res) createdOsId = res.id;
@@ -1733,10 +1774,12 @@ createApp({
       const payload = { responsavel: me.value.id };
       if (o.status === 'pendente') payload.status = 'andamento';
       try {
-        await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
+        const saved = await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
         toast('O.S. assumida com sucesso!', 'success');
         o.responsavel = me.value.id;
         if (payload.status) o.status = payload.status;
+        o.responsavel_nome = me.value.first_name || me.value.username || 'Você';
+        syncOrderDetails(saved || o);
       } catch(e) {
         toast('Erro ao assumir O.S.', 'error');
         return;
@@ -1759,10 +1802,11 @@ createApp({
       o._assumindo = true;
       const payload = { responsavel: me.value.id, status: 'andamento' };
       try {
-        await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
+        const saved = await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
         toast('Atendimento iniciado!', 'success');
         o.responsavel = me.value.id;
         o.status = 'andamento';
+        syncOrderDetails(saved || o);
       } catch(e) {
         toast('Erro ao iniciar atendimento.', 'error');
         return;
@@ -2153,7 +2197,7 @@ createApp({
       }
     }
 
-    async function openEquipamentoDetails(eq, os = null) {
+    async function openEquipamentoDetails(eq) {
       stopEquipModalPolling();
       equipModal.open = true;
       let equipment = (typeof eq === 'number' || typeof eq === 'string')
@@ -2167,7 +2211,6 @@ createApp({
         }
       }
       equipModal.equipamento = equipment;
-      equipModal.currentOS = os || null;
       loadEquipmentAssessment(equipment);
       equipModal.selectedSensor = null;
       equipModal.readings = [];
@@ -2187,7 +2230,6 @@ createApp({
       ++assessmentRequest; equipmentAssessment.history = []; equipmentAssessment.busy = false;
       equipModal.open = false;
       equipModal.equipamento = null;
-      equipModal.currentOS = null;
       equipModal.sensors = [];
       equipModal.selectedSensor = null;
       equipModal.readings = [];
@@ -2365,9 +2407,15 @@ createApp({
       if (!document.hidden) { refreshTrendMonitoring(); if (token.value && view.value === 'dashboard') fetchDashboard({ silent: true }); }
     }
     onUnmounted(() => {
+      closeOrderDetails();
       if (dashboardTimer !== null) clearInterval(dashboardTimer); ++dashboardRequest;
       stopTrendPolling(); stopDemoPolling(); ++demoRequest; ++trendMonitorRequest;
       document.removeEventListener('visibilitychange', onTrendVisibilityChange);
+    });
+
+    // As janelas de edição, prioridade e equipamento devolvem o foco à O.S.
+    watch(() => [modal.open, priorityModal.open, equipModal.open, !!alertHistory.detail], (current, previous) => {
+      if (orderDetail.open && previous?.some(Boolean) && !current.some(Boolean)) focusOrderDetails();
     });
 
     // ─ Chat AI (NanaSmart AI) ────────────────────────
@@ -2623,6 +2671,7 @@ createApp({
     }
 
     return {
+      orderDetail, openOrderDetails, closeOrderDetails, orderDetailKeydown, orderStatusLabel, orderTypeLabel, orderExtraFilters,
       orderState, orderParams, selectOrderPriority, clearOrderFilters, equipmentGuide, equipmentAssessment, criteriaModal,
       loadEquipmentGuide, acceptEquipmentSuggestion, openCriteria, loadCriteria, saveCriteria, criticidadeLabel, historicPriorityLabel, priorityOrigin,
       priorityModal, openPriority, savePriority, orderEquipmentOptions,

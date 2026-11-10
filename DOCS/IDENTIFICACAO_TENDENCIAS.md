@@ -39,7 +39,7 @@ Prioridade: configuração específica do sensor, depois configuração global m
 | `r2_minimo` | 0,80 | Qualidade mínima do ajuste linear; de 0,5 a 1 |
 | `direcao_alerta` | `crescente` | `crescente`, `decrescente` ou `ambas` |
 
-O sentido padrão preserva a interpretação anterior dos sensores com limite superior. Os novos critérios são defaults técnicos iniciais, ajustáveis pelo responsável pela manutenção. A frequência de coleta e o máximo de leituras devem permitir cobrir a duração mínima: 50 leituras a cada segundo não cobrem 30 minutos e, portanto, não produzem uma análise suficiente. Nesse caso, ajustar a duração ou a frequência de coleta. A rotina não faz reamostragem automática.
+O sentido padrão preserva a interpretação anterior dos sensores com limite superior. Os critérios são defaults técnicos iniciais, ajustáveis pelo responsável pela manutenção. Se as últimas `num_leituras` não cobrem a duração mínima, a rotina estende a busca até cobri-la dentro da janela e distribui até esse máximo de observações reais no tempo, preservando os extremos. Não interpola nem fabrica leituras. Sem histórico suficiente, continua aguardando dados. A consistência também é verificada em todas as leituras originais percorridas, impedindo que a seleção oculte picos ou oscilações.
 
 Modelo, administração e API validam as combinações de critérios, incluindo alterações parciais com os valores já existentes. `bulk_create`/`update` de configurações dispensam a validação do Django; importações devem validar os dados antes de usá-los.
 
@@ -47,13 +47,13 @@ Modelo, administração e API validam as combinações de critérios, incluindo 
 
 1. Capturar um único instante `agora`; não analisar sensor inativo ou inexistente.
 2. Se a configuração efetiva está desativada, retornar `analysis_enabled=false`, `data_quality=disabled`, sem novos efeitos operacionais.
-3. Selecionar registros em `[agora - periodo_horas, agora]`, por timestamp decrescente e id decrescente. Descartar valores não finitos. Por timestamp, manter o registro válido de maior id. Parar ao atingir `num_leituras`; ordenar a amostra cronologicamente.
+3. Selecionar registros em `[agora - periodo_horas, agora]`, por timestamp decrescente e id decrescente. Descartar valores não finitos. Por timestamp, manter o registro válido de maior id. Preferir as últimas `num_leituras`; se não cobrem a duração mínima, percorrer até atingir essa duração e selecionar observações distribuídas no tempo. A memória de seleção é limitada ao máximo configurado, mesmo com coleta frequente. Ordenar a amostra cronologicamente.
 4. Exigir pelo menos `minimo_leituras` horários distintos e duração >= `duracao_minima_minutos`. Caso contrário, retornar `insufficient_data=true`, sem projeção ou novo alerta.
 5. Ajustar `valor = intercepto + inclinação × horas`, usando horas desde a primeira leitura. O cálculo usa somas centradas para reduzir cancelamento numérico.
 6. Comparar inclinação com o limiar absoluto: `fator × abs(limite_alerta)`. Fatores: alta = 0,005; média = 0,02; baixa = 0,05. Se o limite for zero, usar o fator em unidade/hora. Crescente exige inclinação estritamente maior que o limiar; decrescente exige inclinação estritamente menor que o negativo do limiar.
 7. Calcular `R² = 1 - soma(resíduos²) / soma((valor - média)²)`, limitado ao intervalo [0, 1]. Série constante tem R² = 1, mas inclinação zero e permanece estável.
 8. Calcular persistência como quantidade de diferenças consecutivas no sentido da inclinação dividida por `n - 1`. Intervalos sem alteração e intervalos no sentido contrário contam contra a persistência.
-9. Confirmar direção somente com R² e persistência >= seus mínimos. Caso contrário, classificar como `stable`, mantendo os indicadores para auditoria.
+9. Confirmar direção somente com R² e persistência >= seus mínimos. Em amostra distribuída, exigir também R² do ajuste exibido contra todos os pontos originais e persistência dos intervalos originais acima dos mesmos mínimos. Caso contrário, classificar como `stable`, mantendo os indicadores para auditoria.
 10. `is_anomalous=true` somente se a direção confirmada pertence a `direcao_alerta`. Recomendar inspeção e gerar OS para toda anomalia confirmada.
 
 Exemplo: limite 100, sensibilidade média, valores 10, 20 e 30 em intervalos de 30 minutos. Inclinação = 20 unidades/h, limiar = 2, R² = 1, persistência = 100%, duração = 60 minutos. Com aumento configurado como anormal, gera alerta e OS mesmo abaixo do primeiro alerta por limite. A mesma amostra concentrada em dois minutos é insuficiente com os defaults.
@@ -79,6 +79,16 @@ O modelo de alerta possui níveis `baixo`, `medio`, `critico`: riscos alto e cr�
 - Bloqueio de linha do sensor envolve a análise e os efeitos, na mesma ordem usada pela ingestão. A restrição parcial de unicidade de alerta e a relação única de origem da OS permanecem como proteção adicional.
 
 O Gemini pode explicar os dados, mas não decide a criação do alerta nem da OS.
+
+## Visualização e limites (10/11/2026)
+
+O gráfico reserva uma área à direita da última leitura para a projeção. A linha azul contém apenas medições; a roxa tracejada no futuro parte da última medição e segue a inclinação calculada, por até metade da duração observada (máximo de 24 horas). O ajuste no histórico é opcional quando existe projeção, evitando sobrepor duas linhas na mesma área. Sem projeção confiável, o ajuste histórico permanece visível e a área futura informa o estado. Com três horários distintos e análise ativa, uma linha preliminar pode aparecer antes da suficiência operacional; isso não autoriza projeções, alertas ou ordens.
+
+A escala inclui valores, ajuste, projeção e limite, com margem vertical. No acompanhamento ao vivo ela expande imediatamente e contrai gradualmente quando um pico antigo sai da janela. O gráfico de tendências mostra uma referência horizontal de limite superior; as três faixas reais de alarme aparecem abaixo, usando os percentuais específicos do sensor (padrões 70%, 85% e 100%).
+
+Uma leitura real igual ou superior à faixa baixa já abre alerta por limite e OS corretiva. O agravamento atualiza o mesmo episódio, sem criar uma OS a cada leitura. Duas novas leituras abaixo da faixa baixa confirmam recuperação do alerta; a OS permanece para encerramento humano. Esse fluxo independe da confirmação de tendência. Já uma anomalia de tendência confirmada gera alerta e OS preditiva antecipadamente. Os dois fluxos têm origens e ordens próprias. A projeção desenhada não é uma leitura real nem um gatilho separado. Ambos são processados no servidor na ingestão, inclusive com a tela fechada. Não há envio de e-mail, SMS ou sirene nesta implementação.
+
+A API acrescenta `sample_selection` (`recent` ou `time_distributed`), `source_readings_count`, `source_r_squared` e `source_persistence_ratio`. O último par só é preenchido na distribuição temporal. `limit_alert` expõe o alerta por limite ativo, seu maior nível, nível atual e OS vinculada. O contexto preditivo usa o vínculo explícito `ordem_servico`, e a tela oferece acesso aos alertas e às respectivas ordens.
 
 ## API e interface
 

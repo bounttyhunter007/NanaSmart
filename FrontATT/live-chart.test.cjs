@@ -200,23 +200,73 @@ test('live trend is optional, uses the displayed window and adds no polling requ
   const f=fixture(() => ({results:[...batch].reverse()})); await f.mount();
   assert.equal(f.app.displayed.value.trendPath,''); const calls=f.urls.length;
   f.app.showTrend.value=true; await f.flush();
-  assert.ok(f.app.displayed.value.trendPath); assert.equal(f.urls.length,calls);
+  assert.ok(f.app.displayed.value.projection); assert.equal(f.app.displayed.value.trendPath,''); assert.equal(f.urls.length,calls);
+  f.app.showHistoryFit.value=true; await f.flush(); assert.ok(f.app.displayed.value.trendPath);
   const previous=f.app.displayed.value; await f.app.refresh(); assert.equal(f.app.displayed.value,previous);
   batch.push(reading(4,6,48)); await f.app.refresh();
   assert.equal(f.app.fitted.value[1].timestamp,stamp(6)); assert.equal(f.app.rows.value.length,4);
   f.app.showTrend.value=false; await f.flush(); assert.equal(f.app.displayed.value.trendPath,''); f.unmount();
 });
 
-test('official sample draws the server fit only with sufficient enabled analysis', () => {
+test('official sample keeps a preliminary fit while awaiting operational criteria', () => {
   const { api }=fixture(() => ({}));
   const rows=[reading(1,0,40),reading(2,600,45),reading(3,1800,55)];
   const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',regression_line:api.fitLine(rows)};
   const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
   assert.equal(sample.fitted.value.length,2); assert.ok(sample.plot.value.trendPath);
-  assert.equal(sample.plot.value.domain.to,Date.parse(stamp(1800)));
-  analysis.insufficient_data=true; assert.equal(sample.plot.value.trendPath,'');
+  assert.equal(sample.plot.value.domain.to,Date.parse(stamp(2700)));
+  analysis.insufficient_data=true; analysis.regression_line=null;
+  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.projection,null);
+  assert.match(sample.fitMessage.value,/preliminar/);
   analysis.insufficient_data=false; analysis.analysis_enabled=false;
   assert.equal(sample.plot.value.trendPath,''); assert.match(sample.fitMessage.value,/desativada/);
+});
+
+test('future area stays reserved when a confirmed trend stabilizes or awaits data', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,600,50),reading(3,1200,60)];
+  const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',direction:'increasing',regression_line:api.fitLine(rows)};
+  const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
+  assert.equal(sample.plot.value.trendPath,'');
+  const end=sample.plot.value.domain.to, divider=sample.plot.value.future.startX;
+  assert.ok(sample.plot.value.projection.path);
+  sample.showHistoryFit.value=true; assert.ok(sample.plot.value.trendPath);
+  sample.showHistoryFit.value=false;
+  analysis.direction='stable';
+  assert.equal(sample.plot.value.domain.to,end); assert.equal(sample.plot.value.future.startX,divider);
+  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.projection,null);
+  analysis.insufficient_data=true; analysis.regression_line=null;
+  assert.ok(sample.plot.value.trendPath); assert.equal(sample.plot.value.domain.to,end);
+});
+
+test('forecast and limit leave vertical headroom and remain visible after real exceedance', () => {
+  const {api}=fixture(() => ({}));
+  for (const values of [[40,60,80],[80,100,120]]) {
+    const rows=values.map((v,i)=>reading(i+1,i*600,v));
+    const fit=api.fitLine(rows), future=api.projectForward(rows,fit,{limit:100});
+    const plot=api.chart(rows,sensor,null,'auto',null,false,fit,future);
+    assert.ok(plot.projection.end.y>55); assert.ok(plot.limits.every(t=>t.y>55));
+    assert.ok(plot.points.every(p=>p.y>42 && p.y<230));
+  }
+});
+
+test('scale recovers gradually after an obsolete high peak leaves the live window', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,600,45),reading(3,1200,50)];
+  let envelope={min:0,max:1000};
+  const first=api.chart(rows,sensor,envelope); assert.ok(first.domain.max<1000);
+  for(let i=0;i<30;i++) envelope=api.chart(rows,sensor,envelope).domain;
+  assert.ok(envelope.max<120); assert.ok(envelope.max>100);
+});
+
+test('sample uses sensor-specific alarm thresholds independently of forecast', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,10,40),reading(3,20,40)];
+  const sample=api.sampleComponent.setup({readings:rows,sensor:{...sensor,limite_alerta_baixo_pct:60,limite_alerta_medio_pct:75,limite_alerta_critico_pct:90},
+    analysis:{analysis_enabled:true,insufficient_data:true}});
+  assert.deepEqual(Array.from(sample.limits.value,t=>t.value),[60,75,90]);
+  assert.equal(sample.plot.value.limits.length,1); assert.equal(sample.plot.value.limits[0].value,100);
+  assert.equal(sample.plot.value.projection,null);
 });
 
 test('forecast time is shown only for a valid future projection anchored to the last sample', () => {

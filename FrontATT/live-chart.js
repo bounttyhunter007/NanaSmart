@@ -93,16 +93,19 @@
       limitOutside: untilLimit !== null && untilLimit > horizon,
       points: [{ timestamp: last.timestamp, valor: last.valor }, { timestamp: new Date(endTime).toISOString(), valor: endValue }] };
   }
-  function chart(rows, sensor, envelope = null, minutes = 'auto', domain = null, compact = false, trendLine = [], projection = null) {
+  function chart(rows, sensor, envelope = null, minutes = 'auto', domain = null, compact = false, trendLine = [], projection = null, view = {}) {
     if (!rows.length) return { width:compact ? 360 : 900, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], ticks: [], times: [], limits: [], path: '', trendPath: '', projection: null, domain: null };
-    const limits = thresholds(sensor), values = rows.map(r => r.valor).concat(limits.map(t => t.value), trendLine.map(p => p.valor), (projection?.points || []).map(p => p.valor));
+    const limits = view.limits || thresholds(sensor), values = rows.map(r => r.valor).concat(limits.map(t => t.value), trendLine.map(p => p.valor), (projection?.points || []).map(p => p.valor));
     const rawMin = Math.min(...values), rawMax = Math.max(...values);
-    const padding = (rawMax - rawMin || Math.max(Math.abs(rawMax) * 0.1, 1)) * 0.08;
-    let min = Math.min(rawMin - padding, envelope?.min ?? Infinity);
-    let max = Math.max(rawMax + padding, envelope?.max ?? -Infinity);
+    const padding = (rawMax - rawMin || Math.max(Math.abs(rawMax) * 0.1, 1)) * 0.15;
+    // Expand immediately; recover gradually after an old peak leaves the window.
+    const targetMin = rawMin - padding, targetMax = rawMax + padding;
+    let min = Math.min(targetMin, envelope ? envelope.min * .8 + targetMin * .2 : targetMin);
+    let max = Math.max(targetMax, envelope ? envelope.max * .8 + targetMax * .2 : targetMax);
     const to = Date.parse(rows[rows.length - 1].timestamp);
     const from = minutes === 'auto' ? Date.parse(rows[0].timestamp) : to - Number(minutes) * 60000;
-    const bounds = domain || { min, max, from: from === to ? to - 1000 : from, to: projection?.to || to };
+    const futureTo = view.futureSpace ? to + Math.min(Math.max(to-from, 2000)/2, 86400000) : projection?.to || to;
+    const bounds = domain || { min, max, from: from === to ? to - 1000 : from, to: futureTo };
     ({ min, max } = bounds);
     const y = value => 230 - (value - min) / (max - min) * 188;
     const left = compact ? 48 : 72, right = compact ? 344 : 722;
@@ -114,7 +117,8 @@
     return { points, width:compact ? 360 : 900, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
       ticks: Array.from({ length: 5 }, (_, i) => { const v = min + (max - min) * i / 4; return { value: v, label: number(v), y: y(v) }; }),
       times: Array.from({ length: 3 }, (_, i) => ({ x: left + i * (right-left)/2, label: timeFormat.format(bounds.from + (bounds.to - bounds.from) * i / 2) })),
-      trendPath: trendLine.map((p,i) => `${i ? 'L' : 'M'}${x(Date.parse(p.timestamp)).toFixed(2)},${y(p.valor).toFixed(2)}`).join(' '),
+      trendPath: view.showFit === false ? '' : trendLine.map((p,i) => `${i ? 'L' : 'M'}${x(Date.parse(p.timestamp)).toFixed(2)},${y(p.valor).toFixed(2)}`).join(' '),
+      future: futureTo > to ? { startX: Math.min(right, Math.max(left, x(to))), width: Math.max(0, right - Math.max(left, x(to))), timestamp: rows[rows.length-1].timestamp } : null,
       projection: projection ? { ...projection, startX: Math.min(right, Math.max(left, x(projection.from))), width: Math.max(0, right - Math.max(left, x(projection.from))),
         points: projectedPoints, path: projectedPoints.map((p,i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '), end: projectedPoints[projectedPoints.length - 1] } : null,
       limits: limits.map(t => ({ ...t, y: y(t.value) })) };
@@ -167,6 +171,7 @@
       const { ref, computed, watch, onMounted, onUnmounted } = Vue;
       const compact = useCompact();
       const showTrend = ref(false);
+      const showHistoryFit = ref(false);
       const equipment = ref(''), sensorId = ref(''), minutes = ref('auto'), options = ref([]), sensors = ref([]);
       const rows = ref([]), displayed = ref(chart([], null)), busy = ref(false), optionsBusy = ref(false), paused = ref(false);
       const error = ref(''), optionsError = ref(''), updatedAt = ref(null), now = ref(Date.now()), truncated = ref(false), selected = ref(null);
@@ -174,6 +179,7 @@
       const sensor = computed(() => sensors.value.find(s => Number(s.id) === Number(sensorId.value)));
       const fitted = computed(() => showTrend.value ? fitLine(rows.value) : []);
       const projected = computed(() => showTrend.value ? projectForward(rows.value, fitted.value, {limit:sensor.value?.limite_alerta}) : null);
+      const view = () => ({futureSpace:showTrend.value, showFit:showHistoryFit.value || !projected.value});
       const latest = computed(() => rows.value[rows.value.length - 1]);
       const age = computed(() => {
         if (!latest.value) return '';
@@ -199,7 +205,7 @@
         function step(time) {
           const t = Math.min((time - started) / 300, 1), d = {};
           for (const key of ['min', 'max', 'from', 'to']) d[key] = previous.domain[key] + (next.domain[key] - previous.domain[key]) * t;
-          displayed.value = t === 1 ? next : chart(rows.value, sensor.value, envelope, minutes.value, d, compact.value, fitted.value, projected.value);
+          displayed.value = t === 1 ? next : chart(rows.value, sensor.value, envelope, minutes.value, d, compact.value, fitted.value, projected.value, view());
           frame = t < 1 ? requestAnimationFrame(step) : null;
         }
         frame = requestAnimationFrame(step);
@@ -215,7 +221,7 @@
           updatedAt.value = new Date().toISOString(); now.value = Date.now(); error.value = ''; truncated.value = result.truncated;
           if (nextSignature !== signature) {
             signature = nextSignature; rows.value = result.rows; selected.value = null;
-            const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value);
+            const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value, view());
             envelope = next.domain ? { min: next.domain.min, max: next.domain.max } : null;
             render(next, true);
           }
@@ -260,10 +266,11 @@
         finally { if (request === optionGeneration) optionsBusy.value = false; }
       }
       function togglePause() { paused.value = !paused.value; if (paused.value) stop(); else start(); }
-      function fit() { envelope = null; render(chart(rows.value, sensor.value, null, minutes.value, null, compact.value, fitted.value, projected.value), false); }
+      function fit() { envelope = null; render(chart(rows.value, sensor.value, null, minutes.value, null, compact.value, fitted.value, projected.value, view()), false); }
       function visibility() { if (document.hidden) stop(); else start(); }
-      watch([compact, showTrend], () => {
-        const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value);
+      watch([compact, showTrend, showHistoryFit], () => {
+        envelope = null;
+        const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value, view());
         envelope = next.domain ? { min:next.domain.min, max:next.domain.max } : null;
         render(next, false);
       });
@@ -273,7 +280,7 @@
       watch(() => props.equipamentos, loadOptions);
       onMounted(() => { loadOptions(); document.addEventListener('visibilitychange', visibility); });
       onUnmounted(() => { disposed = true; ++optionGeneration; ++equipmentGeneration; stop(); document.removeEventListener('visibilitychange', visibility); });
-      return { compact, showTrend, fitted, projected, equipment, sensorId, minutes, options, sensors, sensor, rows, displayed, busy, optionsBusy, paused, error, optionsError, updatedAt, truncated, latest, detail, age, selected,
+      return { compact, showTrend, showHistoryFit, fitted, projected, equipment, sensorId, minutes, options, sensors, sensor, rows, displayed, busy, optionsBusy, paused, error, optionsError, updatedAt, truncated, latest, detail, age, selected,
         refresh, loadOptions, loadSensors, togglePause, fit, number, date };
     },
     template: `
@@ -290,24 +297,25 @@
         <template v-else>
           <div class="live-status"><span :class="['live-state', {paused:paused || !sensor?.ativo, failed:!!error}]">{{ !sensor?.ativo ? 'Sensor inativo · consulta interrompida' : paused ? 'Acompanhamento pausado' : busy ? 'Consultando…' : 'Aguardando novas medições · consulta a cada 5 s' }}</span><span>Última consulta: {{ updatedAt ? date(updatedAt) : 'aguardando' }}</span></div>
           <div v-if="rows.length" class="live-measure"><div><span>Última medição</span><strong>{{ number(latest.valor) }} <small>{{ sensor?.unidade_medida }}</small></strong></div><p>{{ date(latest.timestamp) }}<br>há {{ age }}</p></div>
-          <div v-if="rows.length" class="trend-chart-toolbar"><label class="trend-chart-toggle"><input type="checkbox" v-model="showTrend"> Mostrar tendência e projeção</label><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="showTrend"><i class="legend-trend"></i>Tendência da janela</span><span v-if="displayed.projection"><i class="legend-projection"></i>Projeção futura</span><span><i class="legend-limit"></i>Limites horizontais</span></div></div>
-          <p v-if="showTrend && rows.length" class="trend-chart-explanation">{{ fitted.length ? displayed.projection ? 'A linha azul termina na última medição. A continuação roxa na área sombreada é uma estimativa, se o ritmo continuar.' : 'A linha roxa resume esta janela; não há movimento consistente suficiente para desenhar uma projeção futura. A avaliação de alertas usa os critérios da página Tendências.' : 'Aguardando pelo menos 3 horários de medição diferentes para calcular a tendência desta janela.' }}</p>
+          <div v-if="rows.length" class="trend-chart-toolbar"><label class="trend-chart-toggle"><input type="checkbox" v-model="showTrend"> Mostrar tendência e projeção</label><label v-if="showTrend && projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="displayed.trendPath"><i class="legend-trend"></i>Tendência da janela</span><span v-if="displayed.projection"><i class="legend-projection"></i>Projeção futura</span><span><i class="legend-limit"></i>Limites horizontais</span></div></div>
+          <p v-if="showTrend && rows.length" class="trend-chart-explanation">{{ fitted.length ? displayed.projection ? 'Azul: leituras reais. Roxo à direita: projeção visual, se o ritmo continuar. Alertas e OS seguem os critérios da página Tendências.' : 'A tendência continua no histórico. Sem movimento consistente para projetar o futuro nesta janela.' : 'Aguardando pelo menos 3 horários de medição diferentes para calcular a tendência desta janela.' }}</p>
           <div v-if="rows.length" class="live-plot">
             <svg :viewBox="'0 0 ' + displayed.width + ' 285'" role="img" :aria-label="'Medições de ' + sensor?.nome + ', unidade ' + sensor?.unidade_medida">
               <defs><clipPath :id="'live-clip-' + $.uid"><rect :x="displayed.left-6" y="25" :width="displayed.right-displayed.left+12" height="212"/></clipPath></defs>
               <text :x="displayed.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
-              <g v-if="displayed.projection" class="forecast-region">
-              <rect :x="displayed.projection.startX" y="36" :width="displayed.projection.width" height="200" class="forecast-shade"/>
-              <line :x1="displayed.projection.startX" y1="36" :x2="displayed.projection.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(displayed.projection.points[0].timestamp) }}</title></line>
-              <text v-if="!compact" :x="(displayed.left + displayed.projection.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Histórico observado</text>
-              <text v-if="displayed.projection.width > (compact ? 65 : 100)" :x="displayed.projection.startX + displayed.projection.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Estimativa' : 'Estimativa futura' }}</text>
+              <g v-if="displayed.future" class="forecast-region">
+              <rect :x="displayed.future.startX" y="36" :width="displayed.future.width" height="200" class="forecast-shade"/>
+              <line :x1="displayed.future.startX" y1="36" :x2="displayed.future.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(displayed.future.timestamp) }}</title></line>
+              <text v-if="!compact" :x="(displayed.left + displayed.future.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Leituras reais</text>
+              <text :x="displayed.future.startX + displayed.future.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Projeção' : 'Projeção futura' }}</text>
+              <text v-if="!displayed.projection" :x="displayed.future.startX + displayed.future.width/2" y="140" text-anchor="middle" class="forecast-region-label">Sem projeção</text>
             </g>
             <g v-for="tick in displayed.ticks" :key="tick.y"><line :x1="displayed.left" :y1="tick.y" :x2="displayed.right" :y2="tick.y" class="live-grid"/><text :x="displayed.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
               <g v-for="limit in displayed.limits" :key="limit.name"><line :x1="displayed.left" :y1="limit.y" :x2="displayed.right" :y2="limit.y" :stroke="limit.color" :stroke-dasharray="limit.dash" stroke-width="1.5"/><text v-if="!compact" x="738" :y="limit.y+4" :fill="limit.color" class="live-limit-label">{{ limit.name }} · {{ number(limit.value) }}</text></g>
               <g :clip-path="'url(#live-clip-' + $.uid + ')'">
                 <path :d="displayed.path" fill="none" stroke="var(--ice)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
                 <path v-if="displayed.trendPath" :d="displayed.trendPath" class="trend-fit-line"/>
-<g v-if="displayed.projection">
+              <g v-if="displayed.projection">
                 <path :d="displayed.projection.path" class="trend-projection-line"/>
                 <circle :cx="displayed.projection.end.x" :cy="displayed.projection.end.y" r="5" class="forecast-endpoint" tabindex="0" :aria-label="(displayed.projection.reachesLimit ? 'Alcance estimado do limite: ' : 'Fim do trecho estimado: ') + number(displayed.projection.end.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(displayed.projection.end.timestamp)"><title>{{ displayed.projection.reachesLimit ? 'Alcance estimado do limite' : 'Fim do trecho estimado' }} · {{ number(displayed.projection.end.valor) }} {{ sensor?.unidade_medida }} · {{ date(displayed.projection.end.timestamp) }}</title></circle>
               </g>
@@ -328,45 +336,52 @@
     props: ['readings', 'sensor', 'analysis'],
     setup(props) {
       const compact = useCompact();
+      const showHistoryFit = Vue.ref(false);
       const fitted = Vue.computed(() => {
         const a = props.analysis;
-        if (!a?.analysis_enabled || a.insufficient_data || a.data_quality !== 'valid') return [];
-        return (a.regression_line || []).filter(p => Number.isFinite(Number(p.valor)) && Number.isFinite(Date.parse(p.timestamp)));
+        if (!a?.analysis_enabled) return [];
+        // Keep a preliminary visual fit while operational criteria are pending.
+        // It never authorizes a forecast, alert or work order.
+        return a.regression_line?.length === 2 ? a.regression_line.filter(p => Number.isFinite(Number(p.valor)) && Number.isFinite(Date.parse(p.timestamp))) : fitLine((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})));
       });
       const projected = Vue.computed(() => projectForward((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})), fitted.value, {analysis:props.analysis,limit:props.sensor?.limite_alerta}));
       const estimate = Vue.computed(() => projectionSummary(props.analysis));
       const fitMessage = Vue.computed(() => !props.analysis?.analysis_enabled ? 'Análise de tendência desativada para este sensor.' :
-        fitted.value.length ? projected.value ? 'A azul mostra o que foi medido. A roxa resume a tendência e continua à direita como estimativa, se o ritmo se mantiver.' : 'A linha roxa resume esta amostra. Não há movimento consistente suficiente para projetar um trecho futuro.' : 'Aguardando quantidade e tempo de observação suficientes para calcular a tendência.');
+        !fitted.value.length ? 'Aguardando pelo menos 3 horários diferentes para desenhar a tendência.' :
+        props.analysis.insufficient_data ? 'Tendência preliminar no histórico. A projeção aguarda a quantidade e o tempo mínimos; os alertas por leitura real continuam ativos.' :
+        projected.value ? 'Azul: leituras reais. Roxo à direita: projeção, se o ritmo continuar. A divisória marca a última medição.' :
+        'A tendência continua visível no histórico. A amostra está estável ou sem movimento consistente para projetar o futuro.');
+      const limits = Vue.computed(() => thresholds(props.sensor));
       const plot = Vue.computed(() => {
         const rows = normalize((props.readings || []).map((r,i) => ({ ...r, id:r.id ?? i })));
         const limit = Number(props.sensor?.limite_alerta);
-        const values = rows.map(r => r.valor).concat(fitted.value.map(r => Number(r.valor)), Number.isFinite(limit) && limit > 0 ? [limit] : []);
-        if (!values.length) return chart([], null);
-        const min = Math.min(...values), max = Math.max(...values), pad = (max-min || 1)*.08;
-        const result = chart(rows, null, {min:min-pad,max:max+pad}, 'auto', null, compact.value, fitted.value, projected.value);
-        if (Number.isFinite(limit) && limit > 0 && result.domain) result.limits = [{name:'Limite superior',value:limit,y:230-(limit-result.domain.min)/(result.domain.max-result.domain.min)*188}];
-        return result;
+        // A single operating reference keeps the plot readable; all alarm
+        // thresholds remain available below it, using this sensor's actual rules.
+        const references = Number.isFinite(limit) && limit > 0 ? [{name:'Limite superior',value:limit,color:'var(--danger)',dash:'8 5'}] : [];
+        return chart(rows, null, null, 'auto', null, compact.value, fitted.value, projected.value,
+          {futureSpace:true, showFit:showHistoryFit.value || !projected.value, limits:references});
       });
-      return { compact, fitted, projected, estimate, fitMessage, plot, number, date, forecastDate };
+      return { compact, showHistoryFit, fitted, projected, estimate, fitMessage, limits, plot, number, date, forecastDate };
     },
     template: `
       <figure class="measurement-sample">
-        <figcaption>Amostra analisada · {{ sensor?.unidade_medida }} · mesmos horários para leituras e tendência</figcaption>
-        <div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="fitted.length"><i class="legend-trend"></i>Tendência calculada</span><span v-if="plot.projection"><i class="legend-projection"></i>Projeção futura</span><span v-if="plot.limits.length"><i class="legend-limit"></i>Limite superior</span></div>
+        <figcaption>Leituras e projeção · {{ sensor?.unidade_medida }}</figcaption>
+        <div class="trend-chart-toolbar"><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="plot.trendPath"><i class="legend-trend"></i>{{ analysis?.insufficient_data ? 'Tendência preliminar' : 'Tendência calculada' }}</span><span v-if="plot.projection"><i class="legend-projection"></i>Projeção futura</span><span v-if="plot.limits.length"><i class="legend-limit"></i>Limite superior</span></div><label v-if="projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label></div>
         <p class="trend-chart-explanation">{{ fitMessage }}</p>
         <svg :viewBox="'0 0 ' + plot.width + ' 285'" role="img" :aria-label="'Leituras reais, tendência e projeção de ' + sensor?.nome">
-          <g v-if="plot.projection" class="forecast-region">
-              <rect :x="plot.projection.startX" y="36" :width="plot.projection.width" height="200" class="forecast-shade"/>
-              <line :x1="plot.projection.startX" y1="36" :x2="plot.projection.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(plot.projection.points[0].timestamp) }}</title></line>
-              <text v-if="!compact" :x="(plot.left + plot.projection.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Histórico observado</text>
-              <text v-if="plot.projection.width > (compact ? 65 : 100)" :x="plot.projection.startX + plot.projection.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Estimativa' : 'Estimativa futura' }}</text>
+          <g v-if="plot.future" class="forecast-region">
+              <rect :x="plot.future.startX" y="36" :width="plot.future.width" height="200" class="forecast-shade"/>
+              <line :x1="plot.future.startX" y1="36" :x2="plot.future.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(plot.future.timestamp) }}</title></line>
+              <text v-if="!compact" :x="(plot.left + plot.future.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Leituras reais</text>
+              <text :x="plot.future.startX + plot.future.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? 'Projeção' : 'Projeção futura' }}</text>
+              <text v-if="!plot.projection" :x="plot.future.startX + plot.future.width/2" y="140" text-anchor="middle" class="forecast-region-label">{{ analysis?.insufficient_data ? 'Aguardando dados' : 'Sem projeção' }}</text>
             </g>
             <g v-for="tick in plot.ticks" :key="tick.y"><line :x1="plot.left" :y1="tick.y" :x2="plot.right" :y2="tick.y" class="live-grid"/><text :x="plot.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
           <text :x="plot.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
-          <g v-for="limit in plot.limits" :key="limit.name"><line :x1="plot.left" :y1="limit.y" :x2="plot.right" :y2="limit.y" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="12 4 2 4"/><text v-if="!compact" x="738" :y="limit.y+4" fill="var(--danger)" class="live-limit-label">Limite · {{ number(limit.value) }}</text></g>
+          <g v-for="limit in plot.limits" :key="limit.name"><line :x1="plot.left" :y1="limit.y" :x2="plot.right" :y2="limit.y" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="8 5"/><text v-if="!compact" x="738" :y="limit.y+4" fill="var(--danger)" class="live-limit-label">Limite · {{ number(limit.value) }}</text></g>
           <path :d="plot.path" fill="none" stroke="var(--ice)" stroke-width="2.5"/>
           <path v-if="plot.trendPath" :d="plot.trendPath" class="trend-fit-line"/>
-<g v-if="plot.projection">
+          <g v-if="plot.projection">
                 <path :d="plot.projection.path" class="trend-projection-line"/>
                 <circle :cx="plot.projection.end.x" :cy="plot.projection.end.y" r="5" class="forecast-endpoint" tabindex="0" :aria-label="(plot.projection.reachesLimit ? 'Alcance estimado do limite: ' : 'Fim do trecho estimado: ') + number(plot.projection.end.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(plot.projection.end.timestamp)"><title>{{ plot.projection.reachesLimit ? 'Alcance estimado do limite' : 'Fim do trecho estimado' }} · {{ number(plot.projection.end.valor) }} {{ sensor?.unidade_medida }} · {{ date(plot.projection.end.timestamp) }}</title></circle>
               </g>
@@ -374,6 +389,8 @@
           <text v-for="(time,i) in plot.times" :key="i" :x="time.x" y="260" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
         </svg>
         <p v-if="compact && plot.limits.length" class="live-note">Limite superior: {{ number(plot.limits[0].value) }} {{ sensor?.unidade_medida }}</p>
+        <div v-if="limits.length" class="alarm-thresholds" aria-label="Faixas que geram alerta por leitura real"><span>Alerta por leitura real:</span><span v-for="limit in limits" :key="limit.name" :style="{color:limit.color}">{{ limit.name }} ≥ {{ number(limit.value) }} {{ sensor?.unidade_medida }}</span></div>
+        <p v-if="analysis?.sample_selection === 'time_distributed'" class="live-note">{{ analysis.readings_count }} leituras reais distribuídas no tempo para preservar a duração mínima. A consistência também foi verificada nas {{ analysis.source_readings_count }} leituras originais desse período.</p>
         <div v-if="plot.points.length" class="live-footer"><span>Início observado: {{ date(plot.points[0].timestamp) }}</span><span>Última leitura real: {{ date(plot.points[plot.points.length-1].timestamp) }}</span></div>
         <p v-if="plot.projection" class="forecast-caption">Projeção de até {{ plot.projection.horizonLabel }} após a última leitura, se o ritmo continuar.<span v-if="plot.projection.limitOutside"> O limite fica além deste trecho.</span><span v-if="plot.projection.reachesLimit"> O marcador indica o alcance estimado do limite.</span></p>
         <details v-if="estimate" class="trend-estimate"><summary>Ver estimativa de horário até o limite</summary><strong>Por volta de {{ forecastDate(estimate.at) }}</strong><p>Aproximadamente {{ estimate.duration }} após a última medição, registrada em {{ date(estimate.reference) }}.</p><p>Cálculo com a última medição e o ritmo da tendência, se esse ritmo continuar. Estima o alcance do limite, não um horário de falha.</p></details>

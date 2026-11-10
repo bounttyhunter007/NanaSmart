@@ -4534,6 +4534,62 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 }
 
 
+/* Consulta de ordens de serviço */
+.order-filters { align-items:center; }
+.order-filters > .filter-input { flex:1 1 240px; }
+.order-extra-filters { position:relative; color:var(--t2); font-size:12px; }
+.order-extra-filters > summary { padding:10px 12px; cursor:pointer; border:1px solid var(--edge); border-radius:6px; }
+.order-extra-filters > div { position:absolute; top:calc(100% + 8px); right:0; z-index:5; width:280px; padding:16px; background:var(--s2); border:1px solid var(--edge); border-radius:10px; box-shadow:var(--shadow); display:grid; gap:14px; }
+.order-extra-filters label { display:grid; gap:8px; color:var(--t3); }
+.order-extra-filters .filter-select { width:100%; min-width:0; }
+.order-export { margin-left:auto; }
+.order-sort-note { color:var(--t3); font-size:12px; line-height:1.6; margin:0 0 14px; }
+.order-list-title { width:38%; overflow-wrap:anywhere; }
+.order-status { display:inline-flex; align-items:center; gap:7px; color:var(--t2); font-size:12px; line-height:1.5; white-space:nowrap; }
+.order-status::before { content:''; width:6px; height:6px; flex-shrink:0; background:var(--t3); border-radius:50%; }
+.order-status.is-pendente::before { background:var(--warn); }
+.order-status.is-andamento::before { background:var(--ice); }
+.order-status.is-concluida::before { background:var(--acid); }
+.order-list-card { cursor:default; }
+.order-list-card small { display:block; color:var(--t3); font-size:11px; margin-top:5px; }
+.order-list-card footer { margin-top:auto; padding-top:12px; border-top:1px solid var(--edge); }
+.order-detail-modal { width:min(780px,calc(100vw - 32px)); display:flex; flex-direction:column; overflow:hidden; }
+.order-detail-header { align-items:flex-start; gap:20px; flex-shrink:0; }
+.order-detail-header > div { min-width:0; }
+.order-detail-eyebrow { color:var(--t3); font:500 11px/1.5 var(--body); letter-spacing:1.3px; margin-bottom:8px; }
+.order-detail-header h2 { color:var(--t1); font:600 clamp(18px,2vw,24px)/1.4 var(--body); overflow-wrap:anywhere; }
+.order-detail-body { overflow-y:auto; min-height:0; overscroll-behavior:contain; }
+.order-detail-loading { padding:30px 0; color:var(--t3); }
+.order-detail-badges { display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
+.order-detail-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 28px; margin:0 0 28px; }
+.order-detail-facts dt { color:var(--t3); font-size:12px; margin-bottom:6px; }
+.order-detail-facts dd { color:var(--t1); font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.order-description { margin-bottom:26px; }
+.order-description h3 { color:var(--t1); font:600 14px/1.5 var(--body); margin-bottom:12px; }
+.order-description p { color:var(--t2); font-size:14px; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; }
+.order-equipment-link { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; padding:18px; border:1px solid var(--edge); border-radius:10px; margin:0 0 22px; }
+.order-equipment-link > div { flex:1; min-width:0; }
+.order-equipment-link span { color:var(--t3); font-size:12px; display:block; margin-bottom:6px; }
+.order-equipment-link strong { display:block; color:var(--t1); font-size:14px; font-weight:500; overflow-wrap:anywhere; }
+.order-technical-details { border-top:1px solid var(--edge); }
+.order-technical-details > summary { color:var(--t2); padding:18px 0; font-size:13px; cursor:pointer; }
+.order-technical-details > div { padding:8px 0; }
+.order-priority-reason { color:var(--t3); font-size:13px; line-height:1.8; margin:0 0 18px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.order-safety { font-size:13px; }
+.order-safety strong { display:block; }
+.order-detail-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; flex-shrink:0; padding:18px 28px; border-top:1px solid var(--edge); background:var(--s2); }
+.order-detail-footer > .abc-row-actions { margin-left:auto; }
+.order-detail-modal :focus-visible, .abc-orders :focus-visible { outline:2px solid var(--ice); outline-offset:3px; }
+@media (max-width:600px) {
+  .order-filters > .filter-select { flex:1 1 140px; min-width:0; }
+  .order-extra-filters > div { position:static; margin-top:10px; width:min(280px,calc(100vw - 64px)); }
+  .order-export { margin-left:0; }
+  .order-detail-modal { max-height:calc(100dvh - 24px); }
+  .order-detail-modal .modal-header, .order-detail-modal .modal-body, .order-detail-footer { padding:20px; }
+  .order-detail-facts { gap:18px; }
+  .order-detail-footer > .abc-row-actions { margin-left:0; }
+}
+
 /* Classificação ABC e fila de manutenção */
 .abc-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:24px; }
 .abc-heading h1 { margin:4px 0 10px; color:var(--t1); }
@@ -4603,14 +4659,19 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 
 /* A bounded future segment never adds points to the measured series. */
 .forecast-shade { fill:var(--trend-line); fill-opacity:.08; }
-.forecast-divider { stroke:var(--t4); stroke-width:1; stroke-dasharray:3 5; }
+.forecast-divider { stroke:var(--t3); stroke-width:1; }
 .forecast-region-label { fill:var(--t4); font-size:11px; font-family:var(--body); }
-.trend-fit-line { opacity:.72; }
-.trend-projection-line { fill:none; stroke:var(--trend-line); stroke-width:3; stroke-dasharray:3 5; vector-effect:non-scaling-stroke; pointer-events:none; }
+.trend-fit-line { opacity:.65; stroke-width:2; stroke-dasharray:10 6; }
+.trend-projection-line { fill:none; stroke:var(--trend-line); stroke-width:3; stroke-dasharray:8 5; vector-effect:non-scaling-stroke; pointer-events:none; }
 .forecast-endpoint { fill:var(--s2); stroke:var(--trend-line); stroke-width:2.5; vector-effect:non-scaling-stroke; }
 .forecast-endpoint:focus { outline:none; stroke-width:4; }
-.trend-chart-legend .legend-projection { border-color:var(--trend-line); border-top-style:dotted; border-top-width:3px; }
+.trend-chart-legend .legend-projection { border-color:var(--trend-line); border-top-style:dashed; border-top-width:3px; }
 .trend-chart-legend .legend-trend { opacity:.72; }
 .forecast-caption { margin:12px 0; font-size:12px; color:var(--t4); line-height:1.6; }
 @media(max-width:700px) { .forecast-region-label { font-size:12px; } }
 .measurement-sample .forecast-caption, .live-chart .forecast-caption { font-size:12px; line-height:1.6; }
+.alarm-thresholds { display:flex; flex-wrap:wrap; gap:8px 18px; padding:12px 0; border-top:1px solid var(--edge); color:var(--t3); font-size:12px; line-height:1.6; }
+.trend-automation { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:12px; margin:18px 0; }
+.trend-automation > div { padding:14px; border:1px solid var(--edge); border-radius:10px; background:var(--s2); }
+.trend-automation strong { color:var(--t1); font-size:13px; }
+.trend-automation p { color:var(--t3); font-size:12px; line-height:1.6; margin:8px 0 0; }
