@@ -116,8 +116,31 @@
     }
     return message;
   }
+  function lineAnnotations(points, projectedPoints, projection, left, right, format) {
+    if (!points.length) return [];
+    const last = points[points.length - 1];
+    const end = projectedPoints[projectedPoints.length - 1];
+    const make = (point, id, text, caption, below = false) => {
+      const width = Math.max(text.length * 8, caption.length * 6.5);
+      const x = Math.min(right - 8, Math.max(left + width + 4, point.x - 8));
+      const y = Math.max(56, Math.min(206, point.y + (below ? 22 : -24)));
+      return { id, x, y, text, caption, width };
+    };
+    const latest = make(last, 'latest', format(last.valor), 'Última leitura');
+    const labels = [latest];
+    if (projection && end) {
+      const estimate = make(end, 'estimate', '≈ ' + format(end.valor), '+' + projection.horizonLabel);
+      // Keep the two labels apart on flat lines and narrow/mobile charts.
+      const overlaps = () => Math.abs(latest.y - estimate.y) < 34 &&
+        latest.x > estimate.x - estimate.width - 10 && estimate.x > latest.x - latest.width - 10;
+      if (overlaps()) Object.assign(estimate, make(end, 'estimate', estimate.text, estimate.caption, true));
+      if (overlaps()) estimate.y = latest.y <= 170 ? latest.y + 36 : latest.y - 36;
+      labels.push(estimate);
+    }
+    return labels;
+  }
   function chart(rows, sensor, envelope = null, minutes = 'auto', domain = null, compact = false, trendLine = [], projection = null, view = {}) {
-    if (!rows.length) return { width:compact ? 360 : 900, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], ticks: [], times: [], limits: [], offscaleLimits:[], path: '', trendPath: '', projection: null, domain: null };
+    if (!rows.length) return { width:compact ? 360 : 900, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], annotations: [], ticks: [], times: [], limits: [], offscaleLimits:[], path: '', trendPath: '', projection: null, domain: null };
     const limits = view.limits || thresholds(sensor), values = rows.map(r => r.valor).concat(view.focus ? [] : limits.map(t => t.value), view.showFit === false ? [] : trendLine.map(p => p.valor), (projection?.points || []).map(p => p.valor));
     const rawMin = Math.min(...values), rawMax = Math.max(...values);
     const minimumRange = view.focus ? Math.max(Math.abs(rawMax) * .002, .000001) : 0;
@@ -147,7 +170,7 @@
     const projectedPoints = (projection?.points || []).map(p => ({ ...p, x: x(Date.parse(p.timestamp)), y: y(p.valor) }));
     const axisNumber = new Intl.NumberFormat('pt-BR', {maximumFractionDigits:Math.max(2,Math.min(8,1-Math.floor(Math.log10((max-min)/4))))});
     const plottedLimits = limits.map(t => ({...t,y:y(t.value),visible:t.value>=min && t.value<=max,position:t.value>max?'acima':'abaixo'}));
-    return { points, width:compact ? 360 : 900, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
+    return { points, annotations: lineAnnotations(points, projectedPoints, projection, left, right, value => axisNumber.format(value)), width:compact ? 360 : 900, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
       ticks: Array.from({ length: 5 }, (_, i) => { const v = min + (max - min) * i / 4; return { value: v, label: axisNumber.format(v), y: y(v) }; }),
       times: Array.from({ length: 3 }, (_, i) => ({ x: left + i * (right-left)/2, label: timeFormat.format(bounds.from + (bounds.to - bounds.from) * i / 2) })),
       trendPath: view.showFit === false ? '' : trendLine.map((p,i) => `${i ? 'L' : 'M'}${x(Date.parse(p.timestamp)).toFixed(2)},${y(p.valor).toFixed(2)}`).join(' '),
@@ -372,6 +395,9 @@
               </g>
                               <circle v-for="(point,index) in displayed.points" :key="point.id" :cx="point.x" :cy="point.y" :r="index === displayed.points.length-1 ? 5 : 3" fill="var(--ice)" class="live-point" tabindex="0" role="button" :aria-label="number(point.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(point.timestamp)" @mouseenter="selected=point" @mouseleave="selected=null" @focus="selected=point" @blur="selected=null" @click="selected=point" @keydown.enter="selected=point" @keydown.space.prevent="selected=point"><title>{{ number(point.valor) }} {{ sensor?.unidade_medida }} · {{ date(point.timestamp) }}</title></circle>
               </g>
+              <g v-for="label in displayed.annotations" :key="label.id" class="chart-line-label" :class="'chart-line-label-' + label.id">
+                <text :x="label.x" :y="label.y" text-anchor="end"><tspan class="chart-line-value">{{ label.text }}</tspan><tspan :x="label.x" dy="15" class="chart-line-caption">{{ label.caption }}</tspan></text>
+              </g>
               <text v-for="(time,i) in displayed.times" :key="i" :x="time.x" y="260" :text-anchor="i === 0 ? 'start' : i === 2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
             </svg>
             <p class="live-point-detail" aria-live="polite">{{ detail ? number(detail.valor) + ' ' + sensor?.unidade_medida + ' · ' + date(detail.timestamp) : '' }}</p>
@@ -437,6 +463,9 @@
                 <circle v-if="plot.projection.breach" :cx="plot.projection.breach.x" :cy="plot.projection.breach.y" r="4" class="forecast-breach" tabindex="0" :aria-label="'Alcance estimado do limite: ' + number(plot.projection.breach.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(plot.projection.breach.timestamp)"><title>Alcance estimado do limite · {{ number(plot.projection.breach.valor) }} {{ sensor?.unidade_medida }} · {{ date(plot.projection.breach.timestamp) }}</title></circle>
               </g>
                         <circle v-for="point in plot.points" :key="point.id" :cx="point.x" :cy="point.y" r="4" fill="var(--ice)" tabindex="0" :aria-label="number(point.valor) + ' ' + sensor?.unidade_medida + ' em ' + date(point.timestamp)"><title>{{ number(point.valor) }} {{ sensor?.unidade_medida }} · {{ date(point.timestamp) }}</title></circle>
+          <g v-for="label in plot.annotations" :key="label.id" class="chart-line-label" :class="'chart-line-label-' + label.id">
+            <text :x="label.x" :y="label.y" text-anchor="end"><tspan class="chart-line-value">{{ label.text }}</tspan><tspan :x="label.x" dy="15" class="chart-line-caption">{{ label.caption }}</tspan></text>
+          </g>
           <text v-for="(time,i) in plot.times" :key="i" :x="time.x" y="260" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
         </svg>
         <p v-if="plot.offscaleLimits.length" class="live-note"><span v-for="limit in plot.offscaleLimits" :key="limit.name">{{ limit.name }}: {{ number(limit.value) }} {{ sensor?.unidade_medida }} · {{ limit.position }} da escala. </span>Use “Incluir limite superior” para vê-lo no eixo.</p>

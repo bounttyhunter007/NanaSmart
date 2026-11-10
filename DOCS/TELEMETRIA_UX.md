@@ -93,6 +93,8 @@ O modo inicial “Ao vivo” exibe até 60 leituras dentro dos últimos 5 minuto
 
 A escala padrão “Acompanhar variação” considera dados e projeção, com margem e precisão decimal adaptadas. Limites fora do intervalo visível aparecem identificados abaixo, sem linhas posicionadas artificialmente na borda. “Incluir todos os limites” oferece a escala geral. No modo focado, o desktop usa mais largura para as curvas; os valores dos limites ficam nas legendas abaixo. As janelas maiores continuam disponíveis para consultar histórico.
 
+Dois rótulos discretos junto às curvas mostram a última leitura em azul e o valor no fim da projeção em roxo, com “≈” e o tempo à frente (por exemplo, “+30 s”). A precisão acompanha a escala. Os rótulos se afastam quando necessário em telas estreitas ou curvas horizontais; os demais pontos mantêm os valores disponíveis ao passar o mouse ou selecionar. Sem projeção, aparece apenas a última leitura.
+
 ## Ajuda expansível na aba Tendências
 
 Adicionada uma caixa informativa **Como funcionam as tendências?**, antes dos cards de resumo. Usa `details`/`summary` nativos: inicia fechada, abre/fecha por clique ou teclado e volta fechada ao sair e retornar à aba. O conteúdo é estático e sua abertura não consulta a API nem altera configurações.

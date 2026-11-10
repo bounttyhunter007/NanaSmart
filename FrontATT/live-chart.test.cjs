@@ -629,3 +629,48 @@ test('switching the selected live sensor discards a pending response and restart
   assert.ok(f.app.displayed.value.domain.max<30);
   f.unmount();
 });
+
+test('line labels show only the last measurement and the estimated endpoint with its horizon', () => {
+  const {api}=fixture(()=>({}));
+  const rows=[reading(1,0,40),reading(2,60,50),reading(3,120,60)];
+  const projection=api.projectForward(rows,api.fitLine(rows),{visual:true});
+  for (const compact of [false,true]) {
+    const plot=api.chart(rows,sensor,null,'auto',null,compact,[],projection,{focus:true,futureSpace:true});
+    assert.equal(plot.annotations.length,2);
+    assert.equal(plot.annotations[0].text,'60');
+    assert.equal(plot.annotations[0].caption,'Última leitura');
+    assert.equal(plot.annotations[1].text,'≈ 70');
+    assert.equal(plot.annotations[1].caption,'+1 min');
+    assert.equal(plot.points.length,3);
+    assert.equal(projection.points.length,2);
+    for (const label of plot.annotations) {
+      assert.ok(label.x-label.width>=plot.left);
+      assert.ok(label.x<=plot.right);
+      assert.ok(label.y>=56 && label.y<=206);
+    }
+  }
+});
+
+test('flat mobile line labels stay apart and small or negative values retain their scale precision', () => {
+  const {api}=fixture(()=>({}));
+  for (const [values,expected] of [[[70,70,70],'70'],[[123456.789,123456.789,123456.789],'123.456,79'],[[.00001,.00002,.00003],'0,00003'],[[-3,-2,-1],'-1']]) {
+    const rows=values.map((value,i)=>reading(i+1,i*30,value));
+    const projection=api.projectForward(rows,api.fitLine(rows),{visual:true});
+    const plot=api.chart(rows,sensor,null,'auto',null,true,[],projection,{focus:true,futureSpace:true});
+    const [latest,estimate]=plot.annotations;
+    const overlap=Math.abs(latest.y-estimate.y)<34 && latest.x>estimate.x-estimate.width-10 && estimate.x>latest.x-latest.width-10;
+    assert.equal(overlap,false);
+    assert.equal(latest.text,expected);
+    assert.match(estimate.text,/^≈ /);
+    assert.ok(plot.annotations.every(label=>Number.isFinite(label.x) && Number.isFinite(label.y)));
+  }
+});
+
+test('without a projection there is one measured value, and empty charts have no labels', () => {
+  const {api}=fixture(()=>({}));
+  assert.equal(api.chart([],sensor).annotations.length,0);
+  const plot=api.chart([reading(1,0,0)],sensor);
+  assert.equal(plot.annotations.length,1);
+  assert.equal(plot.annotations[0].text,'0');
+  assert.equal(plot.annotations[0].id,'latest');
+});
