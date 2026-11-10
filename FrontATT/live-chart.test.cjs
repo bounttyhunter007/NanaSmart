@@ -299,13 +299,15 @@ test('future segment starts at last real point, reserves history and never adds 
   assert.ok(plot.projection.path); assert.ok(plot.path);
 });
 
-test('limit is marked only when reached inside bounded horizon and forecast stops there', () => {
+test('limit crossing is marked without truncating the forecast line', () => {
   const {api}=fixture(() => ({}));
   const rows=[reading(1,0,40),reading(2,3600,60),reading(3,7200,80)],fit=api.fitLine(rows);
   const reached=api.projectForward(rows,fit,{limit:90});
   assert.equal(reached.reachesLimit,true);
-  assert.equal(reached.points[1].timestamp,stamp(9000));
-  assert.equal(reached.points[1].valor,90);
+  assert.equal(reached.breach.timestamp,stamp(9000));
+  assert.equal(reached.breach.valor,90);
+  assert.equal(reached.points[1].timestamp,stamp(10800));
+  assert.equal(reached.points[1].valor,100);
   const far=api.projectForward(rows,fit,{limit:200});
   assert.equal(far.reachesLimit,false); assert.equal(far.limitOutside,true);
   assert.equal(far.points[1].valor,100);
@@ -403,14 +405,14 @@ test('flat readings produce a horizontal visual preview without a breach predict
   assert.equal(plot.projection.points[0].y,plot.projection.points[1].y);
 });
 
-test('oscillating readings show a shorter exploratory preview without a time-to-limit claim', () => {
+test('oscillating readings keep a readable exploratory line without a time-to-limit claim', () => {
   const {api}=fixture(() => ({}));
   const rows=[40,60,41,59,42].map((valor,i)=>reading(i+1,i*600,valor));
   const analysis={analysis_enabled:true,insufficient_data:false,data_quality:'valid',direction:'stable',
     regression_line:api.fitLine(rows)};
   const sample=api.sampleComponent.setup({readings:rows,sensor,analysis});
   assert.equal(sample.projected.value.kind,'low_confidence');
-  assert.equal(sample.projected.value.horizon,600000);
+  assert.equal(sample.projected.value.horizon,1200000);
   assert.ok(sample.plot.value.projection.path);
   assert.equal(sample.projected.value.reachesLimit,false);
   assert.equal(sample.estimate.value,null);
@@ -432,6 +434,40 @@ test('preview preserves source-quality failures and upgrades only after server c
   analysis.analysis_enabled=false;
   assert.equal(sample.projected.value,null);
   assert.match(sample.fitMessage.value,/desativada/);
+});
+
+test('near-limit forecast spans the future region on desktop and mobile instead of collapsing into a dot', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,600,70),reading(3,1200,99.99)];
+  const future=api.projectForward(rows,api.fitLine(rows),{visual:true,limit:100});
+  assert.equal(future.reachesLimit,true);
+  assert.ok(future.points[1].valor>100);
+  for(const compact of [false,true]) {
+    const plot=api.chart(rows,sensor,null,'auto',null,compact,[],future,{futureSpace:true,showFit:false});
+    assert.ok(plot.projection.breach.x-plot.projection.startX<1);
+    assert.equal(plot.projection.end.x,plot.right);
+    assert.ok(plot.projection.end.x-plot.projection.startX>(compact?90:200));
+    assert.ok(plot.projection.breach.x<plot.projection.end.x);
+    assert.equal(plot.points.length,3);
+    assert.ok(plot.projection.end.y>42);
+  }
+  assert.doesNotMatch(api.component.template,/forecast-endpoint/);
+  assert.doesNotMatch(api.sampleComponent.template,/forecast-endpoint/);
+});
+
+test('a long selected window cannot compress a short live forecast into a few pixels', () => {
+  const {api}=fixture(() => ({}));
+  const rows=[reading(1,0,40),reading(2,10,45),reading(3,20,50)];
+  const future=api.projectForward(rows,api.fitLine(rows),{visual:true,limit:100});
+  for(const compact of [false,true]) {
+    const plot=api.chart(rows,sensor,null,'360',null,compact,[],future,{futureSpace:true});
+    assert.equal(plot.domain.from,Date.parse(stamp(0)));
+    assert.equal(plot.domain.to,Date.parse(stamp(30)));
+    assert.equal(plot.projection.end.x,plot.right);
+    assert.ok(Math.abs(plot.projection.width/(plot.right-plot.left)-1/3)<1e-9);
+  }
+  const historyOnly=api.chart(rows,sensor,null,'360');
+  assert.equal(historyOnly.domain.from,Date.parse(stamp(20))-360*60000);
 });
 
 test('visual mode still requires three unique valid timestamps and matching fit endpoints', () => {
