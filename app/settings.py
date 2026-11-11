@@ -174,6 +174,18 @@ REST_FRAMEWORK = {
     'MAX_PAGINATE_BY': 200,   # teto absoluto — nenhum ?limit= passa disso
 }
 
+SPECTACULAR_SETTINGS = {
+    # Os mesmos valores ABC têm significados/rótulos diferentes em prioridade e criticidade.
+    # Reutilize um nome por conjunto, inclusive em campos de histórico e valores automáticos.
+    'ENUM_NAME_OVERRIDES': {
+        'PrioridadeOSEnum': 'manutencao.models.OrdemServico.PRIORIDADE_CHOICES',
+        'PrioridadePlanoManutencaoEnum': 'ativos.models.PlanoManutencao.PRIORIDADE_CHOICES',
+        'CriticidadeEquipamentoEnum': 'ativos.models.CRITICIDADE_ABC',
+        'StatusOSEnum': 'manutencao.models.OrdemServico.STATUS_CHOICES',
+        'StatusAlertaEnum': 'alertas.models.Alerta.STATUS_CHOICES',
+    },
+}
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),

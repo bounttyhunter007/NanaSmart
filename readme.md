@@ -69,6 +69,15 @@ Abra `FrontATT/index.html` no navegador. A API e as interfaces de documentação
 | ReDoc | `http://127.0.0.1:9000/api/schema/redoc/` |
 | Administração Django | `http://127.0.0.1:9000/admin/` |
 
+Para validar a documentação OpenAPI e detectar erros ou avisos na geração:
+
+```powershell
+python manage.py spectacular --settings=app.test_settings --validate --fail-on-warn --file .venv/openapi.yml
+python manage.py test app.test_schema --settings=app.test_settings
+```
+
+A demonstração de tendências documenta separadamente a criação (HTTP 201), a consulta e as ações de avanço/parada/troca de fase (HTTP 200). Os formatos de entrada e saída, tipos dos campos calculados e nomes compartilhados das opções de prioridade e criticidade são verificados pelos testes do schema.
+
 Se mudar a porta do backend, atualize também a constante `BASE` em `FrontATT/app.js`.
 
 ## Dados de demonstração
