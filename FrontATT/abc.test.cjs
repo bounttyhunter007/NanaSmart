@@ -27,6 +27,28 @@ function fixture(handler) {
   return { app, requests };
 }
 
+test('última elevação da OS considera todas as ocorrências e o instante de registro', () => {
+  const { app } = fixture(() => ({}));
+  const order = { historico_alertas: [
+    { id: 1, historico_niveis: [{ nivel_anterior: 'baixo', nivel: 'critico', ocorrido_em: '2026-11-11T14:00:00Z', registrado_em: '2026-11-11T14:00:00Z' }] },
+    { id: 2, historico_niveis: [{ nivel_anterior: 'baixo', nivel: 'medio', ocorrido_em: '2026-11-11T13:00:00Z', registrado_em: '2026-11-11T15:00:00Z' }] },
+  ] };
+  assert.equal(app.orderLastEscalation(order).alerta_id, 2);
+  assert.equal(app.orderLastEscalation(order).nivel, 'medio');
+  assert.equal(app.orderEscalations(order).length, 2);
+  assert.equal(app.orderLastEscalation({}), null);
+  assert.equal(app.orderLastEscalation({ historico_alertas: [{ id: 1, historico_niveis: [] }] }), null);
+  assert.equal(app.alertLevelLabel('medio'), 'Médio');
+  assert.equal(app.alertLevelLabel(null), 'Não registrado');
+});
+
+test('datas da OS sempre incluem calendário completo e segundos', () => {
+  const { app } = fixture(() => ({}));
+  assert.match(app.fmtTimestamp('2026-11-11T14:05:37Z'), /11\/11\/2026.*\d{2}:05:37/);
+  assert.equal(app.fmtTimestamp(null), '—');
+  assert.equal(app.fmtTimestamp('inválido'), '—');
+});
+
 test('fila usa filtros no servidor, preserva ordenação recebida e paginação completa', async () => {
   const next = 'http://127.0.0.1:9000/api/ordens-servico/?prioridade=A&limit=2&offset=2';
   const { app, requests } = fixture(url => new URL(url).searchParams.has('offset')

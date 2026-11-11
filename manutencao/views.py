@@ -135,7 +135,10 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return OrdemServico.objects.none()
         user = self.request.user
-        qs = ordenar_ordens(OrdemServico.objects.select_related('equipamento', 'responsavel', 'criterios_criticidade_na_abertura__criado_por'))
+        qs = ordenar_ordens(OrdemServico.objects.select_related(
+            'equipamento', 'responsavel', 'criterios_criticidade_na_abertura__criado_por',
+            'alerta_origem__sensor',
+        ).prefetch_related('alertas_relacionados__sensor'))
         
         if user.tipo_usuario == 'admin':
             return qs.all()

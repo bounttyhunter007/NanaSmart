@@ -2,6 +2,20 @@
 
 Especificação vigente desde 06/11/2026.
 
+## Evolução dos níveis na O.S. — 11/11/2026
+
+A listagem de ordens mostra a data e hora completas da abertura, com segundos, e a última elevação de nível do alerta. Expandir essa informação na própria linha ou cartão permite consultar todas as elevações conhecidas, identificadas pelo alerta, sem abrir a O.S. O detalhe da ordem reúne as ocorrências vinculadas, incluindo recorrências, com abertura, nível inicial, elevações e normalização conhecida. O motivo de cada evento pode ser expandido. Os horários da interface usam o fuso local do dispositivo.
+
+`Alerta.historico_niveis` preserva cada aumento do maior nível do episódio, com `nivel_anterior`, `nivel`, `ocorrido_em`, `registrado_em` e `descricao`. O instante observado vem da leitura por limite ou da análise preditiva que elevou o nível; o registro no sistema é preservado separadamente. Uma alteração sem nova análise usa o instante do registro. Repetição, reprocessamento e retorno a um pico já atingido não acrescentam eventos. O contexto inicial permanece em `dados_deteccao`.
+
+A API da O.S. acrescenta o campo somente leitura `historico_alertas`, com o resumo de cada ocorrência e suas elevações. A primeira ocorrência também é consultada pelo vínculo antigo, sem duplicá-la. O queryset carrega as relações antecipadamente. O isolamento de empresa e a visibilidade do técnico continuam os da própria ordem.
+
+Ordens abertas recebem os mesmos eventos na descrição, com data, hora, fuso e transição de nível. A atualização preditiva acrescenta eventos e preserva o texto anterior. Uma recorrência registra suas próprias elevações mesmo quando seu nível é inferior ao pico de outra ocorrência da O.S. Ordens encerradas preservam a descrição e o estado; o histórico consultável continua exibindo a evolução do alerta vinculado, sem abrir outra ordem.
+
+A interface mantém a prioridade da O.S. e destaca **Criticidade do equipamento na abertura**. A criticidade atual fica nas informações técnicas. Os campos “Origem da prioridade / Herdada” e “Gravidade da condição” foram retirados da apresentação e do formulário; os campos da API permanecem compatíveis. O risco de segurança informado continua visível. Aumentar o nível do alerta não altera automaticamente a prioridade ABC da ordem.
+
+Aplicar `python manage.py migrate` para incluir `alertas.0004_historico_niveis`. A migração é aditiva e inicia o histórico de elevações vazio para registros existentes. Nenhum horário antigo é inferido da última análise ou da descrição. Quando a sequência conhecida não explica o pico preservado, a O.S. informa que parte do histórico não está disponível, inclusive após novas elevações comprovadas.
+
 ## Responsabilidades e uso
 
 O alerta registra uma detecção automática. A O.S. organiza responsável, prioridade, execução e conclusão. Telemetria e Tendências mostram a condição atual. Problemas identificados por uma pessoa são registrados diretamente na O.S.

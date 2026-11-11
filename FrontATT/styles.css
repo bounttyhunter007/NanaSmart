@@ -4705,3 +4705,23 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .trend-automation > div { padding:14px; border:1px solid var(--edge); border-radius:10px; background:var(--s2); }
 .trend-automation strong { color:var(--t1); font-size:13px; }
 .trend-automation p { color:var(--t3); font-size:12px; line-height:1.6; margin:8px 0 0; }
+.order-list-dates { min-width: 205px; }
+.order-list-dates time, .order-escalation time { display: block; }
+.order-escalation { color: var(--warn); }
+.order-list-escalations { margin-top: 8px; font-size: 11px; line-height: 1.5; }
+.order-list-escalations summary { cursor: pointer; }
+.order-list-escalations ol { list-style: none; padding: 0; }
+.order-list-escalations li { margin-top: 10px; color: var(--t3); }
+.order-list-escalations time { display: block; font-variant-numeric: tabular-nums; }
+.order-alert-history { padding: 18px 0; border-top: 1px solid var(--edge); }
+.order-alert-history h3 { margin: 0 0 8px; }
+.order-alert-episode { margin-top: 18px; }
+.order-alert-episode h4 { margin: 0 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+.order-alert-timeline { list-style: none; margin: 12px 0 0 6px; padding: 0 0 0 18px; border-left: 2px solid var(--edge); }
+.order-alert-timeline li { position: relative; padding: 0 0 18px; font-size: 13px; overflow-wrap: anywhere; }
+.order-alert-timeline li:last-child { padding-bottom: 0; }
+.order-alert-timeline li::before { content: ''; position: absolute; top: 5px; left: -23px; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.order-alert-timeline time { display: block; margin-top: 4px; color: var(--t3); font-variant-numeric: tabular-nums; }
+.order-alert-timeline p, .order-alert-timeline small { display: block; margin-top: 6px; color: var(--t3); }
+.order-alert-timeline details { margin-top: 6px; color: var(--t3); }
+.order-alert-timeline summary { cursor: pointer; }

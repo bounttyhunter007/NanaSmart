@@ -2,12 +2,55 @@ from rest_framework import serializers
 from .models import OrdemServico, HistoricoManutencao, HistoricoPrioridadeOS
 from accounts.validation import validate_company_resource
 from ativos.serializers import CriteriosCriticidadeSerializer
+from drf_spectacular.utils import extend_schema_field
+
+
+class OcorrenciaAlertaOSSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    tipo_alerta = serializers.CharField()
+    origem = serializers.CharField()
+    sensor_nome = serializers.CharField()
+    data_alerta = serializers.DateTimeField()
+    nivel_inicial = serializers.CharField(allow_null=True)
+    nivel_maximo = serializers.CharField()
+    descricao_inicial = serializers.CharField()
+    historico_niveis = serializers.ListField(child=serializers.DictField())
+    historico_incompleto = serializers.BooleanField()
+    data_normalizacao = serializers.DateTimeField(allow_null=True)
 
 class OrdemServicoSerializer(serializers.ModelSerializer):
     equipamento_nome = serializers.CharField(source='equipamento.nome', read_only=True)
     criticidade_atual = serializers.CharField(source='equipamento.criticidade', read_only=True, allow_null=True)
     responsavel_nome = serializers.SerializerMethodField()
     criterios_abertura = CriteriosCriticidadeSerializer(source='criterios_criticidade_na_abertura', read_only=True)
+    historico_alertas = serializers.SerializerMethodField()
+
+    @extend_schema_field(OcorrenciaAlertaOSSerializer(many=True))
+    def get_historico_alertas(self, obj):
+        # A primeira relação é mantida também para vínculos antigos sem a FK.
+        alertas = {alerta.pk: alerta for alerta in obj.alertas_relacionados.all()}
+        if obj.alerta_origem_id:
+            alertas.setdefault(obj.alerta_origem_id, obj.alerta_origem)
+        resultado = []
+        for alerta in sorted(alertas.values(), key=lambda a: (a.data_alerta, a.pk)):
+            evidencia = alerta.dados_deteccao or {}
+            niveis = alerta.historico_niveis or []
+            inicial = evidencia.get('nivel')
+            esperado = inicial
+            completo = bool(inicial)
+            for evento in niveis:
+                completo = completo and evento['nivel_anterior'] == esperado
+                esperado = evento['nivel']
+            resultado.append({
+                'id': alerta.pk, 'tipo_alerta': alerta.tipo_alerta, 'origem': alerta.origem,
+                'sensor_nome': evidencia.get('sensor_nome') or (alerta.sensor.nome if alerta.sensor_id else ''),
+                'data_alerta': alerta.data_alerta, 'nivel_inicial': inicial,
+                'nivel_maximo': alerta.nivel, 'descricao_inicial': evidencia.get('descricao', ''),
+                'historico_niveis': niveis,
+                'historico_incompleto': not completo or esperado != alerta.nivel,
+                'data_normalizacao': alerta.data_normalizacao,
+            })
+        return OcorrenciaAlertaOSSerializer(resultado, many=True).data
 
     def get_responsavel_nome(self, obj) -> str | None:
         return (obj.responsavel.get_full_name() or obj.responsavel.username) if obj.responsavel else None

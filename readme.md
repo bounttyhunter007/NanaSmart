@@ -11,6 +11,8 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 - Painéis com indicadores de manutenção, exportações CSV/Excel/PDF e integração opcional com Google Gemini.
 - Frontend em `FrontATT/`, incluindo dashboard, gestão operacional e chat de IA.
 
+A fila de O.S. mostra abertura e última elevação de nível com data e hora completas. Expanda a elevação para consultar os demais horários na própria lista. O detalhe da O.S. reúne o histórico dos alertas e suas recorrências, mantendo a criticidade do equipamento na abertura. Após atualizar, execute `python manage.py migrate` para incluir o registro de elevações. Regras e tratamento de horários antigos: [Histórico de alertas](DOCS/HISTORICO_ALERTAS.md#evolução-dos-níveis-na-os--11112026).
+
 As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
 
 A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de equipamento/sensor, paginação e configuração de análise. O administrador também pode editar a configuração global. A página inclui um gráfico para o sensor selecionado e uma demonstração guiada de aproximadamente um minuto, exclusiva de admin. Consulte o [roteiro de demonstração de tendências](DOCS/DEMONSTRACAO_TENDENCIAS.md). Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).

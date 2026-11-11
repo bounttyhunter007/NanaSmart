@@ -986,6 +986,20 @@ createApp({
     let orderDetailTrigger = null;
     const orderStatusLabel = status => ({ pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[status] || '—');
     const orderTypeLabel = type => ({ preventiva: 'Preventiva', corretiva: 'Corretiva', preditiva: 'Preditiva' }[type] || '—');
+    const alertLevelLabel = level => ({ baixo: 'Baixo', medio: 'Médio', critico: 'Crítico' }[level] || 'Não registrado');
+    function orderEscalations(order) {
+      return (order.historico_alertas || []).flatMap(alert => (alert.historico_niveis || []).map(event => ({ ...event, alerta_id: alert.id })))
+        .sort((a, b) => new Date(b.registrado_em || b.ocorrido_em) - new Date(a.registrado_em || a.ocorrido_em));
+    }
+    function orderLastEscalation(order) {
+      return orderEscalations(order)[0] || null;
+    }
+    function fmtTimestamp(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '—';
+      return date.toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
     function focusOrderDetails() {
       nextTick(() => document.getElementById('order-detail-close')?.focus());
     }
@@ -1076,7 +1090,7 @@ createApp({
     let guideRequest = 0, criteriaRequest = 0, assessmentRequest = 0, priorityRequest = 0;
     function criticidadeLabel(value, legacy = false) { if (legacy && value) return value + ' — ' + ({A:'Crítica', B:'Alta', C:'Moderada', D:'Baixa'}[value] || value) + ' (legado)'; return { A: 'A — Alta criticidade', B: 'B — Média criticidade', C: 'C — Baixa criticidade', D: 'D — Baixa (legado)' }[value] || 'Não avaliada'; }
     function historicPriorityLabel(value) { return { alta: 'Alta (legado)', critica: 'Crítica (legado)', media: 'Média (legado)', baixa: 'Baixa (legado)' }[value] || prioridadeLabel(value); }
-    function priorityOrigin(value) { return { herdada: 'Herdada', ajustada: 'Ajustada', convertida: 'Convertida do legado' }[value] || 'Legado'; }
+    function priorityOrigin(value) { return { herdada: 'Definição na abertura', ajustada: 'Ajuste de prioridade', ajuste: 'Ajuste de prioridade', restauracao: 'Prioridade da abertura restaurada', convertida: 'Conversão de registro antigo', migracao: 'Conversão de registro antigo' }[value] || 'Registro antigo'; }
     async function loadEquipmentGuide() {
       const request = ++guideRequest;
       equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.error = '';
@@ -2744,6 +2758,7 @@ createApp({
     return {
       orderAnalysis, analyzeOrder, osPrompt, promptCompanyId, saveOsPrompt, loadOtherPrompts,
       orderDetail, openOrderDetails, closeOrderDetails, orderDetailKeydown, orderStatusLabel, orderTypeLabel, orderExtraFilters,
+      alertLevelLabel, orderEscalations, orderLastEscalation, fmtTimestamp,
       orderState, orderParams, selectOrderPriority, clearOrderFilters, equipmentGuide, equipmentAssessment, criteriaModal,
       loadEquipmentGuide, acceptEquipmentSuggestion, openCriteria, loadCriteria, saveCriteria, criticidadeLabel, historicPriorityLabel, priorityOrigin,
       priorityModal, openPriority, savePriority, orderEquipmentOptions,

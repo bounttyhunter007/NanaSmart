@@ -3,7 +3,7 @@ from datetime import timedelta
 from threading import Barrier
 from unittest.mock import patch
 
-from django.db import close_old_connections
+from django.db import close_old_connections, connections
 from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 
@@ -34,7 +34,8 @@ class AlertConcurrencyTests(TransactionTestCase):
                 barreira.wait(timeout=10)
                 acao()
             finally:
-                close_old_connections()
+                # As conexões dos workers não podem sobreviver ao banco de teste.
+                connections.close_all()
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             resultados = [pool.submit(executar) for _ in range(2)]
@@ -47,6 +48,16 @@ class AlertConcurrencyTests(TransactionTestCase):
         self.assertEqual(Telemetria.objects.count(), 2)
         self.assertEqual(Alerta.objects.filter(origem='limite').count(), 1)
         self.assertEqual(OrdemServico.objects.count(), 1)
+
+    @patch('telemetria.signals.sync_sensor_trend')
+    def test_elevacao_simultanea_registra_um_unico_horario(self, _):
+        Telemetria.objects.create(sensor=self.sensor, valor=70)
+        self.paralelo(lambda: Telemetria.objects.create(sensor_id=self.sensor.pk, valor=100))
+        alerta = Alerta.objects.get()
+        self.assertEqual(len(alerta.historico_niveis), 1)
+        self.assertEqual(alerta.historico_niveis[0]['nivel_anterior'], 'baixo')
+        self.assertEqual(alerta.historico_niveis[0]['nivel'], 'critico')
+        self.assertEqual(OrdemServico.objects.get().descricao.count('[ELEVAÇÃO DO ALERTA'), 1)
 
     def test_processamento_simultaneo_de_alerta_nao_duplica_os(self):
         # bulk_create evita o sinal apenas para preparar um alerta ainda sem OS.

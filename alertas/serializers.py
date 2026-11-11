@@ -15,7 +15,7 @@ class AlertaSerializer(serializers.ModelSerializer):
             'evento_chave', 'dados_analise', 'analise_ia',
             'data_ultima_analise', 'nivel', 'descricao', 'data_alerta',
             'status', 'ordem_servico_id', 'equipamento_nome', 'sensor_nome',
-            'dados_deteccao', 'data_normalizacao', 'legado',
+            'dados_deteccao', 'data_normalizacao', 'legado', 'historico_niveis',
         ]
         read_only_fields = fields
 
