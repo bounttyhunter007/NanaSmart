@@ -14,6 +14,12 @@ from .permissions import IsOwnerOrGestorOrUnassigned
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+from drf_spectacular.utils import extend_schema, OpenApiResponse
+from gemini_api.serializers import GeminiResponseSerializer
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class HistoricoManutencaoFilter(df_filters.FilterSet):
@@ -37,6 +43,39 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = OrdemServicoFilter
     search_fields = ['titulo', 'descricao']
+
+    @extend_schema(request=None, responses={
+        200: GeminiResponseSerializer,
+        502: OpenApiResponse(description='Falha no provedor ou resposta vazia.'),
+        503: OpenApiResponse(description='IA indisponível ou não configurada.'),
+    })
+    @action(detail=True, methods=['post'], url_path='analise-ia')
+    def analise_ia(self, request, pk=None):
+        from gemini_api.cliente import generate_content, is_gemini_available
+        from gemini_api.order_analysis import build_order_analysis_prompts
+
+        # Authorize the selected OS before building context or calling the provider.
+        order = self.get_object()
+        if not is_gemini_available():
+            return Response(
+                {'detail': 'A análise por IA está indisponível. Contate o administrador.'}, status=503,
+            )
+        system, context = build_order_analysis_prompts(order, self.get_queryset())
+        try:
+            text, model = generate_content(
+                system_instruction=system, user_prompt=context, temperature=0.35,
+            )
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError('Gemini retornou uma análise vazia.')
+        except Exception:
+            logger.exception('Falha na análise por IA da OS %s', order.pk)
+            return Response(
+                {'detail': 'Não foi possível gerar a análise. Tente novamente.'}, status=502,
+            )
+        response = Response({'response': text.strip(), 'model_used': model})
+        response['Cache-Control'] = 'no-store'
+        return response
+
     def list(self, request, *args, **kwargs):
         visible = self.get_queryset()
         qs = self.filter_queryset(visible)

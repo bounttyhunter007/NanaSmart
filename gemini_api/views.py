@@ -1,12 +1,16 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import get_object_or_404
 from rest_framework import status as http_status
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .cliente import generate_content, is_gemini_available
 from .facades import GeminiContextFacade
-from .models import PromptConfig
+from .models import PromptAnaliseOS, PromptConfig
+from .order_analysis import prompt_config_data
+from accounts.models import Empresa
 from .prompt_builder import (
     build_system_instruction,
     build_chat_prompt,
@@ -22,7 +26,61 @@ from .serializers import (
     GeminiMessageSerializer,
     GeminiResponseSerializer,
     PromptConfigSerializer,
+    PromptAnaliseOSSerializer,
 )
+
+
+class CanConfigureOsAnalysis(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.tipo_usuario in ('admin', 'gestor')
+
+
+@extend_schema(parameters=[OpenApiParameter(
+    'empresa', int, description='Obrigatória para administrador. Gestores só podem informar a própria empresa.',
+)])
+class PromptAnaliseOSView(APIView):
+    permission_classes = [IsAuthenticated, CanConfigureOsAnalysis]
+    serializer_class = PromptAnaliseOSSerializer
+
+    def get_company_id(self, request):
+        selected = request.query_params.get('empresa')
+        if request.user.tipo_usuario == 'gestor':
+            company_id = request.user.empresa_id
+            if not company_id:
+                raise PermissionDenied('Seu usuário não possui empresa vinculada.')
+            if selected is not None and selected != str(company_id):
+                raise PermissionDenied('Você só pode configurar a própria empresa.')
+            return company_id
+        try:
+            company_id = int(selected)
+        except (TypeError, ValueError):
+            raise ValidationError({'empresa': 'Selecione uma empresa.'})
+        return get_object_or_404(Empresa, pk=company_id).pk
+
+    @extend_schema(responses=PromptAnaliseOSSerializer)
+    def get(self, request):
+        return Response(prompt_config_data(self.get_company_id(request)))
+
+    @extend_schema(request=PromptAnaliseOSSerializer, responses=PromptAnaliseOSSerializer)
+    def patch(self, request):
+        company_id = self.get_company_id(request)
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        PromptAnaliseOS.objects.update_or_create(
+            empresa_id=company_id, defaults=serializer.validated_data,
+        )
+        return Response(prompt_config_data(company_id))
+
+
+class PromptAnaliseOSResetView(PromptAnaliseOSView):
+    http_method_names = ['post', 'options']
+
+    @extend_schema(request=None, responses=PromptAnaliseOSSerializer)
+    def post(self, request):
+        company_id = self.get_company_id(request)
+        # Removing the override restores the current code default, even after updates.
+        PromptAnaliseOS.objects.filter(empresa_id=company_id).delete()
+        return Response(prompt_config_data(company_id))
 
 
 class IsAdminUser:

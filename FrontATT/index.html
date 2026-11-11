@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20261110-values5">
+  <link rel="stylesheet" href="styles.css?v=20261111-os-ai">
   <style>
     .export-btns {
       display: flex;
@@ -161,10 +161,10 @@
         <div class="nav-item" :class="{active:view==='usuarios'}" role="button" tabindex="0" :aria-label="'Usuários'" @keydown.enter="navigate('usuarios')" @keydown.space.prevent="navigate('usuarios')" @click="navigate('usuarios')">
           <span class="nav-icon">◎</span> <span class="nav-label">Usuários</span>
         </div>
-        <div class="nav-item" :class="{active:view==='prompts'}" role="button" tabindex="0" :aria-label="'Config. Prompts'" @keydown.enter="navigate('prompts')" @keydown.space.prevent="navigate('prompts')" @click="navigate('prompts')">
-          <span class="nav-icon">🤖</span> <span class="nav-label">Config. Prompts</span>
-        </div>
       </template>
+      <div v-if="isAdminOrGestor" class="nav-item" :class="{active:view==='prompts'}" role="button" tabindex="0" aria-label="Instruções da IA" @keydown.enter="navigate('prompts')" @keydown.space.prevent="navigate('prompts')" @click="navigate('prompts')">
+        <span class="nav-icon">🤖</span> <span class="nav-label">Instruções da IA</span>
+      </div>
 
       <div class="sidebar-group-label">Conta</div>
       <div class="nav-item" :class="{active:view==='perfil'}" role="button" tabindex="0" :aria-label="'Meu Perfil'" @keydown.enter="navigate('perfil')" @keydown.space.prevent="navigate('perfil')" @click="navigate('perfil')">
@@ -785,7 +785,22 @@
         </div>
 
         <!-- ══════════ PROMPTS ══════════ -->
-        <div v-if="view==='prompts'">
+        <div v-if="view==='prompts' && isAdminOrGestor" class="os-prompt-page">
+          <section class="card os-prompt-card" :aria-busy="osPrompt.busy || osPrompt.saving">
+            <header class="os-prompt-heading"><div><h2>Instruções para análise de OS</h2><p>Defina como a IA deve analisar as ordens de serviço desta empresa.</p></div><span v-if="osPrompt.loaded" class="badge" :class="osPrompt.is_customized ? 'badge-blue' : 'badge-gray'">{{ osPrompt.is_customized ? 'Personalizado' : 'Padrão' }}</span></header>
+            <p v-if="isAdmin && !promptCompanyId" class="abc-notice">Selecione uma empresa no filtro superior para consultar e editar as instruções.</p>
+            <p v-else-if="!promptCompanyId" class="abc-notice">Seu usuário não possui empresa vinculada.</p>
+            <p v-if="osPrompt.busy" role="status">Carregando instruções…</p>
+            <p v-if="osPrompt.error" class="abc-error" role="alert">{{ osPrompt.error }} <button v-if="!osPrompt.loaded" class="btn btn-ghost btn-sm" @click="fetchPrompts">Tentar novamente</button></p>
+            <template v-if="osPrompt.loaded">
+              <label for="os-analysis-instructions">Instruções</label>
+              <textarea id="os-analysis-instructions" v-model="osPrompt.edit_text" rows="14" maxlength="12000" :disabled="osPrompt.saving" aria-describedby="os-prompt-help"></textarea>
+              <p id="os-prompt-help" class="os-ai-note">Aplica-se somente ao botão de análise da OS. A alteração vale para as próximas solicitações desta empresa. Deixe em branco para usar o padrão.</p>
+              <div class="os-prompt-actions"><button class="btn btn-outline" :disabled="osPrompt.saving" @click="saveOsPrompt(true)">Restaurar padrão</button><button class="btn btn-primary" :disabled="osPrompt.saving" @click="saveOsPrompt()">{{ osPrompt.saving ? 'Salvando…' : 'Salvar' }}</button></div>
+            </template>
+          </section>
+          <details v-if="isAdmin" class="os-other-prompts" @toggle="loadOtherPrompts">
+            <summary>Outras configurações da IA</summary>
           <div class="card card-full" style="max-width: 1000px; margin: 0 auto; margin-top: 24px;">
             <div style="padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border);">
               <h2 style="margin: 0; color: var(--ice); font-family: var(--mono); font-size: 20px;">Configurações de Prompts da IA</h2>
@@ -813,6 +828,7 @@
               </div>
             </div>
           </div>
+          </details>
         </div>
 
         <!-- ══════════ PERFIL ══════════ -->
@@ -899,6 +915,14 @@
           </dl>
           <section class="order-description"><h3>Descrição da O.S.</h3><p>{{ orderDetail.order.descricao || 'Nenhuma descrição informada.' }}</p></section>
           <section class="order-equipment-link"><div><span>Equipamento</span><strong>{{ orderDetail.order.equipamento_nome || eqNome(orderDetail.order.equipamento) }}</strong></div><button class="btn btn-ghost btn-sm" @click="openEquipamentoDetails(orderDetail.order.equipamento)">Ver equipamento ↗</button></section>
+          <section class="order-ai-analysis" :aria-busy="orderAnalysis.busy" aria-labelledby="order-ai-title">
+            <div class="order-ai-heading"><h3 id="order-ai-title">Análise por IA</h3><button class="btn btn-outline btn-sm" :disabled="orderAnalysis.busy" @click="analyzeOrder">{{ orderAnalysis.busy ? 'Analisando…' : orderAnalysis.text ? 'Analisar novamente' : 'Analisar OS' }}</button></div>
+            <p v-if="!orderAnalysis.text && !orderAnalysis.busy && !orderAnalysis.error" class="os-ai-note">Solicite uma avaliação desta OS com os dados do equipamento e o histórico disponível.</p>
+            <p v-if="orderAnalysis.busy" role="status" class="os-ai-note">Analisando a OS. Aguarde…</p>
+            <p v-if="orderAnalysis.error" class="abc-error" role="alert">{{ orderAnalysis.error }}</p>
+            <div v-if="orderAnalysis.text" class="order-ai-result" aria-live="polite">{{ orderAnalysis.text }}</div>
+            <p class="os-ai-note">Análise assistida por IA. Valide as recomendações antes de executar. O resultado fica disponível enquanto esta consulta estiver aberta.</p>
+          </section>
           <details :key="orderDetail.id" class="order-technical-details"><summary>Prioridade e informações técnicas</summary><div>
             <dl class="order-detail-facts">
               <div><dt>Origem da prioridade</dt><dd>{{ priorityOrigin(orderDetail.order.prioridade_origem) }}</dd></div>
@@ -1813,6 +1837,6 @@
 
 </div><!-- /#app -->
 <script src="live-chart.js?v=20261110-values5"></script>
-<script src="app.js"></script>
+<script src="app.js?v=20261111-os-ai"></script>
 </body>
 </html>

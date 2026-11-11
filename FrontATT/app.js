@@ -615,6 +615,7 @@ createApp({
     }
 
     function logout() {
+      clearOsPrompt();
       closeABC(); closeEquipModal();
       ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; liveOpen.value = false; telemetryLiveOpen.value = false; performanceOpen.value = false;
       stopTrendPolling(); resetTrendMonitoring(); clearTrendDemo();
@@ -644,7 +645,10 @@ createApp({
       localizacoes: () => fetchLocalizacoes(),
       prompts: () => fetchPrompts(),
     };
-    function navigate(v) { view.value = v; fetchers[v]?.(); }
+    function navigate(v) {
+      if (v === 'prompts' && !isAdminOrGestor.value) return;
+      view.value = v; fetchers[v]?.();
+    }
 
     // Navegação dos cards clicáveis do técnico no dashboard
     function navigateMinhasOrdens() { return openDashboardOrders(); }
@@ -954,6 +958,29 @@ createApp({
 
     const orderState = reactive({ busy: false, error: '', count: 0, total: 0, triage: 0 });
     const orderDetail = reactive({ open: false, id: null, order: null, busy: false, error: '' });
+    const orderAnalysis = reactive({ busy: false, error: '', text: '' });
+    let orderAnalysisRequest = 0;
+    function resetOrderAnalysis() {
+      ++orderAnalysisRequest;
+      Object.assign(orderAnalysis, { busy: false, error: '', text: '' });
+    }
+    async function analyzeOrder() {
+      if (!orderDetail.open || !orderDetail.order || orderDetail.busy || orderAnalysis.busy) return;
+      const request = ++orderAnalysisRequest;
+      const detailRequest = orderDetailRequest;
+      const id = orderDetail.id, company = globalEmpresa.value, actor = me.value?.id;
+      const current = () => request === orderAnalysisRequest && detailRequest === orderDetailRequest
+        && orderDetail.open && orderDetail.id === id && company === globalEmpresa.value && actor === me.value?.id;
+      Object.assign(orderAnalysis, { busy: true, error: '', text: '' });
+      try {
+        const data = await api(`/api/ordens-servico/${id}/analise-ia/`, { method: 'POST' });
+        if (!current()) return;
+        if (typeof data?.response !== 'string' || !data.response.trim()) throw new Error('Resposta vazia');
+        orderAnalysis.text = data.response.trim();
+      } catch (error) {
+        if (current()) orderAnalysis.error = error.fieldErrors?.detail || 'Não foi possível gerar a análise. Tente novamente.';
+      } finally { if (current()) orderAnalysis.busy = false; }
+    }
     const orderExtraFilters = computed(() => [filters.ordens.tipo_os, filters.ordens.responsavel_escopo].filter(Boolean).length);
     let orderDetailRequest = 0;
     let orderDetailTrigger = null;
@@ -963,6 +990,7 @@ createApp({
       nextTick(() => document.getElementById('order-detail-close')?.focus());
     }
     async function openOrderDetails(order) {
+      resetOrderAnalysis();
       const request = ++orderDetailRequest;
       const company = globalEmpresa.value;
       const actor = me.value?.id;
@@ -981,6 +1009,7 @@ createApp({
       } finally { if (request === orderDetailRequest) orderDetail.busy = false; }
     }
     function closeOrderDetails() {
+      resetOrderAnalysis();
       ++orderDetailRequest;
       Object.assign(orderDetail, { open: false, id: null, order: null, busy: false, error: '' });
       const trigger = orderDetailTrigger;
@@ -998,7 +1027,10 @@ createApp({
     }
     function syncOrderDetails(saved) {
       if (!saved?.id) return;
-      if (orderDetail.order?.id === saved.id) orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
+      if (orderDetail.order?.id === saved.id) {
+        resetOrderAnalysis();
+        orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
+      }
       const listed = lists.ordens.find(order => order.id === saved.id);
       if (listed) Object.assign(listed, saved);
     }
@@ -1482,15 +1514,54 @@ createApp({
       });
     }
 
-    async function fetchPrompts() {
-      await withLoading(async () => {
-        const d = await api('/api/gemini/prompts/');
-        lists.prompts = d.map(p => ({
-          ...p,
-          edit_text: p.custom_text || p.original_text
-        }));
-      });
+    const osPrompt = reactive({ busy: false, saving: false, loaded: false, error: '', edit_text: '', original_text: '', is_customized: false });
+    const promptCompanyId = computed(() => isAdmin.value ? globalEmpresa.value : me.value?.empresa);
+    let osPromptRequest = 0;
+    function clearOsPrompt() {
+      ++osPromptRequest;
+      Object.assign(osPrompt, { busy: false, saving: false, loaded: false, error: '', edit_text: '', original_text: '', is_customized: false });
     }
+    function applyOsPrompt(data) {
+      Object.assign(osPrompt, { loaded: true, edit_text: data.effective_text, original_text: data.original_text, is_customized: data.is_customized });
+    }
+    async function fetchPrompts() {
+      clearOsPrompt();
+      if (!isAdminOrGestor.value || !promptCompanyId.value) return;
+      const request = osPromptRequest, company = promptCompanyId.value, actor = me.value?.id;
+      const current = () => request === osPromptRequest && company === promptCompanyId.value && actor === me.value?.id;
+      osPrompt.busy = true;
+      try {
+        const data = await api('/api/gemini/prompts/analise-os/?empresa=' + company);
+        if (current() && data) applyOsPrompt(data);
+      } catch {
+        if (current()) osPrompt.error = 'Não foi possível carregar as instruções. Tente novamente.';
+      } finally { if (current()) osPrompt.busy = false; }
+    }
+    async function saveOsPrompt(restore = false) {
+      if (!isAdminOrGestor.value || !promptCompanyId.value || !osPrompt.loaded || osPrompt.busy || osPrompt.saving) return;
+      const request = ++osPromptRequest, company = promptCompanyId.value, actor = me.value?.id;
+      const current = () => request === osPromptRequest && company === promptCompanyId.value && actor === me.value?.id;
+      osPrompt.saving = true; osPrompt.error = '';
+      try {
+        const text = osPrompt.edit_text.trim();
+        const data = await api('/api/gemini/prompts/analise-os/' + (restore ? 'reset/' : '') + '?empresa=' + company, {
+          method: restore ? 'POST' : 'PATCH',
+          ...(restore ? {} : { body: JSON.stringify({ custom_text: text === osPrompt.original_text ? '' : text }) })
+        });
+        if (current() && data) { applyOsPrompt(data); toast(restore ? 'Instruções padrão restauradas.' : 'Instruções salvas.'); }
+      } catch (error) {
+        if (current()) osPrompt.error = parseDjangoErrors(error.fieldErrors).custom_text || error.fieldErrors?.detail || 'Não foi possível salvar as instruções. Tente novamente.';
+      } finally { if (current()) osPrompt.saving = false; }
+    }
+    async function fetchLegacyPrompts() {
+      if (!isAdmin.value) return;
+      const actor = me.value?.id;
+      try {
+        const data = await api('/api/gemini/prompts/');
+        if (isAdmin.value && me.value?.id === actor && data) lists.prompts = data.map(p => ({ ...p, edit_text: p.custom_text || p.original_text }));
+      } catch { if (isAdmin.value && me.value?.id === actor) toast('Não foi possível carregar os outros prompts.', 'error'); }
+    }
+    function loadOtherPrompts(event) { if (event.target.open) fetchLegacyPrompts(); }
 
     async function savePrompt(promptId, customText) {
       try {
@@ -1498,10 +1569,10 @@ createApp({
           method: 'PATCH',
           body: JSON.stringify({ custom_text: customText })
         });
-        showToast('Prompt salvo com sucesso!', 'success');
-        fetchPrompts();
+        toast('Prompt salvo com sucesso!', 'success');
+        await fetchLegacyPrompts();
       } catch (e) {
-        showToast('Erro ao salvar prompt', 'error');
+        toast('Erro ao salvar prompt', 'error');
       }
     }
 
@@ -1509,10 +1580,10 @@ createApp({
       if (!confirm('Tem certeza que deseja restaurar o prompt original?')) return;
       try {
         await api(`/api/gemini/prompts/${promptId}/reset/`, { method: 'POST' });
-        showToast('Prompt restaurado para o original!', 'success');
-        fetchPrompts();
+        toast('Prompt restaurado para o original!', 'success');
+        await fetchLegacyPrompts();
       } catch (e) {
-        showToast('Erro ao restaurar prompt', 'error');
+        toast('Erro ao restaurar prompt', 'error');
       }
     }
 
@@ -2671,6 +2742,7 @@ createApp({
     }
 
     return {
+      orderAnalysis, analyzeOrder, osPrompt, promptCompanyId, saveOsPrompt, loadOtherPrompts,
       orderDetail, openOrderDetails, closeOrderDetails, orderDetailKeydown, orderStatusLabel, orderTypeLabel, orderExtraFilters,
       orderState, orderParams, selectOrderPriority, clearOrderFilters, equipmentGuide, equipmentAssessment, criteriaModal,
       loadEquipmentGuide, acceptEquipmentSuggestion, openCriteria, loadCriteria, saveCriteria, criticidadeLabel, historicPriorityLabel, priorityOrigin,

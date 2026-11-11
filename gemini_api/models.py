@@ -1,6 +1,16 @@
 from django.db import models
 
 
+class PromptAnaliseOS(models.Model):
+    """Personalização da análise individual, isolada dos prompts globais."""
+
+    empresa = models.OneToOneField(
+        'accounts.Empresa', on_delete=models.CASCADE, related_name='prompt_analise_os',
+    )
+    custom_text = models.TextField(blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class PromptConfig(models.Model):
     """
     Stores custom prompt configurations for the Gemini AI.

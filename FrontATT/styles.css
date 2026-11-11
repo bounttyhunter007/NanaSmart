@@ -4677,6 +4677,29 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .chart-line-caption { font-size:11px; font-weight:400; }
 @media(max-width:700px) { .forecast-region-label { font-size:12px; } }
 .measurement-sample .forecast-caption, .live-chart .forecast-caption { font-size:12px; line-height:1.6; }
+
+/* Manual OS analysis and the company instruction editor. */
+.order-ai-analysis { border:1px solid var(--edge); border-radius:10px; padding:16px; margin:18px 0; }
+.order-ai-heading, .os-prompt-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.order-ai-heading h3 { margin:0; }
+.order-ai-result { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; font-size:14px; color:var(--t2); margin:16px 0; }
+.os-ai-note { color:var(--t4); font-size:12px; line-height:1.6; margin:12px 0 0; }
+.os-prompt-page { max-width:900px; margin:24px auto; }
+.os-prompt-card { padding:24px; }
+.os-prompt-heading { align-items:flex-start; margin-bottom:20px; }
+.os-prompt-heading h2 { color:var(--t1); font-size:20px; margin:0 0 8px; }
+.os-prompt-heading p { color:var(--t3); font-size:13px; line-height:1.6; margin:0; }
+.os-prompt-card label { display:block; font-size:13px; margin-bottom:8px; color:var(--t2); }
+.os-prompt-card textarea { display:block; width:100%; box-sizing:border-box; resize:vertical; min-height:240px; padding:14px; border:1px solid var(--edge); border-radius:8px; background:var(--bg); color:var(--t1); font:14px/1.7 var(--body); }
+.os-prompt-actions { display:flex; gap:12px; justify-content:flex-end; flex-wrap:wrap; margin-top:20px; }
+.os-other-prompts { margin-top:24px; }
+.os-other-prompts > summary { color:var(--t3); font-size:13px; cursor:pointer; padding:12px 0; }
+@media(max-width:700px) {
+  .os-prompt-card { padding:16px; }
+  .os-prompt-heading h2 { font-size:18px; }
+  .os-prompt-actions .btn { flex:1; }
+  .order-ai-analysis { padding:12px; }
+}
 .alarm-thresholds { display:flex; flex-wrap:wrap; gap:8px 18px; padding:12px 0; border-top:1px solid var(--edge); color:var(--t3); font-size:12px; line-height:1.6; }
 .trend-automation { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:12px; margin:18px 0; }
 .trend-automation > div { padding:14px; border:1px solid var(--edge); border-radius:10px; background:var(--s2); }
