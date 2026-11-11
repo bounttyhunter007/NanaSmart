@@ -2,6 +2,12 @@
 
 Esta pasta contém os itens **3, 4 e 5** do modelo de entrega anexado, separados por diagrama e baseados no código do projeto em 11/11/2026.
 
+## Arquivos para preencher o template
+
+Use a subpasta [Para_preencher_template](Para_preencher_template/): ela contém imagens compactas sem cabeçalho ou rodapé, os textos dos campos 3.2 e 5.2 e a tabela do campo 4.2. Abra [Conteudo_para_copiar.html](Para_preencher_template/Conteudo_para_copiar.html) no navegador para selecionar e copiar a tabela formatada e visualizar os campos na ordem do anexo. As orientações estão em [COMO_PREENCHER.txt](Para_preencher_template/COMO_PREENCHER.txt).
+
+O gerador dessa versão está em [fontes/gerar_para_template.py](fontes/gerar_para_template.py) e utiliza também Pillow. Os arquivos abaixo mantêm a versão anterior dos diagramas completos.
+
 | Item | Arquivo PDF | Conteúdo complementar |
 | --- | --- | --- |
 | 3 | [Diagrama de Pacotes](03_Diagrama_de_Pacotes.pdf) | 3.2. Memória descritiva com 15 linhas, organização lógica, dependências e visibilidade. |
