@@ -57,7 +57,7 @@
     if (minutes < 60) return minutes + ' min';
     return Math.floor(minutes / 60) + ' h' + (minutes % 60 ? ' ' + minutes % 60 + ' min' : '');
   }
-  function projectForward(rows, fitted, { analysis = null, limit = null, visual = false } = {}) {
+  function projectForward(rows, fitted, { analysis = null, limit = null, visual = false, horizonMinutes = null } = {}) {
     const unique = new Map();
     for (const row of normalize(rows)) unique.set(Date.parse(row.timestamp), row);
     const sample = [...unique.values()];
@@ -85,7 +85,11 @@
     const kind = confirmed ? 'confirmed' : total === 0 ? 'stable' : !consistent ? 'low_confidence' : analysis ? 'preliminary' : 'visual';
     // Keep at least two thirds of the time axis for observations. Long-range
     // limit estimates stay in the optional detail instead of flattening history.
-    const horizon = Math.min(span / 2, 24 * 3600000);
+    // Só a análise operacional recebe horizonte explícito. A prévia curta
+    // mantém espaço para o histórico enquanto os critérios estão pendentes.
+    const requestedHorizon = Number(horizonMinutes) * 60000;
+    const horizon = confirmed && requestedHorizon > 0 && Number.isFinite(requestedHorizon)
+      ? requestedHorizon : Math.min(span / 2, 24 * 3600000);
     const to = from + horizon;
     if (!Number.isFinite(to) || !Number.isFinite(new Date(to).getTime())) return null;
     const upper = Number(limit);
@@ -224,7 +228,7 @@
     return compact;
   }
   const component = {
-    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null} },
+    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null}, clean:{type:Boolean,default:false} },
     setup(props) {
       const { ref, computed, watch, onMounted, onUnmounted } = Vue;
       const compact = useCompact();
@@ -357,13 +361,14 @@
         refresh, loadOptions, loadSensors, togglePause, fit, number, date, projectionLabel };
     },
     template: `
-      <section class="live-chart" aria-label="Acompanhamento de medições">
+      <section class="live-chart" :class="{'chart-clean':clean}" aria-label="Acompanhamento de medições">
         <div class="live-controls">
           <label v-if="!selectedSensor">Equipamento<select v-model="equipment" :disabled="optionsBusy"><option value="">Escolha o equipamento</option><option v-for="e in options" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
           <label v-if="!selectedSensor">Sensor<select v-model="sensorId" :disabled="!equipment || optionsBusy"><option value="">Escolha o sensor</option><option v-for="s in sensors" :key="s.id" :value="s.id">{{ s.nome }} · {{ s.unidade_medida }}{{ s.ativo ? '' : ' · inativo' }}</option></select></label>
-          <label>Janela<select v-model="minutes"><option value="auto">Ao vivo — últimos 5 min (até 60 leituras)</option><option value="5">5 minutos</option><option value="15">15 minutos</option><option value="60">1 hora</option><option value="360">6 horas</option><option value="1440">24 horas</option></select></label>
-          <label>Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir todos os limites</option></select></label>
-          <div class="live-buttons"><button class="btn btn-ghost btn-sm" :disabled="!sensorId" @click="togglePause">{{ paused ? 'Retomar ao vivo' : 'Pausar' }}</button><button class="btn btn-ghost btn-sm" :disabled="!rows.length" @click="fit">Ajustar escala</button></div>
+          <label>{{ clean ? 'Período do gráfico' : 'Janela' }}<select v-model="minutes"><option value="auto">{{ clean ? 'Últimos 5 minutos' : 'Ao vivo — últimos 5 min (até 60 leituras)' }}</option><option value="5">5 minutos</option><option value="15">15 minutos</option><option value="60">1 hora</option><option value="120">2 horas</option><option value="360">6 horas</option><option value="1440">24 horas</option></select></label>
+          <label v-if="!clean">Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir todos os limites</option></select></label>
+          <div v-if="!clean" class="live-buttons"><button class="btn btn-ghost btn-sm" :disabled="!sensorId" @click="togglePause">{{ paused ? 'Retomar ao vivo' : 'Pausar' }}</button><button class="btn btn-ghost btn-sm" :disabled="!rows.length" @click="fit">Ajustar escala</button></div>
+          <details v-if="clean" class="chart-options"><summary>Opções do gráfico</summary><div><label>Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir todos os limites</option></select></label><label><input type="checkbox" v-model="showTrend"> Tendência e projeção</label><label v-if="showTrend"><input type="checkbox" v-model="showHistoryFit"> Ajuste no histórico</label><button class="btn btn-ghost btn-sm" :disabled="!sensorId" @click="togglePause">{{ paused ? 'Retomar' : 'Pausar' }}</button><button class="btn btn-ghost btn-sm" :disabled="!rows.length" @click="fit">Ajustar escala</button></div></details>
         </div>
         <p v-if="optionsError" class="telemetry-notice" role="alert">{{ optionsError }} <button class="btn btn-ghost btn-sm" @click="equipment ? loadSensors() : loadOptions()">Tentar novamente</button></p>
         <p v-if="error" class="telemetry-notice" role="alert">{{ error }} <button class="btn btn-ghost btn-sm" :disabled="busy || paused" @click="refresh">Tentar novamente</button></p>
@@ -407,12 +412,12 @@
           <div v-if="displayed.limits.length" class="alarm-thresholds" aria-label="Limites de alarme do sensor"><span v-for="limit in displayed.limits" :key="limit.name" :style="{color:limit.color}">{{ limit.name }} ≥ {{ number(limit.value) }} {{ sensor?.unidade_medida }}<small v-if="!limit.visible"> · {{ limit.position }} da escala</small></span></div>
           <p v-if="displayed.projection" class="forecast-caption">{{ projectionLabel(displayed.projection) }} de até {{ displayed.projection.horizonLabel }} após a última leitura: {{ number(displayed.projection.end.valor) }} {{ sensor?.unidade_medida }} ao final do trecho, se o ritmo continuar.<span v-if="displayed.projection.limitOutside"> O limite fica além deste trecho.</span><span v-if="displayed.projection.reachesLimit"> O marcador indica o alcance estimado do limite.</span><span v-if="displayed.projection.kind !== 'confirmed'"> Prévia visual; alertas e OS dependem da confirmação no servidor.</span></p>
           <footer v-if="rows.length" class="live-footer"><span>{{ rows.length }} medições · última leitura em {{ date(latest.timestamp) }}</span><span v-if="!displayed.limits.length">Limites operacionais indisponíveis</span></footer>
-          <p v-if="truncated" class="live-note">Exibindo as 1.000 medições mais recentes. A janela selecionada contém mais dados.</p>
+          <p v-if="truncated" class="live-note chart-data-warning">Exibindo as 1.000 medições mais recentes. A janela selecionada contém mais dados.</p>
         </template>
       </section>`
   };
   const sampleComponent = {
-    props: ['readings', 'sensor', 'analysis'],
+    props: ['readings', 'sensor', 'analysis', 'clean', 'horizonMinutes'],
     setup(props) {
       const compact = useCompact();
       const showHistoryFit = Vue.ref(false);
@@ -424,7 +429,7 @@
         // The visual preview never authorizes an alert or work order.
         return a.regression_line?.length === 2 ? a.regression_line.filter(p => Number.isFinite(Number(p.valor)) && Number.isFinite(Date.parse(p.timestamp))) : fitLine((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})));
       });
-      const projected = Vue.computed(() => projectForward((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})), fitted.value, {analysis:props.analysis,limit:props.sensor?.limite_alerta,visual:true}));
+      const projected = Vue.computed(() => projectForward((props.readings || []).map((r,i) => ({...r,id:r.id ?? i})), fitted.value, {analysis:props.analysis,limit:props.sensor?.limite_alerta,visual:true,horizonMinutes:props.horizonMinutes}));
       const estimate = Vue.computed(() => projectionSummary(props.analysis));
       const fitMessage = Vue.computed(() => projectionExplanation(projected.value, props.analysis));
       const limits = Vue.computed(() => thresholds(props.sensor));
@@ -440,10 +445,11 @@
       return { compact, showHistoryFit, scale, fitted, projected, estimate, fitMessage, limits, plot, number, date, forecastDate, projectionLabel };
     },
     template: `
-      <figure class="measurement-sample">
+      <figure class="measurement-sample" :class="{'chart-clean':clean}">
         <figcaption>Leituras e projeção · {{ sensor?.unidade_medida }}</figcaption>
         <div class="trend-chart-toolbar"><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="plot.trendPath"><i class="legend-trend"></i>{{ analysis?.insufficient_data ? 'Tendência preliminar' : 'Tendência calculada' }}</span><span v-if="plot.projection"><i class="legend-projection"></i>{{ projectionLabel(plot.projection) }}</span><span v-if="plot.limits.some(t=>t.visible)"><i class="legend-limit"></i>Limite superior</span></div><label v-if="projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label></div>
-        <label class="trend-chart-toggle">Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir limite superior</option></select></label>
+        <label v-if="!clean" class="trend-chart-toggle">Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir limite superior</option></select></label>
+        <details v-if="clean" class="chart-options"><summary>Opções do gráfico</summary><div><label>Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir limite superior</option></select></label><label><input type="checkbox" v-model="showHistoryFit"> Ajuste no histórico</label></div></details>
         <p class="trend-chart-explanation">{{ fitMessage }}</p>
         <svg :viewBox="'0 0 ' + plot.width + ' 285'" role="img" :aria-label="'Leituras reais, tendência e projeção de ' + sensor?.nome">
           <g v-if="plot.future" class="forecast-region">

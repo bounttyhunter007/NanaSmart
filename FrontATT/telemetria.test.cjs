@@ -13,7 +13,7 @@ function fixture(handler) {
   let timerId = 0;
   const context = {
     Vue: { ref: value => ({ value }), reactive: value => value,
-      computed: getter => ({ get value() { return getter(); } }), watch() {}, onMounted() {}, onUnmounted(callback) { unmount.push(callback); },
+      computed: getter => ({ get value() { return typeof getter === 'function' ? getter() : getter.get(); }, set value(value) { getter.set(value); } }), watch() {}, onMounted() {}, onUnmounted(callback) { unmount.push(callback); },
       nextTick: callback => callback?.(), createApp: options => ({ mount() { app = options.setup(); } }) },
     localStorage: { getItem() { return ''; }, setItem() {}, removeItem() {} },
     document: { hidden: false, addEventListener() {}, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, getElementById() {} },
@@ -201,14 +201,14 @@ test('filtros e paginação de Telemetria não influenciam a página de Tendênc
   const { app } = fixture(url => url.includes('/tendencias/') ? [anomaly(1), anomaly(2)] : { count: 1, results: [{ id: 99 }] });
   Object.assign(app.telemetry, { equipment: 99, sensor: 999, offset: 40, size: 50 });
   await app.fetchTrends();
-  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendPage.sensor, '');
+  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendPage.sensor, 1);
   assert.equal(app.trendCount.value, 2); assert.equal(app.trendPage.offset, 0);
   app.trendPage.equipment = 3; app.trendPage.sensor = 1; app.applyTrendFilters();
-  assert.equal(app.trendCount.value, 1);
+  assert.equal(app.trendCount.value, 2);
   assert.equal(app.telemetry.equipment, 99); assert.equal(app.telemetry.sensor, 999);
   app.telemetry.equipment = 100; await app.applyTelemetryFilters(true);
   assert.equal(app.trendPage.equipment, 3); assert.equal(app.trendPage.sensor, 1);
-  assert.equal(app.trendCount.value, 1);
+  assert.equal(app.trendCount.value, 2);
 });
 test('equipamento com um único sensor seleciona-o automaticamente, sem alterar Telemetria', async () => {
   const other = anomaly(2); other.sensor_info.equipamento_id = 4; other.sensor_info.equipamento_nome = 'Bomba';
@@ -245,24 +245,64 @@ test('menu permite acessar tendências diretamente e a antiga aba não é aceita
   assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendCount.value, 1);
 });
 
-test('gráfico só aparece com contexto e mantém o limite no eixo, incluindo ultrapassagem', async () => {
+test('seleção inicial abre um único gráfico e mantém a ultrapassagem representável', async () => {
   const row = anomaly(1);
   Object.assign(row.sensor_info, { limite_alerta: 100 });
   row.readings_summary = [{ valor: 40, timestamp: '2026-11-06T10:00:00Z' }, { valor: 108, timestamp: '2026-11-06T11:00:00Z' }];
   const { app } = fixture(() => [row]);
   await app.fetchTrends();
-  assert.equal(app.selectedTrend.value, null);
-  assert.equal(app.selectedTrendChart.value.points, '');
+  assert.equal(app.selectedTrend.value.sensor_id, 1);
+  assert.equal(app.trendPage.chartMode, 'live');
   app.trendPage.equipment = 3; app.applyTrendFilters(true);
   assert.equal(app.selectedTrend.value.sensor_id, 1);
   const chart = app.selectedTrendChart.value;
   assert.equal(chart.max, 108); assert.equal(chart.limit, 100);
   assert.ok(Number(chart.points.split(' ')[1].split(',')[1]) < chart.limitY);
 });
-test('vários sensores do equipamento não criam vários gráficos; escolha é explícita', async () => {
+test('vários sensores mantêm uma seleção; clicar na lista muda somente o gráfico', async () => {
   const { app } = fixture(() => [anomaly(1), anomaly(2)]);
   await app.fetchTrends(); app.trendPage.equipment = 3; app.applyTrendFilters(true);
-  assert.equal(app.trendPage.sensor, ''); assert.equal(app.selectedTrend.value, null);
+  assert.equal(app.trendPage.sensor, 1);
+  app.openTrendDetail(app.trendPage.rows[1]);
+  assert.equal(app.selectedTrend.value.sensor_id, 2);
+  assert.equal(app.trendCount.value, 2);
+});
+
+test('busca ignora acentos, filtra equipamento e mantém a escolha nas atualizações', async () => {
+  const first = anomaly(1), second = anomaly(2);
+  first.sensor_info.nome = 'Vibração';
+  second.sensor_info.equipamento_id = 4;
+  second.sensor_info.equipamento_nome = 'Bomba de circulação';
+  const {app} = fixture(() => [first, second]);
+  await app.fetchTrends();
+  app.trendPage.search = 'vibracao'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value, 1);
+  app.clearTrendFilters();
+  app.selectTrendEquipment(4);
+  assert.equal(app.trendPage.sensor, 2);
+  app.trendPage.chartMode = 'analysis';
+  await app.fetchTrends();
+  assert.equal(app.trendPage.sensor, 2);
+  assert.equal(app.trendPage.chartMode, 'analysis');
+  app.trendPage.search = 'inexistente'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value, 0);
+  assert.equal(app.selectedTrend.value, null);
+});
+
+test('os dois tempos são independentes e percentuais são convertidos ao salvar', async () => {
+  let saved;
+  const {app} = fixture((url, options) => { saved = JSON.parse(options.body); return {}; });
+  app.trendConfigModal.form = {ativo:true, periodo_horas:24, num_leituras:50, minimo_leituras:3,
+    duracao_minima_minutos:30, antecedencia_os_minutos:480, persistencia_minima:.7, r2_minimo:.8,
+    direcao_alerta:'crescente', sensibilidade:'media'};
+  app.setTrendTimePreset(120);
+  app.trendPersistencePercent.value = 75;
+  app.trendR2Percent.value = 90;
+  await app.saveTrendConfig();
+  assert.equal(saved.duracao_minima_minutos, 120);
+  assert.equal(saved.antecedencia_os_minutos, 480);
+  assert.equal(saved.persistencia_minima, .75);
+  assert.equal(saved.r2_minimo, .9);
 });
 test('perfil rápido prepara configuração de um minuto sem salvar nem mudar a global', () => {
   const { app, urls } = fixture(() => []);

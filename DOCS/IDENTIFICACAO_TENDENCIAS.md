@@ -1,181 +1,85 @@
-# Identificação de tendências e geração antecipada de OS
+# Identificação de tendências e O.S. por previsão de alcance do limite
 
-Data: 06/11/2026. Documento vigente do requisito 1; substitui as regras anteriores de `docs_padroes_projeto/1-ANALISE_TENDENCIAS_PREDITIVAS.md`.
+Revisão: 13/11/2026. Esta revisão substitui a abertura de O.S. para toda anomalia confirmada.
 
-## Requisito definido
+## Comportamento operacional
 
-Com a análise ativa e uma amostra suficiente, identificar aumentos ou reduções persistentes considerados anormais para o sensor. Registrar um alerta com equipamento, sensor, direção, leituras e critérios utilizados. Abrir uma OS preditiva de inspeção para a condição confirmada, antes de exigir ultrapassagem do limite operacional.
+O servidor confirma tendências anormais usando regressão linear, duração observada, quantidade de leituras, sensibilidade, R² e persistência. Uma anomalia confirmada registra um alerta de tendência. A O.S. preditiva de inspeção só é criada quando a projeção confirmada estima alcançar o limite superior dentro da antecedência configurada.
 
-A projeção indica tempo estimado até o limite superior se a inclinação continuar. Não representa prazo de quebra. Uma redução só é anormal quando configurada como tal: por exemplo, resfriamento pode ser recuperação em um equipamento e perda de processo em outro.
+O novo padrão exige **120 minutos de histórico** e prevê alcance do limite em **até 120 minutos**. São dois tempos independentes. Centenas de leituras em poucos minutos não substituem o histórico mínimo. O gráfico continua disponível enquanto a análise aguarda dados.
 
-## Diagnóstico do código anterior
+Configurações salvas mantêm sua duração e os demais critérios. A migração acrescenta antecedência de 120 minutos a elas; o novo default de duração não sobrescreve valores existentes. Configuração específica do sensor prevalece sobre a global mais recente por id; sem ambas, valem os defaults do modelo. Uma configuração inativa não é ignorada.
 
-| Parte existente | Problema encontrado | Decisão implementada |
-|---|---|---|
-| Regressão por tempo real e seleção das últimas leituras | Inclinação sozinha aceitava oscilações ou picos como tendência; rajadas podiam produzir inclinações enormes | Exigir duração, R² e fração de intervalos no mesmo sentido |
-| `num_leituras` | Era o máximo, mas a suficiência era fixada em três | Manter o máximo e adicionar `minimo_leituras` independente |
-| Configuração com `ativo=false` | Era ignorada, fazendo a rotina usar global ou defaults ativos | A configuração efetiva vale inclusive quando desativada |
-| Tendências decrescentes | Apareciam na consulta, mas nunca geravam alerta | Configurar os sentidos anormais por sensor ou globalmente |
-| Amostragem | Limite intermediário de registros podia deixar duplicatas consumirem toda a cota; datas futuras não eram excluídas | Percorrer registros até obter a cota válida, com janela fechada em agora |
-| Alertas e OS | Só aumentos com risco suficiente alertavam; OS exigia alto risco ou projeção de até 24h | Toda anomalia confirmada gera alerta e uma OS preditiva de inspeção |
-| Concorrência | Análise ocorria antes do bloqueio e não serializava com a ingestão | Bloquear sensor antes de analisar; manter bloqueio até concluir os efeitos |
-| Formulário | Sempre salvava ativo; usava defaults locais ao herdar global | Permitir desativar e carregar os valores efetivos do backend |
+## Cálculo
 
-Foram preservados: execução por sinal de nova leitura, comando periódico, separação por empresa, registro dos episódios, vínculos de OS e independência do Gemini. O monitoramento por limites continua separado da tendência.
+Com t em horas desde a primeira leitura, y como valor medido e médias t̄ e ȳ:
 
-## Configuração e precedência
+```text
+b = Σ[(t − t̄)(y − ȳ)] / Σ[(t − t̄)²]
+a = ȳ − b·t̄
+Reta ajustada: ŷ(t) = a + b·t
+Projeção: último valor medido + b·horas futuras
+Horas até o limite superior: (limite − último valor medido) / b
+R² = 1 − Σ(y − ŷ)² / Σ(y − ȳ)²
+Persistência = intervalos no sentido de b / total de intervalos
+```
 
-Prioridade: configuração específica do sensor, depois configuração global mais recente por id, depois defaults do modelo. Uma específica ativa pode sobrepor uma global inativa; uma específica inativa bloqueia a análise daquele sensor. O banco legado permite várias configurações globais; a escolha pela mais recente é explícita e determinística, sem excluir dados existentes. Para mudar a global em uso, editar a de maior id.
+O cálculo usa somas centradas para reduzir cancelamento numérico. R² é limitado a [0, 1]; série constante recebe R²=1, mas não confirma tendência por ter ritmo zero. R² não representa chance de quebra. A projeção estima alcance do limite se o ritmo continuar, não um horário de falha.
+
+A busca exclui datas futuras e valores não finitos. Empates de horário usam a leitura válida de maior id. Preferem-se as últimas N leituras; quando não cobrem a duração mínima e há histórico suficiente, selecionam-se até N leituras reais distribuídas no tempo, preservando os extremos. A consistência também é verificada contra todos os dados originais percorridos, para não esconder picos ou oscilações.
+
+O máximo selecionado é 50 por padrão, configurável de 3 a 500. A API distingue `readings_count` de `source_readings_count`. O número de leituras não define o horizonte futuro. Os detalhes mostram o período efetivamente observado, que pode superar o mínimo com coleta espaçada.
+
+## Configuração
 
 | Campo | Default | Regra |
 |---|---:|---|
-| `ativo` | `true` | Habilita a análise efetiva |
-| `periodo_horas` | 24 | Inteiro >= 1; janela retrospectiva |
-| `num_leituras` | 50 | Máximo de amostras válidas, de 3 a 500 |
-| `minimo_leituras` | 3 | Mínimo de horários distintos, de 3 até `num_leituras` |
-| `duracao_minima_minutos` | 30 | Inteiro >= 1, no máximo a janela; distância entre primeira e última leitura |
-| `sensibilidade` | `media` | Alta, média ou baixa: limiar de inclinação descrito abaixo |
-| `persistencia_minima` | 0,70 | Fração dos intervalos que seguem estritamente o sentido da inclinação; de 0,5 a 1 |
-| `r2_minimo` | 0,80 | Qualidade mínima do ajuste linear; de 0,5 a 1 |
-| `direcao_alerta` | `crescente` | `crescente`, `decrescente` ou `ambas` |
+| `ativo` | true | Habilita a análise efetiva |
+| `periodo_horas` | 24 | Busca histórica máxima; inteiro >= 1 |
+| `num_leituras` | 50 | Máximo selecionado; 3 a 500 |
+| `minimo_leituras` | 3 | Horários distintos; 3 até o máximo |
+| `duracao_minima_minutos` | 120 | Duração real da amostra; 1 até a busca máxima |
+| `antecedencia_os_minutos` | 120 | Prazo positivo previsto até o limite para abrir O.S. |
+| `r2_minimo` | 0,8 | Ajuste mínimo; 0,5 a 1 |
+| `persistencia_minima` | 0,7 | Persistência mínima; 0,5 a 1 |
+| `sensibilidade` | media | Alta=0,005, média=0,02, baixa=0,05 |
+| `direcao_alerta` | crescente | crescente, decrescente ou ambas |
 
-O sentido padrão preserva a interpretação anterior dos sensores com limite superior. Os critérios são defaults técnicos iniciais, ajustáveis pelo responsável pela manutenção. Se as últimas `num_leituras` não cobrem a duração mínima, a rotina estende a busca até cobri-la dentro da janela e distribui até esse máximo de observações reais no tempo, preservando os extremos. Não interpola nem fabrica leituras. Sem histórico suficiente, continua aguardando dados. A consistência também é verificada em todas as leituras originais percorridas, impedindo que a seleção oculte picos ou oscilações.
+O limiar de inclinação é o fator de sensibilidade multiplicado pelo valor absoluto do limite, por hora; com limite zero, usa-se o próprio fator. É necessário ultrapassá-lo estritamente. R² e persistência precisam alcançar seus mínimos, inclusive nos dados originais quando a amostra é distribuída. Modelo e API validam configurações completas e alterações parciais.
 
-Modelo, administração e API validam as combinações de critérios, incluindo alterações parciais com os valores já existentes. `bulk_create`/`update` de configurações dispensam a validação do Django; importações devem validar os dados antes de usá-los.
+## Elegibilidade, episódios e O.S.
 
-## Algoritmo verificável
+`is_anomalous` indica uma direção confirmada configurada como anormal. `intervention_recommended` exige adicionalmente projeção positiva de até `antecedencia_os_minutos` e um horário de alcance ainda futuro. A decisão compara valores sem arredondamento. A previsão parte da última medição, nunca do instante da consulta.
 
-1. Capturar um único instante `agora`; não analisar sensor inativo ou inexistente.
-2. Se a configuração efetiva está desativada, retornar `analysis_enabled=false`, `data_quality=disabled`, sem novos efeitos operacionais.
-3. Selecionar registros em `[agora - periodo_horas, agora]`, por timestamp decrescente e id decrescente. Descartar valores não finitos. Por timestamp, manter o registro válido de maior id. Preferir as últimas `num_leituras`; se não cobrem a duração mínima, percorrer até atingir essa duração e selecionar observações distribuídas no tempo. A memória de seleção é limitada ao máximo configurado, mesmo com coleta frequente. Ordenar a amostra cronologicamente.
-4. Exigir pelo menos `minimo_leituras` horários distintos e duração >= `duracao_minima_minutos`. Caso contrário, retornar `insufficient_data=true`, sem projeção ou novo alerta.
-5. Ajustar `valor = intercepto + inclinação × horas`, usando horas desde a primeira leitura. O cálculo usa somas centradas para reduzir cancelamento numérico.
-6. Comparar inclinação com o limiar absoluto: `fator × abs(limite_alerta)`. Fatores: alta = 0,005; média = 0,02; baixa = 0,05. Se o limite for zero, usar o fator em unidade/hora. Crescente exige inclinação estritamente maior que o limiar; decrescente exige inclinação estritamente menor que o negativo do limiar.
-7. Calcular `R² = 1 - soma(resíduos²) / soma((valor - média)²)`, limitado ao intervalo [0, 1]. Série constante tem R² = 1, mas inclinação zero e permanece estável.
-8. Calcular persistência como quantidade de diferenças consecutivas no sentido da inclinação dividida por `n - 1`. Intervalos sem alteração e intervalos no sentido contrário contam contra a persistência.
-9. Confirmar direção somente com R² e persistência >= seus mínimos. Em amostra distribuída, exigir também R² do ajuste exibido contra todos os pontos originais e persistência dos intervalos originais acima dos mesmos mínimos. Caso contrário, classificar como `stable`, mantendo os indicadores para auditoria.
-10. `is_anomalous=true` somente se a direção confirmada pertence a `direcao_alerta`. Recomendar inspeção e gerar OS para toda anomalia confirmada.
+`intervention_reason` informa: `disabled`, `insufficient_data`, `no_anomaly`, `no_upper_limit_projection`, `expired_projection`, `limit_reached`, `outside_horizon` ou `within_horizon`.
 
-Exemplo: limite 100, sensibilidade média, valores 10, 20 e 30 em intervalos de 30 minutos. Inclinação = 20 unidades/h, limiar = 2, R² = 1, persistência = 100%, duração = 60 minutos. Com aumento configurado como anormal, gera alerta e OS mesmo abaixo do primeiro alerta por limite. A mesma amostra concentrada em dois minutos é insuficiente com os defaults.
+- Anomalia distante cria/atualiza o alerta, mas não abre O.S. Ao entrar no prazo, usa o mesmo alerta e cria sua única O.S.
+- Novas leituras e execuções repetidas não duplicam O.S. Concorrência usa bloqueios do sensor e do alerta, unicidade de episódio e relação única de origem.
+- Afastar a projeção do prazo não resolve o alerta enquanto a anomalia continuar confirmada. Amostra suficiente sem a condição anormal resolve o episódio, sem encerrar a O.S.
+- O.S. concluída ou cancelada não é recriada enquanto o episódio permanece ativo. Recorrência após recuperação é outro episódio.
+- Dados insuficientes, histórico expirado e desativação não provam recuperação e não encerram alertas/ordens.
+- O cadastro possui apenas limite superior. Quedas configuradas como anormais geram acompanhamento/alerta, sem O.S. por previsão de limite inferior.
+- Leitura real no limite não cria uma nova O.S. por previsão; o fluxo por limites permanece independente, com seu próprio alerta e O.S. corretiva. As faixas de alarme podem agir antes do limite superior.
+- Prioridade da O.S. continua herdando a criticidade ABC do equipamento. O risco da condição permanece informação distinta.
 
-Para queda 60, 50, 40 nos mesmos intervalos, a direção é decrescente. Com default crescente, não é anomalia operacional; com `decrescente` ou `ambas`, gera alerta e OS, sem projeção de limite inferior.
+A análise ocorre na ingestão e pelo comando `python manage.py analisar_tendencias`, inclusive com a tela fechada. Consultas GET e mudanças de janela visual não criam alertas nem ordens. Salvar critérios passa a valer nas próximas execuções. O Gemini não participa da decisão automática.
 
-## Projeção e risco
+## Evidência da abertura
 
-Somente tendência crescente confirmada projeta o limite superior: `max(0, (limite - último_valor) / inclinação)`, em horas. Não há projeção para séries estáveis ou quedas. A projeção usa o último valor observado e a inclinação ajustada. O cadastro atual não possui limite inferior.
+`OrdemServico.evidencia_preditiva` guarda uma cópia estruturada, imutável pelo fluxo normal do modelo e somente leitura na API, da análise que efetivamente abriu a ordem. Não se usa a primeira detecção do alerta: ela pode ser anterior, quando a previsão ainda estava fora do prazo.
 
-A classificação mantém as faixas preexistentes de risco: crítico se já atingiu o limite ou a projeção é <= 2 horas; alto para projeção <= 8 horas; médio para <= 24 horas. Fora dessas condições, para limites positivos, valor >= 85% resulta em alto e >= 70% em médio. Toda anomalia confirmada tem pelo menos risco médio. O risco influencia a prioridade da OS pela matriz existente de criticidade e gravidade; ele não é requisito adicional para abrir a inspeção.
+Inclui resumo legível, instante de registro, equipamento/sensor/unidade/limite, valores e horários selecionados, contagens, ritmo completo e exibido, R², persistência, critérios, configuração, projeção e versão `linear-persistent-upper-limit-v2`. Novas análises e mudanças cadastrais não substituem essa evidência. Registros antigos mantêm o histórico existente, sem fabricar evidências ausentes.
 
-O modelo de alerta possui níveis `baixo`, `medio`, `critico`: riscos alto e crítico são representados como alerta crítico, preservando esse mapeamento existente. A OS recebe a gravidade específica do risco original. Valores acima do limite podem continuar sendo críticos mesmo quando a tendência é decrescente; os alertas por limite são independentes.
+## Tela e API
 
-## Episódios e ordens de serviço
+A página combina lista pesquisável de sensores e um único painel. O padrão é Ao vivo, com até 60 leituras dos últimos cinco minutos; a aba Análise operacional usa o resultado do servidor. A prévia com ao menos três horários distintos continua visível antes da confirmação. A projeção operacional confirmada desenha a antecedência configurada; prévias e outros gráficos conservam seu horizonte curto. Escala e ajuste histórico ficam em Opções do gráfico. Fórmula e critérios ficam em seções expansíveis. Detalhes de UX: [Telemetria e tendências](TELEMETRIA_UX.md).
 
-- Chave do episódio: `tendencia:<sensor_id>:<increasing|decreasing>`.
-- Ao confirmar anomalia, criar ou atualizar o alerta ativo, com `origem=tendencia`, sensor, equipamento e `dados_analise` contendo amostra e critérios. O sinal de alerta cria a OS `preditiva`, vinculada por `alerta_origem`, `sensor_origem` e `ordem_servico`.
-- Reexecutar na mesma condição atualiza o episódio e a mesma OS. Uma OS concluída ou cancelada não é recriada enquanto esse episódio permanece ativo. Prioridade manual permanece preservada.
-- Com amostra suficiente e ausência da condição anormal, resolver o alerta ativo. Isso inclui estabilização, reversão ou mudança para um sentido não configurado. A resolução não encerra a OS.
-- Mudança para outro sentido anormal resolve o episódio anterior e abre outro. Após recuperação, recorrência também pode abrir novo episódio e nova OS; uma OS anterior ainda aberta permanece sob gestão humana.
-- Desativação, dados insuficientes e expiração dos dados não provam recuperação: não resolvem automaticamente alertas anteriores e não encerram OS. Ao reativar, a próxima leitura ou execução periódica retoma a avaliação.
-- Bloqueio de linha do sensor envolve a análise e os efeitos, na mesma ordem usada pela ingestão. A restrição parcial de unicidade de alerta e a relação única de origem da OS permanecem como proteção adicional.
+- Configurações: `/api/telemetria/trend-config/`, com novo campo `antecedencia_os_minutos`.
+- Análise: `/api/telemetria/tendencias/?sensor_id=<id>`; `?all=true` inclui estados insuficientes/desativados na lista.
+- A resposta acrescenta `intervention_reason`, `method_version`, `slope_full_precision` e o novo campo em `config_used`, mantendo os campos anteriores.
+- O.S.: `/api/ordens-servico/<id>/` expõe `evidencia_preditiva`, protegida contra escrita pela API.
+- Permissões e isolamento por empresa continuam em vigor. Somente admin altera configuração global; gestores alteram sensores da própria empresa.
 
-O Gemini pode explicar os dados, mas não decide a criação do alerta nem da OS.
+## Validação
 
-## Visualização e limites (10/11/2026)
-
-O gráfico reserva uma área à direita da última leitura para a projeção. A linha azul contém apenas medições; a roxa tracejada no futuro parte da última medição e segue a inclinação calculada, por até metade da duração observada (máximo de 24 horas). O ajuste no histórico é opcional quando existe projeção, evitando sobrepor duas linhas na mesma área. Com três horários válidos distintos e análise ativa, a prévia visual aparece independentemente da confirmação operacional: valores constantes produzem uma linha horizontal; falta de duração, quantidade mínima configurada ou sensibilidade produz projeção preliminar; baixa consistência produz projeção exploratória mais discreta, identificada na legenda. A legenda e a explicação distinguem cada estado. A data de alcance do limite e o marcador específico de alcance na análise oficial continuam restritos à tendência confirmada pelo servidor. A prévia não modifica o resultado da análise nem cria alertas ou ordens. Com menos de três horários ou análise desativada, a área explica o impedimento.
-
-A linha percorre todo o horizonte futuro, inclusive após um eventual cruzamento do limite. Esse cruzamento recebe uma marcação própria, sem interromper a linha; não há ponto isolado na ponta da projeção. No modo com projeção, o eixo começa no histórico efetivamente disponível dentro da janela selecionada, evitando que horas sem leituras comprimam uma amostra curta e sua projeção em poucos pixels. O valor estimado ao final do trecho aparece na legenda abaixo do gráfico.
-
-A escala padrão acompanha os valores, o ajuste visível e a projeção, com margem vertical. Limites distantes não comprimem a variação medida: continuam indicados abaixo com “acima/abaixo da escala”. O seletor “Incluir todos os limites” recoloca as faixas no eixo. No acompanhamento ao vivo a escala expande imediatamente e recupera o foco quando um pico antigo sai da janela; sensores de escala pequena recebem casas decimais suficientes no eixo. As faixas reais de alarme usam os percentuais específicos do sensor (padrões 70%, 85% e 100%).
-
-O gráfico principal de Tendências usa o mesmo componente ao vivo do dashboard e da Telemetria, com o sensor selecionado fixado e projeção visual habilitada. Consulta novas leituras a cada cinco segundos, sem cache, e recalcula o ajuste com a janela exibida. O modo inicial considera até 60 leituras dos últimos cinco minutos, ancorados na última medição, excluindo o histórico antigo do seed que comprimia os dados recentes. Janelas de 15 minutos a 24 horas continuam disponíveis para histórico. Horários avançam somente com medições reais; a tela informa quantas leituras novas chegaram. Valores iguais podem produzir uma linha horizontal mesmo com a janela avançando.
-
-A análise operacional, seus critérios e seus vínculos continuam sendo consultados a cada 30 segundos. A amostra completa do servidor está em “Tempo de observação e detalhes do cálculo”. Ela pode cobrir um período maior que os cinco minutos do acompanhamento visual; a projeção recente não substitui essa evidência nem muda a decisão de alertas e OS.
-
-Uma leitura real igual ou superior à faixa baixa já abre alerta por limite e OS corretiva. O agravamento atualiza o mesmo episódio, sem criar uma OS a cada leitura. Duas novas leituras abaixo da faixa baixa confirmam recuperação do alerta; a OS permanece para encerramento humano. Esse fluxo independe da confirmação de tendência. Já uma anomalia de tendência confirmada gera alerta e OS preditiva antecipadamente. Os dois fluxos têm origens e ordens próprias. A projeção desenhada não é uma leitura real nem um gatilho separado. Ambos são processados no servidor na ingestão, inclusive com a tela fechada. Não há envio de e-mail, SMS ou sirene nesta implementação.
-
-A API acrescenta `sample_selection` (`recent` ou `time_distributed`), `source_readings_count`, `source_r_squared` e `source_persistence_ratio`. O último par só é preenchido na distribuição temporal. `limit_alert` expõe o alerta por limite ativo, seu maior nível, nível atual e OS vinculada. O contexto preditivo usa o vínculo explícito `ordem_servico`, e a tela oferece acesso aos alertas e às respectivas ordens.
-
-## API e interface
-
-Revisão da interface: Telemetria reúne Leituras e Sensores; Tendências é uma página própria no menu lateral, com filtros independentes, evidências da análise, configuração por sensor e edição global para administrador. Navegação, filtros, paginação e limitações estão em [Telemetria: organização da interface](TELEMETRIA_UX.md).
-
-Configurações: CRUD `/api/telemetria/trend-config/`, incluindo filtro `?sensor=<id>`. Administrador pode gerenciar a global; gestores ficam limitados a sensores de sua empresa; técnicos continuam sujeitos às permissões existentes.
-
-Exemplo de criação específica:
-
-```json
-{
-  "sensor": 1,
-  "ativo": true,
-  "periodo_horas": 24,
-  "num_leituras": 50,
-  "minimo_leituras": 10,
-  "duracao_minima_minutos": 60,
-  "sensibilidade": "media",
-  "persistencia_minima": 0.7,
-  "r2_minimo": 0.8,
-  "direcao_alerta": "ambas"
-}
-```
-
-Consulta: `GET /api/telemetria/tendencias/?sensor_id=1`, sem gravações. A resposta mantém os campos anteriores e adiciona `analysis_enabled`, `is_anomalous`, `sample_duration_minutes`, `r_squared`, `persistence_ratio` e origem da configuração (`config_used.source`: `sensor`, `global`, `padrao`). `readings_summary` tem timestamps ISO tanto em amostras suficientes quanto insuficientes. `active_alert_id` e `predictive_work_order` mostram os vínculos atuais. O GET não sincroniza alertas/ordens; os efeitos acontecem na ingestão ou pelo comando periódico.
-
-A lista padrão omite análises desativadas e insuficientes. `?all=true` inclui esses estados; a consulta individual também os retorna. Ela pode mostrar tendências em sentidos não configurados e risco por proximidade do limite: `is_anomalous` é o indicador que decide o fluxo preditivo.
-
-No frontend, o botão de configuração no detalhe do sensor permite editar todos os critérios e habilitar/desabilitar. Quando não há específica, o formulário carrega a configuração efetiva do backend. O detalhe distingue análise desativada de dados ainda insuficientes.
-
-## Execução e migração
-
-Cada nova `Telemetria` criada por `save()` dispara o fluxo na mesma transação. `bulk_create`, importações e alterações por `update()` não disparam sinais: executar o comando após essas operações quando desejar sincronização.
-
-```powershell
-python manage.py migrate
-python manage.py analisar_tendencias
-```
-
-Migração versionada: `telemetria/0002_trendconfig_direcao_alerta_and_more.py`. Acrescenta cinco campos com defaults, mantendo a janela, máximo, sensibilidade, sensor e ativação existentes. Não exclui dados nem reclassifica episódios históricos. A regra nova pode abrir inspeções onde antes havia apenas alerta ou tendência distante do limite; reavaliar os critérios operacionais antes de executar a rotina em produção.
-
-Agendar `analisar_tendencias` pelo mecanismo do ambiente quando for necessário revisar períodos sem novas leituras. O repositório entrega o comando, sem instalar um agendamento no sistema operacional.
-
-## Critérios de aceitação e cobertura
-
-| Cenário | Resultado esperado |
-|---|---|
-| Análise ativa, mínimo/duração atendidos, inclinação/R²/persistência atendidos, sentido configurado | Alerta com equipamento, sensor e condição; uma OS preditiva |
-| Menos leituras que o mínimo, mesmo com inclinação forte | Insuficiente, sem novo alerta/OS |
-| Muitas leituras em poucos segundos | Insuficiente se não cobrir a duração mínima |
-| Pico isolado, oscilação ou persistência abaixo do configurado | Sem anomalia confirmada |
-| Queda com configuração crescente | Direção informada, sem alerta de tendência |
-| Queda com configuração decrescente ou ambas | Alerta e OS de inspeção, sem projeção inferior |
-| Específica inativa e global ativa | Análise desativada; sem fallback |
-| Global inativa, sem específica | Análise desativada; sem fallback |
-| Datas futuras, antigas ou valores infinitos | Excluídos da amostra |
-| Várias leituras no mesmo horário | Uma amostra válida por horário; duplicatas não esgotam a cota |
-| Repetição, execução periódica e concorrência | Um alerta ativo e uma OS por episódio |
-| Estabilização comprovada | Alerta resolvido, OS preservada |
-| Desativação ou dados expirados após alerta | Alerta preservado; ausência de evidência não confirma recuperação |
-| Consulta de tendência por GET | Nenhuma criação de alerta/OS |
-| Critérios inválidos ou PATCH incompatível | Validação rejeita a alteração |
-
-Testes: `telemetria/test_trend_analysis.py`, `telemetria/test_alert_concurrency.py` e a suíte existente de API, alertas, manutenção, simulação e migrações.
-
-```powershell
-python manage.py test --settings=app.test_settings --noinput
-python manage.py makemigrations --check --dry-run --settings=app.test_settings
-node --check FrontATT/app.js
-```
-
-Validação realizada em 06/11/2026:
-
-- PostgreSQL 18: **109 testes aprovados**, sem skips, incluindo três casos de concorrência (ingestão, processamento de alerta e análise de tendência simultâneos).
-- SQLite descartável: **106 testes aprovados, três skips esperados**, pois não suporta o bloqueio de linha exigido nos testes concorrentes.
-- `makemigrations --check --dry-run`: nenhuma divergência entre modelos e migrações.
-- `node --check FrontATT/app.js`: sintaxe válida. O formulário não foi validado visualmente em navegador nesta entrega.
-- `git diff --check`: sem erros de whitespace.
-
-O PostgreSQL foi iniciado em cluster descartável local `.venv/nanasmart-trend-pg-tests`, porta 55440, com `NANASMART_TEST_POSTGRES_PORT=55440`, e encerrado após a suíte. O banco de desenvolvimento não foi acessado nem migrado; executar `python manage.py migrate` no ambiente de destino antes de iniciar a versão nova.
-
-Durante a validação completa no PostgreSQL, os testes preexistentes do simulador revelaram um problema de isolamento: o processo fecha as conexões, mas `TestCase` mantinha uma transação externa nelas. `telemetria/test_simulador_realtime.py` passou a usar `TransactionTestCase`, compatível com esse comportamento. O código do simulador não foi alterado.
-
-Arquivos centrais: `telemetria/models.py`, `serializers.py`, `trend_analysis.py`, `predictive_service.py`, `admin.py`, a migração `0002`, os testes de tendência/concorrência/simulador e `FrontATT/app.js`/`index.html`. README, referência de API e documentação anterior receberam links para esta especificação.
+Cobrir duas horas exatas, prazo inclusivo sem arredondamento, histórico insuficiente com coleta frequente, distribuição com milhares de dados, picos/oscilações, queda, limite atingido, projeção vencida, episódios, captura tardia da evidência, imutabilidade, API, migração sem sobrescrita e concorrência em PostgreSQL. A demonstração administrativa conserva seu perfil próprio de um minuto.

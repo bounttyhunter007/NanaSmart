@@ -204,7 +204,7 @@ class SimulatorTests(TransactionTestCase):
             self.assertAlmostEqual(valor, esperado, delta=.005)
 
     def test_tendencia_gera_os_pelos_criterios_reais_sem_inventar_horarios(self):
-        TrendConfig.objects.create(sensor=self.sensor, minimo_leituras=7, duracao_minima_minutos=1)
+        TrendConfig.objects.create(sensor=self.sensor, minimo_leituras=7, duracao_minima_minutos=1, antecedencia_os_minutos=480)
         memoria, dinamica, rng = {self.sensor.pk: 2.9}, {}, random.Random(4)
         inicio = timezone.now() - timedelta(minutes=1)
         for index in range(7):

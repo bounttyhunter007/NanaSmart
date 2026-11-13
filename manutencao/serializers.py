@@ -65,7 +65,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'prioridade_origem', 'prioridade_herdada_conhecida', 'criterios_criticidade_na_abertura',
             'justificativa_prioridade', 'criticidade_na_abertura',
             'justificativa_criticidade_na_abertura', 'prioridade_manual',
-            'alerta_origem', 'sensor_origem',
+            'alerta_origem', 'sensor_origem', 'evidencia_preditiva',
         ]
 
     def validate(self, data):

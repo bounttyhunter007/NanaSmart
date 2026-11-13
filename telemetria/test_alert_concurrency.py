@@ -70,11 +70,11 @@ class AlertConcurrencyTests(TransactionTestCase):
 
     def test_analise_simultanea_nao_duplica_alerta_e_os_preditiva(self):
         readings = Telemetria.objects.bulk_create([
-            Telemetria(sensor=self.sensor, valor=value) for value in (10, 20, 30)
+            Telemetria(sensor=self.sensor, valor=value) for value in (60, 70, 80)
         ])
-        start = timezone.now() - timedelta(hours=1)
+        start = timezone.now() - timedelta(hours=2)
         for index, reading in enumerate(readings):
-            Telemetria.objects.filter(pk=reading.pk).update(timestamp=start + timedelta(minutes=index * 20))
+            Telemetria.objects.filter(pk=reading.pk).update(timestamp=start + timedelta(minutes=index * 60))
         self.paralelo(lambda: sync_sensor_trend(self.sensor.pk))
         self.assertEqual(Alerta.objects.filter(origem='tendencia', status='ativo').count(), 1)
         self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)

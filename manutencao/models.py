@@ -31,6 +31,8 @@ class OrdemServico(models.Model):
     # Dados da OS
     titulo = models.CharField(max_length=200)
     descricao = models.TextField(help_text="Descreva o problema ou o serviço a ser realizado")
+    evidencia_preditiva = models.JSONField(default=dict, blank=True, editable=False,
+                                           help_text='Previsão e evidências preservadas na abertura da O.S.')
     
     # Status e Prioridade
     STATUS_CHOICES = (
@@ -73,7 +75,8 @@ class OrdemServico(models.Model):
                     setattr(self, campo, valor)
             else:
                 imutaveis = ['equipamento_id', 'criticidade_na_abertura', 'justificativa_criticidade_na_abertura',
-                             'criterios_criticidade_na_abertura_id', 'prioridade_automatica', 'prioridade_herdada_conhecida']
+                             'criterios_criticidade_na_abertura_id', 'prioridade_automatica', 'prioridade_herdada_conhecida',
+                             'evidencia_preditiva']
                 for campo in imutaveis:
                     if getattr(self, campo) != getattr(anterior, campo):
                         raise ValidationError({campo: 'O contexto da abertura da OS é imutável.'})

@@ -1,5 +1,16 @@
 # Telemetria: organização da interface e tendências
 
+## Revisão vigente de Tendências — 13/11/2026
+
+A página de Tendências agora usa lista compacta com busca sem distinção de acentos, filtro de equipamento pesquisável e filtros por condição. O sensor de maior risco é selecionado inicialmente; clicar em outro item atualiza um único painel. Atualizações preservam a escolha. Em telas pequenas, a lista é recolhível. A seleção não altera os filtros de Telemetria.
+
+O gráfico abre em **Ao vivo · 5 min**. A aba **Análise operacional** mostra a amostra usada pelo servidor. Prévia gráfica não confirma O.S. e permanece disponível com histórico incompleto. As explicações extensas, cards grandes e detalhe duplicado foram substituídos por situação, previsão, vínculo da O.S. e seções expansíveis de fórmula/critérios. Escala e ajuste no histórico ficam em Opções do gráfico. O teste administrativo continua em Demonstração de tendências.
+
+**Ajustar análise** destaca histórico mínimo e antecedência da O.S., com sugestões de tempo e resumo da regra. Defaults novos: 2 h e 2 h; valores salvos são preservados. Critérios técnicos ficam em opções avançadas, com R² e persistência em percentuais.
+
+A O.S. mostra Previsão na abertura, com evidência fixa da análise elegível, separada do acompanhamento atual. Abertura exige previsão confirmada dentro da antecedência; uma anomalia distante pode ter alerta sem O.S. As descrições de Tendências nas seções históricas abaixo foram substituídas por esta revisão. Regras completas: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
+
+
 Revisão: 06/11/2026.
 
 **Organização vigente:** Tendências é uma página própria no menu lateral. Telemetria contém somente Leituras e Sensores. As decisões anteriores abaixo registram a evolução inicial; a seção “Página independente de Tendências” ao final substitui a proposta de três abas e o compartilhamento de filtros. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md). Não modifica o algoritmo de detecção ou a regra de geração automática de OS.

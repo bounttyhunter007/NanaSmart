@@ -674,3 +674,20 @@ test('without a projection there is one measured value, and empty charts have no
   assert.equal(plot.annotations[0].text,'0');
   assert.equal(plot.annotations[0].id,'latest');
 });
+
+test('operational horizon shows two hours ahead independently of the two-hour history', () => {
+  const {api} = fixture(() => ({}));
+  const rows = [reading(1,0,60),reading(2,3600,70),reading(3,7200,80)];
+  const fitted = api.fitLine(rows);
+  const analysis = {analysis_enabled:true, insufficient_data:false, data_quality:'valid', direction:'increasing'};
+  const official = api.projectForward(rows,fitted,{analysis,visual:true,limit:100,horizonMinutes:120});
+  assert.equal(official.horizon,7200000);
+  assert.equal(official.reachesLimit,true);
+  assert.equal(official.points[1].valor,100);
+  assert.equal(official.breach.timestamp,stamp(14400));
+  const preliminary = api.projectForward(rows,fitted,{analysis:{...analysis,insufficient_data:true},visual:true,horizonMinutes:120});
+  assert.equal(preliminary.kind,'preliminary');
+  assert.equal(preliminary.horizon,3600000);
+  const live = api.projectForward(rows,fitted,{visual:true,horizonMinutes:120});
+  assert.equal(live.horizon,3600000);
+});

@@ -9,6 +9,7 @@ from .models import Sensor, Telemetria, TrendConfig
 CONFIG_FIELDS = (
     'periodo_horas', 'num_leituras', 'minimo_leituras', 'duracao_minima_minutos',
     'persistencia_minima', 'r2_minimo', 'direcao_alerta', 'sensibilidade', 'ativo',
+    'antecedencia_os_minutos',
 )
 
 
@@ -109,6 +110,8 @@ def analyze_sensor_trend(sensor_id):
         'sample_selection': 'recent', 'source_readings_count': 0,
         'source_r_squared': None, 'source_persistence_ratio': None,
         'is_anomalous': False, 'intervention_recommended': False,
+        'intervention_reason': 'disabled' if not config['ativo'] else 'insufficient_data',
+        'method_version': 'linear-persistent-upper-limit-v2',
         'checks': [{'label': 'Análise ativa', 'passed': config['ativo']}],
         'threshold_per_hour': None,
         'analyzed_at': now.isoformat(), **_operational_context(sensor.id),
@@ -197,6 +200,26 @@ def analyze_sensor_trend(sensor_id):
             projected_at = (readings[-1][0] + timedelta(hours=projection)).isoformat()
         except OverflowError:
             pass  # An unrepresentable date must not break the analysis.
+    # Decisão com precisão completa; a projeção é ancorada na última medição.
+    eligible = bool(anomalous and projection is not None and
+                    0 < projection * 60 <= config['antecedencia_os_minutos'] and
+                    projected_at and readings[-1][0] + timedelta(hours=projection) > now)
+    if ys[-1] >= limit:
+        reason = 'limit_reached'
+    elif not anomalous:
+        reason = 'no_anomaly'
+    elif projection is None:
+        reason = 'no_upper_limit_projection'
+    elif not projected_at or readings[-1][0] + timedelta(hours=projection) <= now:
+        reason = 'expired_projection'
+    else:
+        reason = 'within_horizon' if eligible else 'outside_horizon'
+    result['checks'].extend([
+        {'label': 'Previsão dentro da antecedência da O.S.', 'passed': bool(
+            projection is not None and 0 < projection * 60 <= config['antecedencia_os_minutos'])},
+        {'label': 'Estimativa ainda futura', 'passed': bool(
+            projected_at and readings[-1][0] + timedelta(hours=projection) > now)},
+    ])
     risk = _calculate_risk_level(ys[-1], limit, direction, projection, config['sensibilidade'])
     if anomalous and risk == 'baixo':
         risk = 'medio'
@@ -206,7 +229,8 @@ def analyze_sensor_trend(sensor_id):
         projected_breach_minutes=round(projection * 60, 2) if projection is not None else None,
         risk_level=risk, data_quality='valid', r_squared=round(r_squared, 6),
         persistence_ratio=round(persistence, 6), is_anomalous=anomalous,
-        intervention_recommended=anomalous,
+        intervention_recommended=eligible, intervention_reason=reason,
+        slope_full_precision=slope,
         regression_line=regression_line, projected_breach_at=projected_at,
     )
     return result

@@ -1,6 +1,6 @@
 # Demonstração de tendências: gráfico, alerta e OS
 
-Revisão: 06/11/2026. Roteiro de apresentação e descrição da implementação. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) e [Telemetria e UX](TELEMETRIA_UX.md).
+Revisão: 13/11/2026. Roteiro de apresentação e descrição da implementação. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) e [Telemetria e UX](TELEMETRIA_UX.md).
 
 ## O que dizer ao apresentar
 
@@ -10,17 +10,17 @@ Revisão: 06/11/2026. Roteiro de apresentação e descrição da implementação
 
 A fórmula e as regras são explícitas no código; o resultado não é uma resposta fixa: depende dos valores, horários e configuração. Alguns parâmetros são configuráveis (janela, quantidade, duração, sensibilidade, R², persistência e sentido). Faixas de risco e fatores das opções de sensibilidade são regras fixas e documentadas. Não apresentar R² como probabilidade de falha ou a extrapolação como previsão garantida de quebra.
 
-## Entendendo os 30 minutos
+## Entendendo o histórico mínimo
 
-São a duração mínima **coberta pela amostra selecionada**, entre sua primeira e sua última medição. Não são um cronômetro iniciado ao abrir a tela, nem a frequência de atualização do frontend.
+O novo padrão de duas horas é a duração mínima **coberta pela amostra selecionada**, entre sua primeira e sua última medição. Não são um cronômetro iniciado ao abrir a tela, nem a frequência de atualização do frontend.
 
 - Com histórico válido que já cubra o mínimo, a análise pode acontecer imediatamente.
 - Sem esse histórico, o gráfico mostra cada leitura, mas a confirmação aguarda quantidade **e** tempo suficientes.
 - A lista normal é consultada a cada 30 segundos; esse intervalo de consulta não altera o período mínimo de observação.
-- O máximo de leituras limita a amostra. Cinquenta medições a cada segundo cobrem aproximadamente 49 segundos; não atingem 30 minutos nem após horas de coleta, pois a rotina seleciona as últimas 50.
+- O máximo de leituras limita a amostra. Cinquenta medições a cada segundo cobrem aproximadamente 49 segundos. Se houver histórico suficiente, a rotina distribui leituras reais no tempo e também verifica as originais; sem histórico suficiente, não inventa duração.
 - No sensor de demonstração, a duração mínima é **um minuto**, com sete medições, máximo de sete e intervalo de pelo menos dez segundos. Assim a primeira fase pode ser demonstrada em cerca de um minuto, sem falsificar timestamps.
 
-Para ajustar um sensor real, selecionar equipamento/sensor e abrir **Ajustar tempo e critérios**. O formulário oferece atalhos de 1, 5 e 30 minutos. O perfil de 1 minuto prepara duração mínima de 1, mínimo de 7 leituras e máximo de 500, para comportar coleta frequente. Os atalhos apenas editam o formulário; a alteração vale ao salvar e fica específica do sensor. Não fabricam histórico, não reiniciam o relógio e não garantem um alerta. Recomenda-se o equipamento [DEMO] para a apresentação, preservando os critérios dos ativos reais.
+Para ajustar um sensor real, selecionar equipamento/sensor e abrir **Ajustar análise**. O formulário destaca histórico mínimo e antecedência da O.S. em ajustes independentes; sugestões de tempo apenas preparam o formulário e passam a valer ao salvar. Critérios adicionais ficam em opções avançadas. A demonstração conserva seu perfil próprio de um minuto e sete leituras.
 
 ## Como usar na apresentação
 
@@ -30,7 +30,7 @@ Para ajustar um sensor real, selecionar equipamento/sensor e abrir **Ajustar tem
 4. Manter **Aumento gradual** e clicar em **Iniciar demonstração**. O sistema cria e seleciona um equipamento e sensor identificados como [DEMO]. Não usa nem muda o sensor real que estava selecionado.
 5. A página rola até o sensor selecionado ao iniciar a fase. Mostrar o gráfico azul crescendo, ainda abaixo da linha vermelha de limite superior. As primeiras leituras aparecem como **Aguardando dados**. Expor os indicadores de quantidade e tempo.
 6. Aguardar aproximadamente um minuto, com a página visível. Na sétima leitura, os critérios devem ser atendidos pelo cenário crescente padrão. Mostrar os itens aprovados, o alerta de origem `tendencia`, sua descrição e a OS `preditiva` vinculada.
-7. Explicar que o último valor é 52 °C, abaixo até da primeira faixa de aviso operacional (70 °C neste cadastro). A abertura é antecipada por tendência, não por ultrapassagem do limite.
+7. Explicar que o último valor é 52 °C, abaixo até da primeira faixa de aviso operacional (70 °C neste cadastro). A abertura é antecipada pela previsão confirmada de alcance do limite dentro da antecedência configurada. A O.S. registra essa previsão e suas evidências.
 8. Opcionalmente clicar em **Próxima fase: ultrapassar 100 °C** e acompanhar 60, 68, 76, 84, 92, 100 e 108 °C. A descrição distingue o alerta preditivo do alerta de origem `limite` e sua OS corretiva.
 9. Clicar em **Próxima fase: recuperar e estabilizar**. Sete leituras em 40 °C substituem a amostra anterior; a tendência deixa de ser anormal e os alertas normalizam conforme os serviços existentes. As OS continuam pendentes: a recuperação do sensor não conclui o trabalho da equipe.
 10. Para provar que o alerta não é forçado, criar outra demonstração com **Estável** ou **Pico isolado**. Cada demonstração possui seu próprio sensor; os registros anteriores não são apagados.
@@ -88,14 +88,7 @@ Novos campos de análise, aditivos: `checks` (rótulo e aprovação de cada crit
 
 ## Validação
 
-- Dez testes de backend cobrem crescimento e antecedência, estabilidade/pico, limite versus tendência e recuperação, perfis, propriedade, entradas inválidas, relógio/valores controlados pelo servidor, parar/fases, expiração e isolamento do simulador.
-- Teste PostgreSQL adicional verifica dois avanços simultâneos gerando um único passo.
-- Vinte e cinco testes de frontend verificam também escala do gráfico/ultrapassagem, seleção única de sensor, ausência de gráficos em Todos, perfil rápido, proteção de ações, endpoints e encerramento do timer.
-- Compilação do template Vue, sintaxe JavaScript e consistência de migrações fazem parte dos checks.
-- Suíte explícita completa no PostgreSQL 18 descartável: **135 testes aprovados**, sem skips, incluindo concorrência do avanço da demonstração. O cluster local de testes foi encerrado após a execução.
-- Suíte de frontend: **25 testes aprovados**, incluindo continuidade após renovação normal do token.
-- Template Vue 3.4.21 compilado sem erros; `node --check`, `git diff --check` e `makemigrations --check --dry-run` aprovados.
-- Migração `0003_trenddemo` aplicada com sucesso ao PostgreSQL de desenvolvimento; `showmigrations telemetria` confirmou as três migrações aplicadas. Não foram criados equipamentos de demonstração no banco de desenvolvimento durante a implementação: eles serão criados quando o administrador iniciar um teste.
-- Sem nova conferência visual no navegador; a validação cobriu lógica, template e fluxo de banco, sem declarar aprovação visual.
-
-A demonstração guiada é voltada ao funcionamento das tendências, não uma simulação física fiel de um motor. Os valores sobem rapidamente para caber na apresentação; essa aceleração é declarada, e os horários registrados continuam sendo reais.
+- Testes de backend cobrem crescimento, antecedência, estabilidade/pico, limite versus tendência, recuperação, perfis, propriedade, entradas inválidas, relógio/valores controlados pelo servidor, parar/fases, expiração e isolamento do simulador.
+- PostgreSQL verifica concorrência de ingestão, análise preditiva e avanço da demonstração, sem duplicação.
+- Testes de frontend cobrem seleção única, busca, filtros, tempos independentes, gráfico ao vivo/operacional e encerramento dos timers.
+- Compilação Vue, schema OpenAPI, migrações e verificação visual em desktop e celular complementam a suíte.

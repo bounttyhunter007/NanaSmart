@@ -36,6 +36,29 @@ def acrescentar_registros_alerta(ordem, alerta):
             ordem.descricao += '\n\n' + registro
 
 
+def evidencia_previsao_abertura(alerta, dados):
+    """Captura a análise elegível da criação da ordem, não a detecção anterior."""
+    from alertas.evidence import detection_snapshot
+
+    evidencia = detection_snapshot(alerta.sensor, 'tendencia', alerta.tipo_alerta,
+                                   alerta.nivel, alerta.descricao, dados)
+    # Vínculos operacionais não pertencem à evidência matemática da abertura.
+    for field in ('predictive_work_order', 'limit_alert', 'active_alert_id'):
+        evidencia['analise'].pop(field, None)
+    at = parse_datetime(dados.get('projected_breach_at') or '')
+    horario = timezone.localtime(at).strftime('%d/%m/%Y às %H:%M:%S %z') if at else 'horário não registrado'
+    unit = evidencia['unidade_medida']
+    antecedencia = dados.get('config_used', {}).get('antecedencia_os_minutos')
+    evidencia.update(
+        registrado_em=timezone.now().isoformat(),
+        resumo=(f'Abertura automática: tendência confirmada prevê atingir '
+                f'{evidencia["limite_operacional"]:g} {unit} em {horario}, '
+                f'dentro da antecedência configurada de {antecedencia} min. '
+                'Inspecionar o equipamento; a projeção não representa uma data de quebra.'),
+    )
+    return evidencia
+
+
 class PrioridadeOSService:
     """A classe vigente do equipamento é copiada uma única vez na abertura."""
 
@@ -126,7 +149,7 @@ class PrioridadeOSService:
         prioridade, justificativa, criticidade = cls.calcular(
             alerta.equipamento, 'preditiva', gravidade,
         )
-        titulo = f'MANUTENÇÃO PREDITIVA: {alerta.tipo_alerta}'
+        titulo = f'INSPEÇÃO PREDITIVA: previsão de atingir o limite · {alerta.sensor.nome if alerta.sensor else alerta.tipo_alerta}'
         descricao = (
             '\n\n'.join(registros_alerta(alerta)) + '\n'
             f'Indicadores: inclinação {dados.get("slope_per_hour")} por hora; '
@@ -143,13 +166,16 @@ class PrioridadeOSService:
                 .first()
             )
             if ordem is None:
+                # Alertas legados podem não ter sensor nem evidências matemáticas.
+                evidencia = evidencia_previsao_abertura(alerta, dados) if alerta.sensor_id else {}
                 ordem = OrdemServico.objects.create(
                     equipamento=alerta.equipamento,
                     sensor_origem=alerta.sensor,
                     alerta_origem=alerta,
                     tipo_os='preditiva',
                     titulo=titulo,
-                    descricao=descricao,
+                    descricao=(evidencia.get('resumo', '') + '\n\n' + descricao).strip(),
+                    evidencia_preditiva=evidencia,
                     status='pendente',
                     prioridade=prioridade,
                     gravidade_condicao=gravidade,

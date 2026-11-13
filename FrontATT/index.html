@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20261111-os-history">
+  <link rel="stylesheet" href="styles.css?v=20261113-trends">
   <style>
     .export-btns {
       display: flex;
@@ -485,38 +485,42 @@
           </div>
         </section>
 
-        <!-- Página independente: seleção e paginação próprias para tendências. -->
-        <section v-if="view==='tendencias'" class="telemetry-workspace">
-          <header class="telemetry-heading"><div><div class="telemetry-eyebrow">ACOMPANHAMENTO PREDITIVO</div><h1>Tendências</h1><p>Acompanhe mudanças persistentes e identifique sensores que precisam de inspeção.</p></div><div class="telemetry-actions"><button v-if="isAdmin" class="btn btn-ghost" @click="openTrendConfig(null,null)">Configuração global</button><button class="btn btn-primary" :disabled="trendPage.busy" @click="fetchTrends">↻ Atualizar</button></div></header>
-          <div class="telemetry-panel trend-context">
-            <div class="telemetry-section-head"><div><h2>O que você quer acompanhar?</h2><p>Veja todos os sensores ativos ou selecione um equipamento e, se quiser, um sensor. A seleção é exclusiva desta página.</p></div></div>
-            <form class="telemetry-filters" @submit.prevent="applyTrendFilters()">
-              <label>Equipamento<select class="filter-select" v-model="trendPage.equipment" @change="applyTrendFilters(true)"><option value="">Todos os equipamentos</option><option v-if="trendPage.equipment && !trendEquipments.some(e => Number(e.id) === Number(trendPage.equipment))" :value="trendPage.equipment">Equipamento selecionado sem sensores ativos</option><option v-for="e in trendEquipments" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
-              <label>Sensor<select class="filter-select" v-model="trendPage.sensor" @change="applyTrendFilters()"><option value="">Todos os sensores do contexto</option><option v-if="trendPage.sensor && !trendSensors.some(s => Number(s.id) === Number(trendPage.sensor))" :value="trendPage.sensor">Sensor selecionado indisponível</option><option v-for="sensor in trendSensors" :key="sensor.id" :value="sensor.id">{{ sensor.nome }} · {{ sensor.equipamento_nome }}</option></select></label>
-              <button class="btn btn-ghost btn-sm" type="button" @click="clearTrendFilters">Limpar seleção</button>
-            </form>
+        <!-- Tendências: navegação compacta e um único painel de acompanhamento. -->
+        <section v-if="view==='tendencias'" class="telemetry-workspace trends-workspace">
+          <header class="telemetry-heading trends-heading"><div><h1>Tendências</h1><p>Observe a evolução. Antecipe a inspeção.</p></div><div class="telemetry-actions"><button v-if="isAdmin" class="btn btn-ghost btn-sm" @click="openTrendConfig(null,null)">Configuração global</button><button class="btn btn-ghost btn-sm" :disabled="trendPage.busy" @click="fetchTrends">↻ Atualizar</button></div></header>
+          <div v-if="trendPage.error" role="alert" class="telemetry-notice">{{ trendPage.error }} <button class="btn btn-ghost btn-sm" @click="fetchTrends">Tentar novamente</button></div>
+          <div class="trends-layout">
+            <aside class="trends-browser telemetry-panel" :class="{'is-open':trendPage.listOpen || !selectedTrend}" aria-label="Selecionar sensor">
+              <button class="trends-mobile-toggle" :aria-expanded="trendPage.listOpen || !selectedTrend" aria-controls="trends-sensor-list" @click="trendPage.listOpen = !trendPage.listOpen">Sensores <span>{{ trendCount }} · {{ trendPage.listOpen ? 'Recolher −' : 'Escolher +' }}</span></button>
+              <div id="trends-sensor-list" class="trends-browser-body">
+                <div class="trends-browser-heading"><h2>Sensores</h2><span>{{ trendCount }}</span></div>
+                <label class="trends-search"><span class="sr-only">Buscar equipamento ou sensor</span><input class="filter-input" type="search" v-model="trendPage.search" @input="applyTrendFilters()" placeholder="Buscar equipamento ou sensor"></label>
+                <details class="trends-equipment-picker"><summary>{{ trendEquipments.find(e => Number(e.id) === Number(trendPage.equipment))?.nome || 'Todos os equipamentos' }}</summary><div class="trends-equipment-options"><label><span class="sr-only">Buscar equipamento</span><input class="filter-input" type="search" v-model="trendPage.equipmentSearch" placeholder="Buscar equipamento"></label><button @click="selectTrendEquipment('', $event)">Todos os equipamentos</button><button v-for="eq in trendEquipmentOptions" :key="eq.id" :aria-pressed="Number(trendPage.equipment) === Number(eq.id)" @click="selectTrendEquipment(eq.id, $event)">{{ eq.nome }}</button><p v-if="!trendEquipmentOptions.length">Nenhum equipamento encontrado.</p></div></details>
+                <div class="trends-condition-filters" aria-label="Condição dos sensores"><button v-for="item in [{id:'',label:'Todos'},{id:'anomalous',label:'Atenção'},{id:'normal',label:'Sem anomalia'},{id:'insufficient',label:'Aguardando'},{id:'disabled',label:'Desativados'}]" :key="item.id" :aria-pressed="trendPage.condition === item.id" @click="trendPage.condition = item.id; applyTrendFilters()">{{ item.label }}<span>{{ item.id ? trendSummary[item.id] : scopedTrendCount }}</span></button></div>
+                <p v-if="trendPage.busy && !trendPage.rows.length" class="trends-list-note" role="status">Carregando sensores…</p>
+                <div v-else-if="!trendCount" class="trends-empty-list"><p>Nenhum sensor encontrado.</p><button class="btn btn-ghost btn-sm" @click="clearTrendFilters">Limpar filtros</button></div>
+                <div class="trends-sensor-items"><button v-for="row in trendRows" :key="row.sensor_id" class="trends-sensor-item" :class="{selected:Number(trendPage.sensor) === row.sensor_id}" :aria-pressed="Number(trendPage.sensor) === row.sensor_id" @click="openTrendDetail(row)"><span class="trends-item-top"><strong>{{ row.sensor_info.nome }}</strong><span>{{ row.current_value == null ? '—' : formatNumber(row.current_value) }} <small>{{ row.sensor_info.unidade_medida }}</small></span></span><span class="trends-item-equipment">{{ row.sensor_info.equipamento_nome }}</span><span :class="['trends-item-condition',trendCondition(row)]"><i aria-hidden="true"></i>{{ trendConditionLabel(row) }}<span v-if="row.predictive_work_order"> · O.S. #{{ row.predictive_work_order.id }}</span></span></button></div>
+                <footer v-if="trendCount > trendPage.size" class="trends-list-pagination"><button class="page-btn" :disabled="!trendPage.offset" @click="changeTrendPage(-1)" aria-label="Sensores anteriores">←</button><span>{{ trendPage.offset + 1 }}–{{ Math.min(trendPage.offset + trendPage.size,trendCount) }} de {{ trendCount }}</span><button class="page-btn" :disabled="trendPage.offset + trendPage.size >= trendCount" @click="changeTrendPage(1)" aria-label="Próximos sensores">→</button></footer>
+                <p class="trends-list-note">{{ trendMonitor.busy || trendPage.busy ? 'Atualizando…' : 'Análise atualizada a cada 30 s' }}</p>
+              </div>
+            </aside>
+            <section v-if="selectedTrend" id="trend-live-monitor" class="telemetry-panel trends-main" :key="globalEmpresa + ':' + selectedTrend.sensor_id">
+              <header class="trends-sensor-heading"><div><p>{{ selectedTrend.sensor_info.equipamento_nome }}</p><h2>{{ selectedTrend.sensor_info.nome }}</h2></div><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="openTrendConfig(selectedTrend.sensor_id,selectedTrend.sensor_info.equipamento_id)">Ajustar análise</button></header>
+              <div class="trends-overview"><span :class="['telemetry-condition',trendCondition(selectedTrend)]">{{ trendConditionLabel(selectedTrend) }}</span><span>Limite superior <strong>{{ formatNumber(selectedTrend.sensor_info.limite_alerta) }} {{ selectedTrend.sensor_info.unidade_medida }}</strong></span><span v-if="trendDemo.session?.sensor_id === selectedTrend.sensor_id" class="badge badge-gray">DEMO · {{ trendDemo.session.passo }}/{{ trendDemo.session.total_passos }}</span></div>
+              <nav class="trends-chart-tabs" aria-label="Gráfico exibido"><button :aria-pressed="trendPage.chartMode === 'live'" @click="trendPage.chartMode = 'live'">Ao vivo</button><button :aria-pressed="trendPage.chartMode === 'analysis'" @click="trendPage.chartMode = 'analysis'">Análise operacional <small>mín. {{ trendMinutes(selectedTrend.config_used.duracao_minima_minutos) }}</small></button></nav>
+              <div v-if="trendPage.chartMode === 'live'" class="trends-chart-context"><live-chart :api="api" :empresa="globalEmpresa" :selected-sensor="selectedTrend.sensor_info" :clean="true"></live-chart><p class="trends-context-note">Tendência visual desta janela · a decisão da O.S. usa a análise operacional.</p></div>
+              <div v-else class="trends-chart-context"><measurement-sample v-if="selectedTrend.readings_summary.length" :readings="selectedTrend.readings_summary" :sensor="selectedTrend.sensor_info" :analysis="selectedTrend" :clean="true" :horizon-minutes="selectedTrend.config_used.antecedencia_os_minutos"></measurement-sample><div v-else class="empty">Aguardando as primeiras leituras.</div><p class="trends-context-note">{{ selectedTrend.insufficient_data ? 'Prévia · histórico ainda insuficiente para confirmar a tendência.' : !selectedTrend.analysis_enabled ? 'Análise desativada para este sensor.' : 'Amostra e critérios utilizados pelo servidor para decidir a O.S.' }}</p></div>
+              <section class="trends-decision" :class="{'is-actionable':selectedTrend.intervention_recommended}"><div><span class="trends-decision-eyebrow">PREVISÃO OPERACIONAL</span><strong v-if="selectedTrend.projected_breach_at && selectedTrend.intervention_reason !== 'expired_projection'">Alcance do limite em {{ fmtDate(selectedTrend.projected_breach_at) }}</strong><strong v-else>{{ trendInterventionLabel(selectedTrend) }}</strong><p v-if="selectedTrend.projected_breach_at && selectedTrend.intervention_reason !== 'expired_projection'">{{ trendInterventionLabel(selectedTrend) }}</p><small>Histórico mínimo {{ trendMinutes(selectedTrend.config_used.duracao_minima_minutos) }} · antecedência da O.S. {{ trendMinutes(selectedTrend.config_used.antecedencia_os_minutos) }}</small></div><button v-if="selectedTrend.predictive_work_order" class="btn btn-primary btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.predictive_work_order.id})">Ver O.S. #{{ selectedTrend.predictive_work_order.id }} ↗</button><span v-else class="trends-order-status">{{ selectedTrend.intervention_recommended ? 'Condição elegível · aguardando processamento' : 'Sem O.S. preditiva neste episódio' }}</span></section>
+              <div v-if="selectedTrend.limit_alert" class="trends-limit-notice"><span>Alerta por limite #{{ selectedTrend.limit_alert.id }}<span v-if="selectedTrend.limit_alert.current_level === 'normal'"> · recuperação em confirmação</span></span><button v-if="selectedTrend.limit_alert.work_order" class="btn btn-ghost btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.limit_alert.work_order.id})">Ver O.S. corretiva #{{ selectedTrend.limit_alert.work_order.id }}</button><button v-else class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.limit_alert.id})">Ver alerta</button></div>
+              <details class="trends-details"><summary>Como é calculado <span>Regressão linear</span></summary><div class="trends-details-body"><p>A reta resume o ritmo das leituras selecionadas nos seus horários reais. A projeção parte da última medição e segue esse ritmo, se ele continuar.</p><div class="trends-formulas"><code>Reta ajustada: ŷ(t) = a + b × t</code><code>Ritmo b = Σ[(t − média(t)) × (y − média(y))] ÷ Σ[(t − média(t))²]</code><code>Valor futuro = último valor + b × horas futuras</code><code>Horas até o limite = (limite − último valor) ÷ b</code></div><p>t é o tempo em horas desde a primeira leitura; y é o valor medido; a = média(y) − b × média(t). O tempo até o limite é calculado para subida confirmada, abaixo do limite superior.</p><p v-if="selectedTrend.projected_breach_minutes > 0">Neste sensor: ({{ formatNumber(selectedTrend.limite_operacional) }} − {{ formatNumber(selectedTrend.current_value) }}) ÷ {{ formatNumber(selectedTrend.slope_per_hour) }} {{ selectedTrend.sensor_info.unidade_medida }}/h ≈ {{ trendMinutes(selectedTrend.projected_breach_minutes) }} após a última leitura.</p><p>R² mede o ajuste da reta aos dados; persistência mede a proporção de intervalos no mesmo sentido. Nenhum deles representa uma porcentagem de chance de quebra. A projeção estima alcance do limite, não uma data de falha.</p></div></details>
+              <details class="trends-details"><summary>Detalhes da análise <span>{{ selectedTrend.readings_count }} leituras no ajuste</span></summary><div class="trends-details-body"><dl class="trends-analysis-facts"><div><dt>Leituras selecionadas / originais verificadas</dt><dd>{{ selectedTrend.readings_count }} / {{ selectedTrend.source_readings_count }}</dd></div><div><dt>Duração observada / mínima</dt><dd>{{ trendMinutes(selectedTrend.sample_duration_minutes) }} / {{ trendMinutes(selectedTrend.config_used.duracao_minima_minutos) }}</dd></div><div><dt>Ritmo</dt><dd>{{ selectedTrend.insufficient_data || !selectedTrend.analysis_enabled ? 'Aguardando amostra' : formatNumber(selectedTrend.slope_per_hour) + ' ' + selectedTrend.sensor_info.unidade_medida + '/h' }}</dd></div><div><dt>Ajuste R² / persistência</dt><dd>{{ selectedTrend.r_squared == null ? '—' : Math.round(selectedTrend.r_squared * 100) + '% / ' + Math.round(selectedTrend.persistence_ratio * 100) + '%' }}</dd></div><div><dt>Configuração</dt><dd>{{ {sensor:'Específica do sensor',global:'Global',padrao:'Padrão do sistema'}[selectedTrend.config_used.source] }}</dd></div><div><dt>Analisado em</dt><dd>{{ fmtDate(selectedTrend.analyzed_at) }}</dd></div></dl><p v-if="selectedTrend.readings_summary.length">Período efetivo: {{ fmtDate(selectedTrend.readings_summary[0].timestamp) }} a {{ fmtDate(selectedTrend.readings_summary[selectedTrend.readings_summary.length-1].timestamp) }}.</p><p v-if="selectedTrend.sample_selection === 'time_distributed'">Amostra distribuída no tempo. A consistência também é verificada nas leituras originais; a seleção não fabrica histórico.</p><ul class="trends-check-list"><li v-for="check in selectedTrend.checks" :key="check.label"><span :class="{passed:check.passed}">{{ check.passed ? '✓' : '○' }}</span> {{ check.label }}</li></ul><button v-if="selectedTrend.active_alert_id" class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.active_alert_id})">Ver alerta de tendência #{{ selectedTrend.active_alert_id }}</button></div></details>
+            </section>
+            <section v-else class="telemetry-panel trends-main empty"><h2>{{ trendPage.busy ? 'Carregando análises…' : 'Selecione um sensor' }}</h2><p>Busque pelo equipamento ou pelo nome do sensor.</p></section>
           </div>
-          <section v-if="trendPage.equipment && !selectedTrend" class="telemetry-panel"><h2>Escolha o sensor para ver o gráfico</h2><p>Um equipamento pode medir temperatura, pressão e outras grandezas. Selecione um sensor acima para acompanhar um único gráfico com a unidade correta.</p></section>
-          <section v-if="selectedTrend" id="trend-live-monitor" class="telemetry-panel trend-live-panel">
-            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">EVOLUÇÃO DO SENSOR SELECIONADO</div><h2>{{ selectedTrend.sensor_info.nome }} · {{ selectedTrend.sensor_info.equipamento_nome }}</h2><p>Acompanhe as últimas leituras e a tendência visual. Escolha “Incluir todos os limites” para comparar com as faixas de alarme.</p></div><button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openTrendConfig(selectedTrend.sensor_id,selectedTrend.sensor_info.equipamento_id)">Ajustar tempo e critérios</button></div>
-            <span :class="['telemetry-condition',trendCondition(selectedTrend)]">{{ trendConditionLabel(selectedTrend) }}</span><span v-if="trendDemo.session && trendDemo.session.sensor_id === selectedTrend.sensor_id" class="telemetry-condition">[DEMO] Leitura {{ trendDemo.session.passo }} / {{ trendDemo.session.total_passos }}</span>
-            <live-chart :key="globalEmpresa + ':' + selectedTrend.sensor_id" :api="api" :empresa="globalEmpresa" :selected-sensor="selectedTrend.sensor_info"></live-chart>
-            <p class="live-note">Gráfico e tendência visual: leituras recentes consultadas a cada 5 s. A confirmação operacional abaixo usa a amostra e os critérios do servidor, atualizados a cada 30 s.</p>
-            <div class="telemetry-evidence trend-sample-evidence"><div><span>Amostra operacional / mínimo</span><strong>{{ selectedTrend.readings_count }} / {{ selectedTrend.config_used.minimo_leituras }}</strong></div><div><span>Tempo operacional / mínimo</span><strong>{{ Number(selectedTrend.sample_duration_minutes).toFixed(2) }} / {{ selectedTrend.config_used.duracao_minima_minutos }} min</strong></div><div><span>Ritmo na amostra operacional</span><strong>{{ selectedTrend.insufficient_data || !selectedTrend.analysis_enabled ? 'Aguardando amostra' : Number(selectedTrend.slope_per_hour / 60).toFixed(2) + ' ' + selectedTrend.sensor_info.unidade_medida + '/min' }}</strong></div></div>
-            <div class="trend-automation" aria-label="Quando o sistema gera alertas e ordens"><div><strong>Tendência anormal confirmada</strong><p>Gera alerta e OS preditiva de inspeção, mesmo antes do limite. Exige quantidade, duração e consistência configuradas.</p></div><div><strong>Leitura real na faixa de alarme</strong><p>Gera alerta por limite e OS corretiva. As faixas acima são inclusivas: ao atingir o valor, a regra já vale. Independe da tendência.</p></div><div><strong>Projeção e recuperação</strong><p>O tracejado é uma estimativa. Alertas e OS são processados no servidor a cada nova leitura, mesmo com a tela fechada. A normalização do alerta não encerra a OS.</p></div></div>
-            <div v-if="selectedTrend.limit_alert" class="telemetry-notice" role="status"><strong>Alerta por limite #{{ selectedTrend.limit_alert.id }}</strong> · maior nível {{ {baixo:'baixo',medio:'médio',critico:'crítico'}[selectedTrend.limit_alert.level] }}<span v-if="selectedTrend.limit_alert.current_level === 'normal'"> · aguardando confirmação de recuperação</span><span v-if="selectedTrend.limit_alert.work_order"> · OS corretiva #{{ selectedTrend.limit_alert.work_order.id }} ({{ selectedTrend.limit_alert.work_order.status }})</span><div class="telemetry-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.limit_alert.id})">Ver alerta</button><button v-if="selectedTrend.limit_alert.work_order" class="btn btn-ghost btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.limit_alert.work_order.id})">Ver OS corretiva</button></div></div>
-            <details class="telemetry-advanced"><summary>Tempo de observação e detalhes do cálculo</summary><measurement-sample v-if="selectedTrend.readings_summary.length" :readings="selectedTrend.readings_summary" :sensor="selectedTrend.sensor_info" :analysis="selectedTrend"></measurement-sample><p>Este sensor exige {{ selectedTrend.config_used.duracao_minima_minutos }} minuto(s) entre a primeira e a última leitura. Esse tempo vem do histórico, sem depender de quando a tela foi aberta. Se a coleta for rápida, a amostra é distribuída no tempo para preservar essa duração.</p>
-            <div class="trend-checks"><span v-for="check in selectedTrend.checks || []" :key="check.label" :class="{passed:check.passed}">{{ check.passed ? '✓' : '○' }} {{ check.label }}</span></div>
-            <p v-if="selectedTrend.insufficient_data">Os demais critérios serão calculados quando a amostra atingir os mínimos acima. O ritmo exibido antes disso não é uma tendência confirmada.</p>
-            <p v-else-if="selectedTrend.is_anomalous"><strong>Por que preocupa?</strong> A amostra tem quantidade e duração suficientes; o ritmo superou {{ selectedTrend.threshold_per_hour }} {{ selectedTrend.sensor_info.unidade_medida }}/h, o movimento atende à persistência e ao R² configurados e segue o sentido considerado anormal.</p>
-            <p v-if="selectedTrend.projected_breach_minutes !== null && selectedTrend.projected_breach_minutes !== undefined" class="telemetry-formula">Tempo até o limite = máximo entre 0 e ({{ selectedTrend.sensor_info.limite_alerta }} − {{ selectedTrend.current_value }}) ÷ ritmo por minuto ≈ {{ selectedTrend.projected_breach_minutes }} minuto(s), se o ritmo continuar.<span v-if="selectedTrend.current_value >= selectedTrend.sensor_info.limite_alerta"> O limite já foi atingido; a estimativa fica em zero.</span></p>
-            <p><strong>Método:</strong> regressão linear, persistência e critérios configuráveis. A projeção estima o alcance do limite se o ritmo continuar; não estima uma data de quebra.</p></details>
-            <div v-if="selectedTrend.active_alert_id" class="telemetry-notice" role="status">Alerta de tendência #{{ selectedTrend.active_alert_id }}<span v-if="selectedTrend.predictive_work_order"> · OS preditiva #{{ selectedTrend.predictive_work_order.id }} ({{ selectedTrend.predictive_work_order.status }})</span><div class="telemetry-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails({id:selectedTrend.active_alert_id})">Ver alerta</button><button v-if="selectedTrend.predictive_work_order" class="btn btn-ghost btn-sm" @click="openAlertaOS({ordem_servico_id:selectedTrend.predictive_work_order.id})">Ver OS preditiva</button></div></div>
-          </section>
           <details v-if="isAdmin" class="telemetry-guide trend-demo-panel">
-            <summary><span class="telemetry-guide-icon" aria-hidden="true">▶</span><span><strong>Apresentação guiada · teste de tendência</strong><small>Veja a temperatura subir e acompanhe o motivo do alerta e a OS gerada.</small></span><span class="telemetry-guide-toggle" aria-hidden="true"></span></summary>
+            <summary><span class="telemetry-guide-icon" aria-hidden="true">▶</span><span><strong>Demonstração de tendências</strong><small>Veja a temperatura subir e acompanhe o motivo do alerta e a OS gerada.</small></span><span class="telemetry-guide-toggle" aria-hidden="true"></span></summary>
             <div class="telemetry-guide-body">
-              <section><h3>Uma demonstração real em cerca de um minuto</h3><p>Cria um equipamento e um sensor <strong>[DEMO]</strong> na empresa escolhida. Os valores do cenário são programados para ensinar. O alerta não é forçado: os dados passam pela mesma análise matemática, alertas e ordens da aplicação. Nenhum sensor real tem sua configuração alterada. O histórico do teste fica no banco para consulta.</p>
+              <section><h3>Uma demonstração real em cerca de um minuto</h3><p>Teste com equipamento e sensor <strong>[DEMO]</strong>, sem alterar sensores reais. Usa as mesmas regras de análise e geração de O.S.</p>
                 <button class="btn btn-ghost" @click="toggleTrendTestMode">{{ testerMode ? 'Desativar modo de teste' : 'Ativar modo de teste (administrador)' }}</button>
               </section>
               <section v-if="testerMode">
@@ -530,7 +534,7 @@
                 <p>Uma nova leitura é permitida pelo servidor a cada dez segundos. O gráfico é consultado a cada dois segundos durante o teste. Mantenha esta página visível; ao sair ou ocultar a página, a alimentação pausa. A duração usa o relógio real, sem inventar datas. O teste expira após 30 minutos.</p>
                 <div v-if="trendDemo.error" class="telemetry-notice" role="alert">{{ trendDemo.error }}</div>
                 <template v-if="trendDemo.session">
-                  <div class="telemetry-guide-callout" role="status"><strong>{{ {aumento:'Aumento gradual',limite:'Ultrapassagem do limite',recuperacao:'Recuperação',estavel:'Valores estáveis',pico:'Pico isolado'}[trendDemo.session.cenario] }} · leitura {{ trendDemo.session.passo }} de {{ trendDemo.session.total_passos }}</strong><p>{{ {executando:'Em execução: aguarde as próximas medições. Dados insuficientes no começo são esperados.',concluido:'Fase concluída. Confira abaixo o que o algoritmo identificou.',parado:'Teste parado. Os registros já gerados continuam disponíveis.'}[trendDemo.session.status] }}</p><p><strong>Perfil deste teste:</strong> sete leituras, máximo de sete, duração mínima de um minuto, limite superior 100 °C. Não altera o padrão global de 30 minutos.</p></div>
+                  <div class="telemetry-guide-callout" role="status"><strong>{{ {aumento:'Aumento gradual',limite:'Ultrapassagem do limite',recuperacao:'Recuperação',estavel:'Valores estáveis',pico:'Pico isolado'}[trendDemo.session.cenario] }} · leitura {{ trendDemo.session.passo }} de {{ trendDemo.session.total_passos }}</strong><p>{{ {executando:'Em execução: aguarde as próximas medições. Dados insuficientes no começo são esperados.',concluido:'Fase concluída. Confira abaixo o que o algoritmo identificou.',parado:'Teste parado. Os registros já gerados continuam disponíveis.'}[trendDemo.session.status] }}</p><p><strong>Perfil deste teste:</strong> sete leituras, máximo de sete, duração mínima de um minuto, limite superior 100 °C. Mantém o perfil próprio de demonstração.</p></div>
                   <div class="telemetry-actions"><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status !== 'executando'" @click="runTrendDemo('parar')">Parar teste</button><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status === 'executando'" @click="runTrendDemo('fase','limite')">Próxima fase: ultrapassar 100 °C</button><button class="btn btn-ghost" :disabled="trendDemo.busy || trendDemo.session.status === 'executando'" @click="runTrendDemo('fase','recuperacao')">Próxima fase: recuperar e estabilizar</button></div>
                   <h3 class="trend-demo-title">O que gerou alerta neste teste?</h3>
                   <p v-if="!trendDemo.session.alertas.length">Nenhum alerta gerado até agora. O algoritmo ainda precisa de evidências suficientes.</p>
@@ -538,116 +542,6 @@
                   <div v-if="trendDemo.session.ordens.length" class="telemetry-guide-table"><table><thead><tr><th>Ordem gerada</th><th>Tipo</th><th>Estado</th></tr></thead><tbody><tr v-for="ordem in trendDemo.session.ordens" :key="ordem.id"><td>#{{ ordem.id }} · {{ ordem.titulo }}</td><td>{{ ordem.tipo_os }}</td><td>{{ ordem.status }}</td></tr></tbody></table></div>
                 </template>
               </section>
-            </div>
-          </details>
-          <div class="telemetry-summary" aria-label="Filtrar tendências pela condição">
-            <button v-for="card in [{id:'anomalous',label:'Anomalias confirmadas'},{id:'normal',label:'Sem tendência anormal'},{id:'insufficient',label:'Aguardando dados'},{id:'disabled',label:'Análise desativada'}]" :key="card.id" :class="['telemetry-stat',card.id,{selected:trendPage.condition === card.id}]" :aria-pressed="trendPage.condition === card.id" @click="trendPage.condition = trendPage.condition === card.id ? '' : card.id; applyTrendFilters()"><span>{{ card.label }}</span><strong>{{ trendPage.busy || trendPage.error ? '—' : trendSummary[card.id] }}</strong><small>{{ trendPage.condition === card.id ? 'Filtro ativo · clique para remover' : 'Filtrar sensores →' }}</small></button>
-          </div>
-          <div class="telemetry-panel">
-            <div class="telemetry-section-head"><div><h2>Análises dos sensores</h2><p>Use os cards acima para filtrar uma condição. Clique no card selecionado novamente para mostrar todas.</p></div><button v-if="trendPage.condition" class="btn btn-ghost btn-sm" @click="trendPage.condition = ''; applyTrendFilters()">Mostrar todas as condições</button></div>
-            <div class="telemetry-list-meta"><span v-if="trendPage.updatedAt">Consulta atualizada em {{ fmtDate(trendPage.updatedAt) }}</span><span v-else>Aguardando primeira consulta</span><span>{{ trendMonitor.busy ? 'Atualizando tendências…' : 'Atualização automática · a cada 30 s' }}</span></div>
-            <div v-if="trendPage.error" role="alert" class="telemetry-notice">{{ trendPage.error }} <button class="btn btn-ghost btn-sm" @click="fetchTrends">Tentar novamente</button></div>
-            <div v-if="trendPage.busy" class="empty" role="status"><div class="spinner"></div>Consultando tendências…</div>
-            <div v-else-if="!trendCount" class="empty"><strong>Nenhuma análise neste contexto</strong><p>Confira os filtros e se existem sensores com cadastro ativo. Você pode acompanhar todos sem selecionar um equipamento.</p><button class="btn btn-ghost btn-sm" @click="clearTrendFilters">Limpar seleção</button></div>
-            <template v-else>
-              <div class="table-wrap telemetry-table"><table><thead><tr><th>Equipamento / sensor</th><th>Condição</th><th>Direção</th><th>Último valor da amostra</th><th>Ações</th></tr></thead><tbody><tr v-for="row in trendRows" :key="row.sensor_id"><td><strong>{{ row.sensor_info.equipamento_nome }}</strong><small>{{ row.sensor_info.nome }} · {{ row.sensor_info.tipo_display }}</small></td><td><span :class="['telemetry-condition',trendCondition(row)]">{{ trendConditionLabel(row) }}</span><small v-if="row.is_anomalous">Risco {{ {baixo:'baixo',medio:'médio',alto:'alto',critico:'crítico'}[row.risk_level] }}</small></td><td>{{ trendDirection(row) }}</td><td>{{ row.current_value ?? '—' }} <small>{{ row.sensor_info.unidade_medida }}</small></td><td><button class="btn btn-ghost btn-sm" @click="openTrendDetail(row)">Ver análise</button><button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click="openTrendConfig(row.sensor_id,row.sensor_info.equipamento_id)">Configurar</button></td></tr></tbody></table></div>
-              <footer class="telemetry-pagination"><span>{{ trendPage.offset + 1 }}–{{ Math.min(trendPage.offset + trendPage.size,trendCount) }} de {{ trendCount }} sensores</span><label>Por página <select class="filter-select" v-model.number="trendPage.size" @change="applyTrendFilters()"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label><div><button class="page-btn" :disabled="trendPage.offset === 0" @click="changeTrendPage(-1)">← Anterior</button><button class="page-btn" :disabled="trendPage.offset + trendPage.size >= trendCount" @click="changeTrendPage(1)">Próxima →</button></div></footer>
-            </template>
-          </div>
-          <section v-if="trendPage.detail" id="trend-detail" class="telemetry-panel telemetry-detail">
-            <div class="telemetry-section-head"><div><div class="telemetry-eyebrow">DETALHE DA ANÁLISE</div><h2>{{ trendPage.detail.sensor_info.nome }}</h2><p>{{ trendPage.detail.sensor_info.equipamento_nome }} · {{ fmtDate(trendPage.detail.analyzed_at) }}</p></div><button class="btn btn-ghost btn-sm" @click="trendPage.detail = null">Fechar análise</button></div>
-            <span :class="['telemetry-condition',trendCondition(trendPage.detail)]">{{ trendConditionLabel(trendPage.detail) }}</span>
-            <p>{{ !trendPage.detail.analysis_enabled ? 'A configuração atual não permite novas análises. Alertas anteriores não são encerrados por desativação.' : trendPage.detail.insufficient_data ? 'Ainda faltam medições ou tempo de observação. O sistema precisa dos dois para confirmar uma mudança persistente.' : trendPage.detail.is_anomalous ? 'As leituras estão mudando de forma persistente no sentido que foi configurado como preocupante. Confira os dados, o alerta e a ordem de inspeção abaixo.' : 'As leituras disponíveis não confirmam a mudança preocupante definida na configuração. Mesmo assim, uma leitura pode exigir atenção por estar próxima ou acima do limite.' }}</p>
-            <measurement-sample v-if="trendPage.detail.readings_summary.length && (!selectedTrend || selectedTrend.sensor_id !== trendPage.detail.sensor_id)" :readings="trendPage.detail.readings_summary" :sensor="trendPage.detail.sensor_info" :analysis="trendPage.detail"></measurement-sample>
-            <div class="telemetry-evidence trend-sample-evidence"><div><span>Direção confirmada</span><strong>{{ trendDirection(trendPage.detail) }}</strong></div><div><span>Leituras válidas / mínimo</span><strong>{{ trendPage.detail.readings_count }} / {{ trendPage.detail.config_used.minimo_leituras }}</strong></div><div><span>Duração / mínimo</span><strong>{{ trendPage.detail.sample_duration_minutes }} / {{ trendPage.detail.config_used.duracao_minima_minutos }} min</strong></div></div>
-            <details class="telemetry-advanced"><summary>Como esta condição foi identificada</summary><p>Janela: {{ trendPage.detail.config_used.periodo_horas }} h. Persistência observada: {{ Math.round(trendPage.detail.persistence_ratio * 100) }}% (mínimo {{ Math.round(trendPage.detail.config_used.persistencia_minima * 100) }}%). R²: {{ trendPage.detail.r_squared ?? 'não calculado' }} (mínimo {{ trendPage.detail.config_used.r2_minimo }}). Inclinação: {{ trendPage.detail.slope_per_hour }} {{ trendPage.detail.sensor_info.unidade_medida }}/h.</p><p>Configuração {{ {sensor:'específica deste sensor',global:'global herdada',padrao:'padrão do sistema'}[trendPage.detail.config_used.source] }}. A projeção estima aproximação do limite, não uma data de quebra.</p></details>
-            <div class="telemetry-notice" v-if="trendPage.detail.active_alert_id">Alerta ativo #{{ trendPage.detail.active_alert_id }}<span v-if="trendPage.detail.predictive_work_order"> · OS preditiva #{{ trendPage.detail.predictive_work_order.id }} ({{ trendPage.detail.predictive_work_order.status }})</span><span v-else> · Sem OS vinculada nesta consulta</span></div>
-            <p v-if="trendPage.detail.is_anomalous && !trendPage.detail.active_alert_id">Ainda não há alerta ativo vinculado nesta consulta. A sincronização operacional ocorre na próxima leitura ou na rotina periódica.</p><div class="telemetry-actions"><button class="btn btn-ghost" @click="openEquipamentoDetails(trendPage.detail.sensor_info.equipamento_id)">Ver equipamento e ordens</button><button v-if="isAdminOrGestor" class="btn btn-primary" @click="openTrendConfig(trendPage.detail.sensor_id,trendPage.detail.sensor_info.equipamento_id)">Configurar análise</button></div>
-          </section>
-          <details class="telemetry-guide">
-            <summary>
-              <span class="telemetry-guide-icon" aria-hidden="true">ⓘ</span>
-              <span><strong>Como funcionam as tendências?</strong><small>Veja como o sistema percebe uma mudança, estima a chegada ao limite e avisa a equipe — com contas e exemplos simples.</small></span>
-              <span class="telemetry-guide-toggle" aria-hidden="true"></span>
-            </summary>
-            <div class="telemetry-guide-body">
-              <section>
-                <h3>Imagine um motor que está esquentando aos poucos</h3>
-                <p>Uma leitura mostra <strong>como o motor está agora</strong>. A tendência mostra <strong>para onde a temperatura está indo</strong>. Se ela sobe continuamente, o sistema calcula esse ritmo e verifica se ele merece atenção, mesmo antes de chegar ao limite cadastrado.</p>
-                <p>É parecido com observar o combustível de um carro: além de saber quanto resta, você considera a velocidade com que ele está acabando para se antecipar. Aqui, a ideia é programar uma inspeção antes que a condição piore.</p>
-                <div class="telemetry-guide-callout"><strong>O sistema estima quando uma leitura pode atingir o limite. Ele não sabe a hora em que o equipamento vai quebrar.</strong><p>O limite é uma referência definida no cadastro do sensor. Atingi-lo indica uma condição que precisa de atenção, não uma certeza de falha.</p></div>
-              </section>
-              <section>
-                <h3>Um exemplo completo: de 60 °C até o limite de 100 °C</h3>
-                <p>Considere um sensor de temperatura com limite superior de <strong>100 °C</strong>. As leituras mais recentes são:</p>
-                <div class="telemetry-guide-table"><table><thead><tr><th>Horário</th><th>Temperatura medida</th><th>O que aconteceu</th></tr></thead><tbody><tr><td>13h</td><td>60 °C</td><td>Primeira leitura do exemplo</td></tr><tr><td>14h</td><td>70 °C</td><td>Subiu 10 °C em uma hora</td></tr><tr><td>15h</td><td>80 °C</td><td>Subiu mais 10 °C em uma hora</td></tr></tbody></table></div>
-                <div class="telemetry-guide-examples">
-                  <article><h4>1. Descobrir o ritmo de aumento</h4><p>Neste exemplo, a subida é regular. Podemos enxergar o ritmo usando a diferença entre a última e a primeira leitura:</p><div class="telemetry-formula">Ritmo = mudança de temperatura ÷ tempo decorrido<br><strong>(80 − 60) ÷ 2 = 10 °C por hora</strong></div><p>No sistema, esse ritmo recebe o nome de <strong>inclinação</strong>. A conta real usa todas as leituras escolhidas, não apenas a primeira e a última.</p></article>
-                  <article><h4>2. Calcular quanto falta até o limite</h4><p>Às 15h, faltam 20 °C para chegar a 100 °C. Se a temperatura continuar aumentando 10 °C por hora:</p><div class="telemetry-formula">Tempo até o limite = (limite − valor atual) ÷ ritmo<br><strong>(100 − 80) ÷ 10 = 2 horas</strong></div><p>A estimativa é atingir o limite <strong>por volta das 17h, se o mesmo ritmo continuar</strong>. Se o motor esfriar ou o ritmo mudar, a estimativa também muda na próxima análise.</p></article>
-                </div>
-                <p><strong>O que acontece nesse caso?</strong> Com os padrões iniciais, análise ativa e aumento escolhido como anormal, há 3 leituras cobrindo 2 horas, uma subida consistente e todos os intervalos no mesmo sentido. O sistema confirma a tendência e gera um alerta e uma <strong>ordem de serviço (OS) preditiva de inspeção</strong> no processamento automático. Não precisa esperar a temperatura chegar a 100 °C.</p>
-                <p>A estimativa de 2 horas recebe risco crítico pela regra atual de proximidade do limite. Isso expressa urgência para avaliar a condição; não significa que há 100% de chance de quebra nesse prazo. Temperaturas e limite deste exemplo são ilustrativos: use os limites adequados ao seu equipamento.</p>
-              </section>
-              <section>
-                <h3>Por que uma subida qualquer não vira tendência?</h3>
-                <p>Antes de abrir uma inspeção por tendência, o sistema confere cinco pontos:</p>
-                <ol>
-                  <li><strong>Tem informação suficiente?</strong> Precisa do mínimo de leituras e de tempo observado. Três leituras em 2 minutos não atendem a uma duração mínima de 30 minutos.</li>
-                  <li><strong>A mudança é grande o bastante?</strong> A sensibilidade define o menor ritmo de mudança que merece ser investigado.</li>
-                  <li><strong>O movimento se repete?</strong> A persistência conta quantos intervalos seguem o mesmo sentido. Se 7 de 10 intervalos sobem, a persistência de subida é <strong>7 ÷ 10 × 100 = 70%</strong>. Intervalos parados ou no sentido contrário não contam a favor.</li>
-                  <li><strong>Os valores seguem um caminho consistente?</strong> O R² mede quanto as leituras se aproximam de uma linha. Perto de 1, a linha representa bem o movimento. <strong>R² de 0,8 não significa 80% de chance de falha.</strong> Ele avalia o ajuste aos dados.</li>
-                  <li><strong>Esse sentido é preocupante para o sensor?</strong> Esquentar pode ser anormal para um motor; perder pressão pode ser anormal para uma bomba. Você escolhe aumento, redução ou ambos.</li>
-                </ol>
-                <p>Um ponto isolado pode ficar alto sem confirmar tendência. Os alertas por limite operacional continuam sendo avaliados separadamente: um valor já perigoso pode exigir atenção mesmo sem um movimento persistente.</p>
-              </section>
-              <section>
-                <h3>Como configurar, sem precisar entender de estatística</h3>
-                <p>Como gestor ou administrador, clique em <strong>Configurar</strong> na linha do sensor ou em <strong>Configurar análise</strong> no detalhe. Comece pelos padrões abaixo e ajuste conforme a frequência de coleta e o comportamento esperado do equipamento. Técnicos podem consultar os resultados.</p>
-                <div class="telemetry-guide-table"><table><thead><tr><th>Campo</th><th>O que ele quer dizer</th><th>Padrão inicial</th></tr></thead><tbody>
-                  <tr><td>Análise ativa</td><td>Liga ou desliga a análise de tendências desse sensor.</td><td>Ligada</td></tr>
-                  <tr><td>Período de análise</td><td>Até quanto tempo atrás o sistema pode buscar leituras.</td><td>Últimas 24 horas</td></tr>
-                  <tr><td>Máximo de leituras</td><td>Quantas das leituras mais recentes entram na conta, no máximo.</td><td>50 leituras</td></tr>
-                  <tr><td>Mínimo de leituras válidas</td><td>Quantas medições em horários diferentes precisam existir para começar a analisar.</td><td>3 leituras</td></tr>
-                  <tr><td>Duração mínima</td><td>Quanto tempo deve existir entre a primeira e a última leitura da amostra.</td><td>30 minutos</td></tr>
-                  <tr><td>Condição anormal</td><td>Escolha o movimento que merece inspeção: subir, cair ou ambos.</td><td>Aumento persistente</td></tr>
-                  <tr><td>Persistência mínima</td><td>Quanto o movimento deve se repetir. Digitar 0,7 significa exigir pelo menos 70% dos intervalos no mesmo sentido.</td><td>0,7 (70%)</td></tr>
-                  <tr><td>Consistência mínima (R²)</td><td>Quanto a linha calculada deve representar as leituras. Um mínimo maior exige um movimento mais próximo de uma linha.</td><td>0,8</td></tr>
-                  <tr><td>Sensibilidade</td><td>Alta percebe ritmos menores de mudança; baixa exige mudanças mais fortes. Os outros critérios continuam obrigatórios.</td><td>Média</td></tr>
-                </tbody></table></div>
-                <p><strong>Exemplo de ajuste:</strong> se você quer observar pelo menos 1 hora e receber leituras a cada 10 minutos, pode escolher mínimo de 7 leituras, máximo de 50 e duração mínima de 60 minutos. Sete leituras distribuídas de 13h a 14h, a cada 10 minutos, cobrem essa hora. Os demais critérios também precisam ser atendidos.</p>
-                <p><strong>Quantidade não substitui tempo:</strong> 50 leituras a cada segundo cobrem cerca de 49 segundos. Se já houver 30 minutos de histórico válido, o sistema distribui até 50 leituras reais nesse período e verifica também a consistência das leituras originais. Se o sensor acabou de começar, ainda precisa completar a duração mínima.</p>
-                <p><strong>Configuração do sensor ou global?</strong> A específica do sensor vale primeiro. Se não existir, ele herda a global mais recente; sem global, usa os padrões acima. Salvar os critérios herdados cria uma configuração específica. Somente o administrador altera a global, que afeta todos os sensores que a herdam, inclusive de outras empresas.</p>
-              </section>
-              <section>
-                <h3>Outras situações fáceis de reconhecer</h3>
-                <div class="telemetry-guide-examples">
-                  <article><h4>A temperatura ficou estável</h4><p>Às 13h, 14h e 15h: <strong>60 °C, 60 °C e 60 °C</strong>. Não há aumento: o ritmo é zero.</p><p><strong>Resultado:</strong> nenhuma tendência de aumento é confirmada. O sistema não calcula um prazo até 100 °C dividindo por zero.</p></article>
-                  <article><h4>A bomba está perdendo pressão</h4><p>Às 13h, 14h e 15h: <strong>6 bar, 5 bar e 4 bar</strong>. A queda de 1 bar por hora pode merecer inspeção, se atender à sensibilidade e aos demais critérios.</p><p><strong>Resultado:</strong> só vira anomalia de tendência se você configurar redução ou ambos. O cadastro atual tem apenas limite superior, então a queda não recebe uma estimativa de tempo até um limite inferior.</p></article>
-                  <article><h4>Houve só um pico</h4><p>A cada 30 minutos: <strong>60, 60, 60, 60 e 90 °C</strong>. Só um dos quatro intervalos subiu.</p><div class="telemetry-formula">Persistência = intervalos no mesmo sentido ÷ total de intervalos × 100<br><strong>1 ÷ 4 × 100 = 25%</strong></div><p><strong>Resultado:</strong> não atende ao mínimo de 70%. Pode haver alerta por limite, mas não por tendência confirmada nessa amostra.</p></article>
-                  <article><h4>As leituras acabaram de começar</h4><p>O sensor registrou <strong>60, 70 e 80 °C em 2 minutos</strong>. Parece uma subida rápida, mas os padrões pedem 30 minutos de observação.</p><p><strong>Resultado:</strong> aguardando dados. Ainda não há evidência suficiente para abrir uma OS por tendência. O monitoramento de limite continua independente.</p></article>
-                </div>
-              </section>
-              <section>
-                <h3>O que acontece depois do aviso?</h3>
-                <p><strong>Alerta</strong> é o registro da condição encontrada. A <strong>OS preditiva</strong> é a ordem para a equipe inspecionar o equipamento. A mesma condição contínua atualiza o mesmo episódio, sem criar outra OS a cada leitura. Uma OS concluída ou cancelada não é recriada enquanto o episódio permanece ativo.</p>
-                <p>Se uma nova amostra suficiente comprovar que a condição anormal desapareceu, o alerta é resolvido. A OS permanece sob controle da equipe. Uma nova ocorrência depois da recuperação, ou outro sentido anormal, pode abrir outro episódio. Desligar a análise ou ficar sem leituras não comprova recuperação e não encerra o trabalho automaticamente.</p>
-                <p>Na tela, <strong>Anomalia confirmada</strong> significa que os critérios foram atendidos; <strong>Sem tendência anormal</strong> significa que a amostra não confirma o movimento configurado; <strong>Aguardando dados</strong> indica falta de quantidade ou duração; e <strong>Análise desativada</strong> indica que a configuração está desligada. Nenhum desses rótulos substitui a avaliação dos limites operacionais.</p>
-                <p>As consultas desta tela se atualizam a cada 30 segundos enquanto a página está visível. A análise que gera alertas e OS acontece quando uma nova leitura é gravada pelo fluxo normal ou quando a rotina periódica é executada. Abrir a tela, atualizar ou salvar critérios não cria uma OS por si só. O cálculo é feito pelo sistema, sem depender da IA.</p>
-              </section>
-              <details class="telemetry-advanced">
-                <summary>Quero entender a fórmula que usa todas as leituras</summary>
-                <p>O nome do método é <strong>regressão linear</strong>: ele encontra a linha que melhor acompanha o conjunto de leituras. Cada ponto tem um tempo <strong>t</strong>, em horas desde a primeira leitura, e um valor medido <strong>y</strong>.</p>
-                <div class="telemetry-formula">Ritmo (b) = Σ[(t − média dos tempos) × (y − média dos valores)] ÷ Σ[(t − média dos tempos)²]<br>Linha ajustada: valor estimado = média dos valores + b × (tempo − média dos tempos)</div>
-                <p>O símbolo <strong>Σ</strong> significa somar a conta para todas as leituras. Assim, pequenas oscilações participam da análise; o sistema não usa apenas dois pontos para decidir o ritmo. No exemplo 60, 70 e 80 °C, os tempos são 0, 1 e 2 horas. As médias são 1 hora e 70 °C:</p>
-                <div class="telemetry-formula">b = [(-1 × -10) + (0 × 0) + (1 × 10)] ÷ [(-1)² + 0² + 1²]<br><strong>b = 20 ÷ 2 = 10 °C/h</strong></div>
-                <p>Depois de confirmar o crescimento, a projeção usa o <strong>último valor medido</strong>, e não o valor previsto pela linha:</p>
-                <div class="telemetry-formula">Horas até o limite superior = máximo entre 0 e [(limite superior − último valor medido) ÷ b]</div>
-                <p>O R² compara o erro da linha com a variação total das leituras. Se a linha passa exatamente pelos pontos do exemplo, o erro é zero e o R² vale 1. Uma série constante também tem R² igual a 1 nesta implementação, mas seu ritmo zero impede confirmar tendência.</p>
-                <div class="telemetry-formula">R² = 1 − [Σ(valor medido − valor da linha)² ÷ Σ(valor medido − média dos valores)²]</div>
-                <p><strong>Limiar de sensibilidade:</strong> com limite superior 100, o ritmo precisa superar 0,5 unidade/h na sensibilidade alta, 2 unidades/h na média ou 5 unidades/h na baixa. São, respectivamente, 0,5%, 2% e 5% do valor absoluto do limite por hora. Na redução, compara-se a mesma intensidade no sentido negativo. Se o limite for zero, os limiares são 0,005, 0,02 e 0,05 unidade/h.</p>
-                <p><strong>Regras de risco:</strong> limite já atingido ou projeção de até 2 horas: crítico; até 8 horas: alto; até 24 horas: médio. Fora dessas faixas, para limites positivos, valor a partir de 85% do limite é alto e a partir de 70% é médio. Anomalia confirmada tem pelo menos risco médio. A nova OS copia a classe ABC do equipamento na abertura; o risco permanece como informação da ocorrência. Revisões de prioridade exigem justificativa do gestor.</p>
-                <p><strong>Regras de amostra e configuração:</strong> a busca considera apenas a janela configurada, descarta valores não finitos e datas futuras e conta uma leitura válida por horário. O período deve ser de pelo menos 1 hora; máximo de 3 a 500 leituras; mínimo de 3 até o máximo; duração mínima de 1 minuto até o tamanho da janela; persistência e R² mínimos entre 0,5 e 1.</p>
-              </details>
             </div>
           </details>
         </section>
@@ -915,6 +809,16 @@
             <div><dt>Criticidade do equipamento na abertura</dt><dd>{{ criticidadeLabel(orderDetail.order.criticidade_na_abertura,!orderDetail.order.prioridade_herdada_conhecida) }}</dd></div>
             <div v-if="orderDetail.order.data_conclusao"><dt>Concluída em</dt><dd>{{ fmtTimestamp(orderDetail.order.data_conclusao) }}</dd></div>
           </dl>
+          <section v-if="orderDetail.order.tipo_os === 'preditiva'" class="order-prediction" aria-label="Previsão na abertura">
+            <h3>Previsão na abertura</h3>
+            <template v-for="e in [orderDetail.order.evidencia_preditiva]" :key="orderDetail.id">
+              <template v-if="e?.registrado_em">
+                <p class="order-prediction-summary">{{ e.resumo }}</p>
+                <dl class="order-detail-facts"><div><dt>Sensor / equipamento</dt><dd>{{ e.sensor_nome }} · {{ e.equipamento_nome }}</dd></div><div><dt>Último valor / limite</dt><dd>{{ formatNumber(e.analise.current_value) }} / {{ formatNumber(e.limite_operacional) }} {{ e.unidade_medida }}</dd></div><div><dt>Ritmo observado</dt><dd>{{ formatNumber(e.analise.slope_per_hour) }} {{ e.unidade_medida }}/h</dd></div><div><dt>Alcance estimado do limite</dt><dd>{{ fmtTimestamp(e.analise.projected_breach_at) }}</dd></div></dl>
+                <details class="trends-details"><summary>Evidências e critérios da abertura</summary><div class="trends-details-body"><p>Registro fixo em {{ fmtTimestamp(e.registrado_em) }}. Novas leituras não modificam esta evidência.</p><dl class="trends-analysis-facts"><div><dt>Período observado</dt><dd>{{ fmtTimestamp(e.leituras[0]?.timestamp) }} a {{ fmtTimestamp(e.leituras[e.leituras.length-1]?.timestamp) }}</dd></div><div><dt>Leituras no ajuste / originais</dt><dd>{{ e.analise.readings_count }} / {{ e.analise.source_readings_count }}</dd></div><div><dt>Ajuste R² / persistência</dt><dd>{{ Math.round(e.analise.r_squared * 100) }}% / {{ Math.round(e.analise.persistence_ratio * 100) }}%</dd></div><div><dt>Histórico mínimo / antecedência</dt><dd>{{ trendMinutes(e.analise.config_used.duracao_minima_minutos) }} / {{ trendMinutes(e.analise.config_used.antecedencia_os_minutos) }}</dd></div></dl><ul class="trends-check-list"><li v-for="check in e.analise.checks" :key="check.label">{{ check.passed ? '✓' : '○' }} {{ check.label }}</li></ul><measurement-sample :readings="e.leituras" :sensor="{nome:e.sensor_nome,unidade_medida:e.unidade_medida,limite_alerta:e.limite_operacional}" :analysis="e.analise" :clean="true" :horizon-minutes="e.analise.config_used.antecedencia_os_minutos"></measurement-sample><p>Método: {{ e.analise.method_version }}.</p><button class="btn btn-ghost btn-sm" @click="showTrends(orderDetail.order.equipamento,orderDetail.order.sensor_origem); closeOrderDetails()">Ver análise atual do sensor ↗</button></div></details>
+              </template><p v-else class="abc-note">Previsão de abertura não registrada para esta O.S.</p>
+            </template>
+          </section>
           <section v-if="orderDetail.order.historico_alertas?.length" class="order-alert-history" aria-labelledby="order-alert-history-title">
             <h3 id="order-alert-history-title">Histórico de alertas da O.S.</h3>
             <p class="abc-note">Horários locais deste dispositivo. Elevações indicam o nível do alerta; a prioridade da O.S. é consultada acima.</p>
@@ -1757,14 +1661,14 @@
   </div>
 
   <!-- Modal: Configuração de Análise de Tendência -->
-  <div v-if="trendConfigModal.open" class="modal-backdrop" @click.self="trendConfigModal.open = false">
-    <div class="modal">
+  <div v-if="trendConfigModal.open" class="modal-backdrop" @click.self="closeTrendConfig()" @keydown="trendConfigKeydown">
+    <div class="modal trend-config-dialog" role="dialog" aria-modal="true" aria-labelledby="trend-config-title" :aria-busy="trendConfigModal.loading || trendConfigModal.saving">
       <div class="modal-header">
         <div>
-          <div class="modal-title">{{ trendConfigModal.sensorId ? "Configurar análise do sensor" : "Configuração global de tendências" }}</div>
+          <h2 id="trend-config-title" class="modal-title">{{ trendConfigModal.sensorId ? "Configurar análise do sensor" : "Configuração global de tendências" }}</h2>
           <div style="margin-top:4px;font-size:14px;color:var(--t2);">{{ trendConfigModal.sensorId ? "Critérios usados nas próximas análises deste sensor" : "Afeta sensores de todas as empresas que herdam a configuração global" }}</div>
         </div>
-        <button class="modal-close" @click="trendConfigModal.open = false">×</button>
+        <button id="trend-config-close" class="modal-close" aria-label="Fechar configuração de tendências" @click="closeTrendConfig()">×</button>
       </div>
       <div class="modal-body">
         <div v-if="trendConfigModal.loading" class="loading"><div class="spinner"></div></div>
@@ -1775,59 +1679,24 @@
           </div>
           
           <div class="field">
-            <label><input type="checkbox" v-model="trendConfigModal.form.ativo"> Análise de tendências ativa</label>
+            <label class="trend-config-toggle"><input type="checkbox" v-model="trendConfigModal.form.ativo"> Análise de tendências ativa</label>
           </div>
-          <div class="field">
-            <label>Período de Análise (Horas)</label>
-            <input type="number" v-model.number="trendConfigModal.form.periodo_horas" required min="1" max="720">
-            <div style="font-size:11px; color:var(--t4); margin-top:4px;">Janela de tempo para analisar as leituras do sensor.</div>
+          <div class="trends-config-times">
+            <section><h3>Histórico mínimo</h3><p>Tempo coberto pelas leituras para confirmar a tendência.</p><div class="field"><label for="trend-history-minutes">Duração em minutos</label><input id="trend-history-minutes" type="number" v-model.number="trendConfigModal.form.duracao_minima_minutos" required min="1" :max="trendConfigModal.form.periodo_horas * 60"></div><div class="trends-presets"><button v-for="n in [30,60,120,240]" :key="n" type="button" :aria-pressed="trendConfigModal.form.duracao_minima_minutos === n" @click="setTrendTimePreset(n)">{{ trendMinutes(n) }}</button></div></section>
+            <section><h3>Antecedência da O.S.</h3><p>Quanto pode faltar para o limite ao abrir a inspeção.</p><div class="field"><label for="trend-horizon-minutes">Prazo em minutos</label><input id="trend-horizon-minutes" type="number" v-model.number="trendConfigModal.form.antecedencia_os_minutos" required min="1"></div><div class="trends-presets"><button v-for="n in [30,60,120,480]" :key="n" type="button" :aria-pressed="trendConfigModal.form.antecedencia_os_minutos === n" @click="trendConfigModal.form.antecedencia_os_minutos = n">{{ trendMinutes(n) }}</button></div></section>
           </div>
-          
-          <div class="field">
-            <label>Número de Leituras (Máximo)</label>
-            <input type="number" v-model.number="trendConfigModal.form.num_leituras" required min="3" max="500">
-          </div>
-          <div class="field">
-            <label>Mínimo de leituras válidas</label>
-            <input type="number" v-model.number="trendConfigModal.form.minimo_leituras" required min="3" :max="trendConfigModal.form.num_leituras">
-          </div>
-          <div v-if="trendConfigModal.sensorId" class="telemetry-guide-callout"><strong>Tempo mínimo de observação</strong><p>É o período coberto pelas leituras, não uma espera depois de abrir a tela. Abaixo você pode preparar um ajuste; ele só vale ao clicar em Salvar Configuração.</p><div class="telemetry-actions"><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(1)">Preparar perfil de 1 minuto</button><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(5)">5 minutos</button><button type="button" class="btn btn-ghost btn-sm" @click="setTrendTimePreset(30)">30 minutos</button></div><p>O perfil de 1 minuto define mínimo de 7 leituras e máximo de 500 para comportar coleta frequente. Isso não fabrica histórico nem garante alerta: a frequência de coleta e os outros critérios também precisam ser atendidos.</p></div>
-          <div class="field">
-            <label>Duração mínima da amostra (minutos)</label>
-            <input type="number" v-model.number="trendConfigModal.form.duracao_minima_minutos" required min="1" :max="trendConfigModal.form.periodo_horas * 60">
-          </div>
-          <div class="field">
-            <label>Condição anormal</label>
-            <select v-model="trendConfigModal.form.direcao_alerta" required>
-              <option value="crescente">Aumento persistente</option>
-              <option value="decrescente">Redução persistente</option>
-              <option value="ambas">Aumento ou redução persistente</option>
-            </select>
-            <div style="font-size:11px; color:var(--t4); margin-top:4px;">Cada condição confirmada gera um alerta e uma OS preditiva de inspeção. Reduções não têm projeção de limite inferior.</div>
-          </div>
-          <details class="telemetry-advanced"><summary>Configurações avançadas de detecção</summary>
-          <div class="field">
-            <label>Persistência mínima (0,5 a 1)</label>
-            <input type="number" v-model.number="trendConfigModal.form.persistencia_minima" required min="0.5" max="1" step="0.01">
-            <div style="font-size:11px; color:var(--t4); margin-top:4px;">0,7 exige pelo menos 70% dos intervalos no mesmo sentido.</div>
-          </div>
-          <div class="field">
-            <label>Consistência mínima da tendência — R² (0,5 a 1)</label>
-            <input type="number" v-model.number="trendConfigModal.form.r2_minimo" required min="0.5" max="1" step="0.01">
-          </div>
-          
-          <div class="field">
-            <label>Nível de Sensibilidade</label>
-            <select v-model="trendConfigModal.form.sensibilidade" required>
-              <option value="alta">Alta (variações menores por hora)</option>
-              <option value="media">Média (recomendado para a maioria)</option>
-              <option value="baixa">Baixa (apenas grandes variações)</option>
-            </select>
-          </div>
-          
+          <p class="trends-config-summary">Confirmar com pelo menos <strong>{{ trendMinutes(trendConfigModal.form.duracao_minima_minutos) }}</strong> de histórico e abrir O.S. se prever alcance do limite em até <strong>{{ trendMinutes(trendConfigModal.form.antecedencia_os_minutos) }}</strong>.</p>
+          <details class="telemetry-advanced"><summary>Critérios avançados</summary>
+            <div class="field"><label for="trend-lookback">Busca histórica máxima (horas)</label><input id="trend-lookback" type="number" v-model.number="trendConfigModal.form.periodo_horas" required min="1" max="720"></div>
+            <div class="field"><label for="trend-max-readings">Máximo de leituras no ajuste</label><input id="trend-max-readings" type="number" v-model.number="trendConfigModal.form.num_leituras" required min="3" max="500"></div>
+            <div class="field"><label for="trend-min-readings">Mínimo de leituras válidas</label><input id="trend-min-readings" type="number" v-model.number="trendConfigModal.form.minimo_leituras" required min="3" :max="trendConfigModal.form.num_leituras"></div>
+            <div class="field"><label for="trend-direction">Sentido considerado anormal</label><select id="trend-direction" v-model="trendConfigModal.form.direcao_alerta"><option value="crescente">Aumento persistente</option><option value="decrescente">Redução persistente</option><option value="ambas">Aumento ou redução</option></select><small>Reduções ficam em acompanhamento: o cadastro possui apenas limite superior.</small></div>
+            <div class="field"><label for="trend-persistence">Persistência mínima (%)</label><input id="trend-persistence" type="number" v-model.number="trendPersistencePercent" required min="50" max="100" step="1"></div>
+            <div class="field"><label for="trend-r2">Ajuste mínimo da reta — R² (%)</label><input id="trend-r2" type="number" v-model.number="trendR2Percent" required min="50" max="100" step="1"></div>
+            <div class="field"><label for="trend-sensitivity">Sensibilidade</label><select id="trend-sensitivity" v-model="trendConfigModal.form.sensibilidade"><option value="alta">Alta · percebe ritmos menores</option><option value="media">Média</option><option value="baixa">Baixa · exige ritmos maiores</option></select></div>
           </details>
           <div class="modal-actions" style="margin-top:24px;">
-            <button type="button" class="btn btn-ghost" @click="trendConfigModal.open = false" :disabled="trendConfigModal.saving">Cancelar</button>
+            <button type="button" class="btn btn-ghost" @click="closeTrendConfig()" :disabled="trendConfigModal.saving">Cancelar</button>
             <button type="submit" class="btn btn-primary" :disabled="trendConfigModal.saving">
               <span v-if="trendConfigModal.saving" class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px"></span>
               Salvar Configuração
@@ -1839,7 +1708,7 @@
   </div>
 
 </div><!-- /#app -->
-<script src="live-chart.js?v=20261110-values5"></script>
-<script src="app.js?v=20261111-os-history"></script>
+<script src="live-chart.js?v=20261113-trends"></script>
+<script src="app.js?v=20261113-trends"></script>
 </body>
 </html>

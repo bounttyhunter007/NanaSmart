@@ -110,7 +110,8 @@ class TrendConfig(models.Model):
         help_text="Número máximo de leituras para análise"
     )
     minimo_leituras = models.IntegerField(default=3, help_text='Mínimo de leituras válidas com horários distintos.')
-    duracao_minima_minutos = models.IntegerField(default=30, help_text='Duração mínima coberta pela amostra.')
+    duracao_minima_minutos = models.IntegerField(default=120, help_text='Duração mínima coberta pela amostra.')
+    antecedencia_os_minutos = models.PositiveIntegerField(default=120, help_text='Prazo previsto até o limite superior para abrir O.S. preditiva.')
     persistencia_minima = models.FloatField(default=0.7, help_text='Fração mínima de intervalos no sentido da tendência (0 a 1).')
     r2_minimo = models.FloatField(default=0.8, help_text='Qualidade mínima do ajuste linear (0 a 1).')
     direcao_alerta = models.CharField(
@@ -138,6 +139,8 @@ class TrendConfig(models.Model):
             raise ValidationError({'minimo_leituras': 'Use de 3 até o máximo de leituras configurado.'})
         if not 1 <= self.duracao_minima_minutos <= self.periodo_horas * 60:
             raise ValidationError({'duracao_minima_minutos': 'Use de 1 minuto até a duração da janela.'})
+        if self.antecedencia_os_minutos < 1:
+            raise ValidationError({'antecedencia_os_minutos': 'Informe uma antecedência de pelo menos um minuto.'})
         for field in ('persistencia_minima', 'r2_minimo'):
             if not 0.5 <= getattr(self, field) <= 1:
                 raise ValidationError({field: 'Use um valor entre 0,5 e 1.'})
