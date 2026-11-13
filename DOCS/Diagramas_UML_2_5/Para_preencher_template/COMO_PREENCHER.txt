@@ -1,0 +1,24 @@
+﻿ARQUIVOS PARA PREENCHER O MODELO ANEXADO
+
+3.1. Modelo: inserir 3_1_Diagrama_de_Pacotes.png.
+3.2. Memória Descritiva: copiar o texto de 3_2_Memoria_Descritiva.txt.
+O texto foi resumido para caber no limite de 15 linhas em Arial 12,
+largura de 16 cm; a quantidade final de linhas depende da formatação do seu arquivo.
+
+4.1. Modelo: inserir 4_1_Diagrama_de_Componentes.png.
+4.2. Mapeamento de Interfaces do Sistema: copiar a tabela formatada
+do arquivo Conteudo_para_copiar.html, aberto no navegador.
+As quatro colunas são exatamente as pedidas no anexo.
+O arquivo 4_2_Mapeamento_de_Interfaces.txt também contém os dados,
+separados por tabulação, para colar nas células ou converter em tabela no Word.
+
+5.1. Modelo: inserir 5_1_Diagrama_de_Implantacao.png.
+5.2. Especificação da Infraestrutura de Execução: copiar os três tópicos
+de 5_2_Especificacao_da_Infraestrutura.txt.
+
+Abra Conteudo_para_copiar.html para ver os itens na sequência do modelo,
+com as imagens, as descrições e a tabela prontas para seleção e cópia.
+As imagens não contêm cabeçalho, rodapé ou numeração de página.
+Os diagramas continuam representando a arquitetura geral do NanaSmart.
+Os nomes de interfaces iniciados por I são contratos conceituais, não classes Python.
+A implantação representa o ambiente local documentado no projeto.

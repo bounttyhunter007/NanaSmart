@@ -3,6 +3,15 @@ from rest_framework import serializers
 from .models import PromptConfig
 
 
+class PromptAnaliseOSSerializer(serializers.Serializer):
+    empresa = serializers.IntegerField(read_only=True)
+    custom_text = serializers.CharField(allow_blank=True, max_length=12000)
+    original_text = serializers.CharField(read_only=True)
+    effective_text = serializers.CharField(read_only=True)
+    is_customized = serializers.BooleanField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
 class GeminiHistoryItemSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=['user', 'model'], default='user')
     text = serializers.CharField()

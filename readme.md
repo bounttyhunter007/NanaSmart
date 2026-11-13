@@ -11,9 +11,11 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 - Painéis com indicadores de manutenção, exportações CSV/Excel/PDF e integração opcional com Google Gemini.
 - Frontend em `FrontATT/`, incluindo dashboard, gestão operacional e chat de IA.
 
-As regras de tendências, configurações de persistência, geração antecipada de OS e critérios de aceitação estão em [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Após atualizar o código, execute `python manage.py migrate` para incluir os novos critérios de configuração.
+A fila de O.S. mostra abertura e última elevação de nível com data e hora completas. Expanda a elevação para consultar os demais horários na própria lista. O detalhe da O.S. reúne o histórico dos alertas e suas recorrências, mantendo a criticidade do equipamento na abertura. Após atualizar, execute `python manage.py migrate` para incluir o registro de elevações. Regras e tratamento de horários antigos: [Histórico de alertas](DOCS/HISTORICO_ALERTAS.md#evolução-dos-níveis-na-os--11112026).
 
-A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de equipamento/sensor, paginação e configuração de análise. O administrador também pode editar a configuração global. A página inclui um gráfico para o sensor selecionado e uma demonstração guiada de aproximadamente um minuto, exclusiva de admin. Consulte o [roteiro de demonstração de tendências](DOCS/DEMONSTRACAO_TENDENCIAS.md). Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
+A tela **Tendências** combina lista pesquisável de sensores e gráfico, com modos Ao vivo e Análise operacional. Novas configurações exigem 2 h de histórico e abrem O.S. preditiva quando o limite é previsto em até 2 h; ambos os tempos são configuráveis e ajustes existentes são preservados. A ordem registra a previsão e as evidências da abertura. Regras e fórmulas: [Identificação de tendências](DOCS/IDENTIFICACAO_TENDENCIAS.md). Execute `python manage.py migrate` para acrescentar a antecedência e a evidência preditiva.
+
+A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seleção independente de sensor, busca, paginação e configuração de análise. O administrador também pode editar a configuração global. A página inclui um gráfico para o sensor selecionado e uma demonstração guiada de aproximadamente um minuto, exclusiva de admin. Consulte o [roteiro de demonstração de tendências](DOCS/DEMONSTRACAO_TENDENCIAS.md). Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
 
 ## Requisitos
 
@@ -69,20 +71,34 @@ Abra `FrontATT/index.html` no navegador. A API e as interfaces de documentação
 | ReDoc | `http://127.0.0.1:9000/api/schema/redoc/` |
 | Administração Django | `http://127.0.0.1:9000/admin/` |
 
+Para validar a documentação OpenAPI e detectar erros ou avisos na geração:
+
+```powershell
+python manage.py spectacular --settings=app.test_settings --validate --fail-on-warn --file .venv/openapi.yml
+python manage.py test app.test_schema --settings=app.test_settings
+```
+
+A demonstração de tendências documenta separadamente a criação (HTTP 201), a consulta e as ações de avanço/parada/troca de fase (HTTP 200). Os formatos de entrada e saída, tipos dos campos calculados e nomes compartilhados das opções de prioridade e criticidade são verificados pelos testes do schema.
+
 Se mudar a porta do backend, atualize também a constante `BASE` em `FrontATT/app.js`.
 
 ## Dados de demonstração
 
 O script `scripts/seed_db.py` cria empresas, usuários, tipos de equipamento, ativos, sensores, leituras históricas, ordens, alertas, configurações de tendência e prompts Gemini.
 
-**Atenção:** o seed começa apagando dados de várias tabelas, incluindo empresas e usuários que não sejam superusuários. Não execute contra um banco que contenha dados que queira preservar. O modo `--clean-only` também apaga dados; ele apenas não repovoa o banco.
+**Atenção:** o seed apaga dados de várias tabelas, incluindo empresas e usuários sem perfil administrativo. Não execute contra um banco que contenha dados operacionais que queira preservar. O modo `--clean-only` também apaga dados; ele apenas não repovoa o banco.
+
+A limpeza e a geração agora formam uma única transação: falhas revertem a execução. Superusuários e contas com perfil `admin` preservam suas credenciais e são desvinculados das empresas removidas; superusuários recebem o perfil administrativo usado pela aplicação. Parâmetros e migrações são verificados antes da limpeza. O seed só anuncia sucesso após salvar a base validada e retorna código diferente de zero em caso de falha.
 
 ```powershell
 # Padrão: 2 empresas, 10 equipamentos por empresa e 120 dias de histórico
 python scripts/seed_db.py
 
+# Verifica parâmetros e migrações sem alterar a base
+python scripts/seed_db.py --check
+
 # Exemplo com parâmetros personalizados
-python scripts/seed_db.py --empresas 5 --equipamentos 30 --days 60
+python scripts/seed_db.py --empresas 5 --equipamentos 30 --funcionarios 4 --days 60 --seed 42
 
 # Apaga os dados gerenciados pelo seed, sem repopular
 python scripts/seed_db.py --clean-only
@@ -93,22 +109,32 @@ python scripts/seed_db.py --clean-only
 | `--empresas` | `2` | Quantidade de empresas criadas |
 | `--equipamentos` | `10` | Equipamentos criados por empresa |
 | `--days` | `120` | Dias de histórico de telemetria |
+| `--funcionarios` | `4` | Total por empresa: um gestor e três técnicos; mínimo dois |
+| `--seed` | `42` | Reproduz os cadastros e valores; datas são relativas à execução e IDs podem mudar |
+| `--check` | desativada | Verifica parâmetros e migrações sem limpar ou gerar dados |
 | `--clean-only` | desativada | Limpa os dados gerenciados pelo seed e encerra |
 
 Em uma base limpa, o seed cria `admin` com senha `admin` caso esse usuário ainda não exista. Usuários de demonstração recebem a senha `123`. Em bases existentes, não presuma que a senha do superusuário seja `admin`.
 
+Cada empresa recebe `gestor.demo.N` e `tecnico.demo.N.M`, com senha `123`. O resumo imprime os logins reais (com sufixo se houver colisão com conta preservada), os IDs dos equipamentos/sensores, seus cenários e o próximo disparo por horímetro. Com pelo menos três equipamentos por empresa, há exemplos A/B/C, alerta ativo, recuperação, recorrência e O.S. gerada por tendência. Todos os técnicos recebem trabalho pendente e em andamento; todos os equipamentos têm conclusões recentes com custos. Quantidades menores continuam disponíveis, com aviso de cobertura parcial.
+
+O seed importa histórico sintético com datas anteriores ao momento da execução; os episódios por limite são avaliados em ordem pelos serviços operacionais. Não muda o relógio nem encurta os critérios globais de tendência. O [roteiro de apresentação](DOCS/APRESENTACAO_DADOS.md) explica os três perfis, os cenários e a preparação.
+
 ## Simulação de telemetria
 
-O simulador `scripts/simulador_realtime.py` grava leituras para sensores ativos. Por padrão, executa continuamente com intervalos aleatórios entre 1 e 3 segundos; encerre com `Ctrl+C`.
+O simulador `scripts/simulador_realtime.py` grava leituras para sensores ativos de equipamentos ativos e exclui sensores da demonstração guiada. Por padrão, executa continuamente com intervalos aleatórios entre 3 e 7 segundos; encerre com `Ctrl+C`.
 
 ```powershell
 python scripts/simulador_realtime.py
+python scripts/simulador_realtime.py --check
 python scripts/simulador_realtime.py --cycles 50 --interval-min 0.5 --interval-max 1.0
 python scripts/simulador_realtime.py --sensor 1 2 --dry-run --debug
 python scripts/simulador_realtime.py --equipamento 4 5 --seed 42
 ```
 
 `--dry-run` não grava leituras. `--sensor` e `--equipamento` limitam quais sensores serão simulados. Consulte `python scripts/simulador_realtime.py --help` para todas as opções.
+
+`--check` consulta o banco, os filtros e os limites, lista os sensores selecionados e encerra sem simular. Retorna falha se nenhum sensor for elegível ou houver configuração inválida. O início também informa IDs sem correspondência e duração estimada. Execuções finitas sem sensores ou com falhas retornam erro, mesmo que o último ciclo tenha funcionado. O cenário misto não garante uma anomalia em poucos minutos; a escalada padrão tem cinco fases de cerca de cinco minutos cada. Para mostrar a tendência em aproximadamente um minuto, use a demonstração guiada já disponível na interface.
 
 O script `scripts/stress_telemetry.py` envia leituras em paralelo para testar a API. Ele precisa do servidor rodando e de um token válido:
 

@@ -3,7 +3,7 @@ from datetime import timedelta
 from threading import Barrier
 from unittest.mock import patch
 
-from django.db import close_old_connections
+from django.db import close_old_connections, connections
 from django.test import TransactionTestCase, skipUnlessDBFeature
 from django.utils import timezone
 
@@ -34,7 +34,8 @@ class AlertConcurrencyTests(TransactionTestCase):
                 barreira.wait(timeout=10)
                 acao()
             finally:
-                close_old_connections()
+                # As conexões dos workers não podem sobreviver ao banco de teste.
+                connections.close_all()
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             resultados = [pool.submit(executar) for _ in range(2)]
@@ -48,6 +49,16 @@ class AlertConcurrencyTests(TransactionTestCase):
         self.assertEqual(Alerta.objects.filter(origem='limite').count(), 1)
         self.assertEqual(OrdemServico.objects.count(), 1)
 
+    @patch('telemetria.signals.sync_sensor_trend')
+    def test_elevacao_simultanea_registra_um_unico_horario(self, _):
+        Telemetria.objects.create(sensor=self.sensor, valor=70)
+        self.paralelo(lambda: Telemetria.objects.create(sensor_id=self.sensor.pk, valor=100))
+        alerta = Alerta.objects.get()
+        self.assertEqual(len(alerta.historico_niveis), 1)
+        self.assertEqual(alerta.historico_niveis[0]['nivel_anterior'], 'baixo')
+        self.assertEqual(alerta.historico_niveis[0]['nivel'], 'critico')
+        self.assertEqual(OrdemServico.objects.get().descricao.count('[ELEVAÇÃO DO ALERTA'), 1)
+
     def test_processamento_simultaneo_de_alerta_nao_duplica_os(self):
         # bulk_create evita o sinal apenas para preparar um alerta ainda sem OS.
         alerta = Alerta.objects.bulk_create([Alerta(
@@ -59,11 +70,11 @@ class AlertConcurrencyTests(TransactionTestCase):
 
     def test_analise_simultanea_nao_duplica_alerta_e_os_preditiva(self):
         readings = Telemetria.objects.bulk_create([
-            Telemetria(sensor=self.sensor, valor=value) for value in (10, 20, 30)
+            Telemetria(sensor=self.sensor, valor=value) for value in (60, 70, 80)
         ])
-        start = timezone.now() - timedelta(hours=1)
+        start = timezone.now() - timedelta(hours=2)
         for index, reading in enumerate(readings):
-            Telemetria.objects.filter(pk=reading.pk).update(timestamp=start + timedelta(minutes=index * 20))
+            Telemetria.objects.filter(pk=reading.pk).update(timestamp=start + timedelta(minutes=index * 60))
         self.paralelo(lambda: sync_sensor_trend(self.sensor.pk))
         self.assertEqual(Alerta.objects.filter(origem='tendencia', status='ativo').count(), 1)
         self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)

@@ -1,7 +1,62 @@
 """Regras determinísticas para priorização de ordens de serviço."""
 
 from django.db import transaction
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from .models import OrdemServico
+
+
+def registros_alerta(alerta):
+    """Texto legível com os mesmos instantes preservados no histórico estruturado."""
+    def horario(valor):
+        data = parse_datetime(valor) if isinstance(valor, str) else valor
+        return timezone.localtime(data).strftime('%d/%m/%Y %H:%M:%S %z')
+
+    evidencia = alerta.dados_deteccao or {}
+    rotulos = dict(alerta.NIVEL_CHOICES)
+    inicial = evidencia.get('nivel')
+    nivel = rotulos.get(inicial, 'inicial não registrado')
+    registros = [(
+        f'[ABERTURA DO ALERTA #{alerta.pk} · {horario(alerta.data_alerta)}] '
+        f'Nível {nivel}.\n{evidencia.get("descricao") or alerta.descricao}'
+    )]
+    for evento in alerta.historico_niveis or []:
+        registros.append(
+            f'[ELEVAÇÃO DO ALERTA #{alerta.pk} · {horario(evento["ocorrido_em"])} · '
+            f'{rotulos.get(evento["nivel_anterior"], evento["nivel_anterior"])} → '
+            f'{rotulos.get(evento["nivel"], evento["nivel"])}]\n{evento["descricao"]}'
+        )
+    return registros
+
+
+def acrescentar_registros_alerta(ordem, alerta):
+    for registro in registros_alerta(alerta):
+        # O cabeçalho contém ID, instante e transição; repetir análise não duplica.
+        if registro.split('\n', 1)[0] not in ordem.descricao:
+            ordem.descricao += '\n\n' + registro
+
+
+def evidencia_previsao_abertura(alerta, dados):
+    """Captura a análise elegível da criação da ordem, não a detecção anterior."""
+    from alertas.evidence import detection_snapshot
+
+    evidencia = detection_snapshot(alerta.sensor, 'tendencia', alerta.tipo_alerta,
+                                   alerta.nivel, alerta.descricao, dados)
+    # Vínculos operacionais não pertencem à evidência matemática da abertura.
+    for field in ('predictive_work_order', 'limit_alert', 'active_alert_id'):
+        evidencia['analise'].pop(field, None)
+    at = parse_datetime(dados.get('projected_breach_at') or '')
+    horario = timezone.localtime(at).strftime('%d/%m/%Y às %H:%M:%S %z') if at else 'horário não registrado'
+    unit = evidencia['unidade_medida']
+    antecedencia = dados.get('config_used', {}).get('antecedencia_os_minutos')
+    evidencia.update(
+        registrado_em=timezone.now().isoformat(),
+        resumo=(f'Abertura automática: tendência confirmada prevê atingir '
+                f'{evidencia["limite_operacional"]:g} {unit} em {horario}, '
+                f'dentro da antecedência configurada de {antecedencia} min. '
+                'Inspecionar o equipamento; a projeção não representa uma data de quebra.'),
+    )
+    return evidencia
 
 
 class PrioridadeOSService:
@@ -10,7 +65,7 @@ class PrioridadeOSService:
     @classmethod
     def calcular(cls, equipamento, tipo_os=None, gravidade='ausente', risco_seguranca=False, prioridade_plano=None):
         classe = equipamento.criticidade if equipamento.criticidade in ('A', 'B', 'C') else None
-        motivo = (f'Prioridade {classe} herdada da criticidade do equipamento na abertura.' if classe
+        motivo = (f'Prioridade {classe}: criticidade do equipamento na abertura.' if classe
                   else 'A definir: equipamento sem criticidade avaliada na abertura; requer triagem do gestor.')
         return classe, motivo, classe
 
@@ -56,7 +111,7 @@ class PrioridadeOSService:
         dados = cls.preencher({
             'tipo_os': 'corretiva', 'gravidade_condicao': gravidade, 'risco_seguranca': False,
         }, alerta.equipamento)
-        descricao = f'O.S. vinculada ao alerta: {alerta.tipo_alerta}.\n{alerta.descricao}'
+        descricao = '\n\n'.join(registros_alerta(alerta))
         if ordem is None:
             return OrdemServico.objects.create(
                 equipamento=alerta.equipamento, alerta_origem=alerta, sensor_origem=alerta.sensor,
@@ -64,11 +119,11 @@ class PrioridadeOSService:
             )
         peso_gravidade = {'ausente': 0, 'baixa': 1, 'moderada': 2, 'alta': 3, 'critica': 4}
         agravou = peso_gravidade[gravidade] > peso_gravidade[ordem.gravidade_condicao]
-        nova_ocorrencia = alerta.ordem_servico_id != ordem.pk and ordem.alerta_origem_id != alerta.pk
-        if agravou or nova_ocorrencia:
+        descricao_anterior = ordem.descricao
+        acrescentar_registros_alerta(ordem, alerta)
+        if agravou or ordem.descricao != descricao_anterior:
             if agravou:
                 ordem.gravidade_condicao = gravidade
-            ordem.descricao += f'\n\n[ATUALIZAÇÃO DO ALERTA #{alerta.pk}] {alerta.descricao}'
             ordem.save()
         return ordem
 
@@ -94,10 +149,9 @@ class PrioridadeOSService:
         prioridade, justificativa, criticidade = cls.calcular(
             alerta.equipamento, 'preditiva', gravidade,
         )
-        titulo = f'MANUTENÇÃO PREDITIVA: {alerta.tipo_alerta}'
+        titulo = f'INSPEÇÃO PREDITIVA: previsão de atingir o limite · {alerta.sensor.nome if alerta.sensor else alerta.tipo_alerta}'
         descricao = (
-            f'Intervenção preditiva vinculada ao alerta #{alerta.id}.\n'
-            f'{alerta.descricao}\n'
+            '\n\n'.join(registros_alerta(alerta)) + '\n'
             f'Indicadores: inclinação {dados.get("slope_per_hour")} por hora; '
             f'leituras analisadas: {dados.get("readings_count")}; '
             f'projeção até o limite: {dados.get("projected_breach_hours")} horas.'
@@ -112,13 +166,16 @@ class PrioridadeOSService:
                 .first()
             )
             if ordem is None:
+                # Alertas legados podem não ter sensor nem evidências matemáticas.
+                evidencia = evidencia_previsao_abertura(alerta, dados) if alerta.sensor_id else {}
                 ordem = OrdemServico.objects.create(
                     equipamento=alerta.equipamento,
                     sensor_origem=alerta.sensor,
                     alerta_origem=alerta,
                     tipo_os='preditiva',
                     titulo=titulo,
-                    descricao=descricao,
+                    descricao=(evidencia.get('resumo', '') + '\n\n' + descricao).strip(),
+                    evidencia_preditiva=evidencia,
                     status='pendente',
                     prioridade=prioridade,
                     gravidade_condicao=gravidade,
@@ -131,7 +188,7 @@ class PrioridadeOSService:
                 )
             elif ordem.status in ('pendente', 'andamento'):
                 ordem.gravidade_condicao = gravidade
-                ordem.descricao = descricao
+                acrescentar_registros_alerta(ordem, alerta)
                 ordem.save(update_fields=[
                     'gravidade_condicao', 'descricao',
                 ])

@@ -155,7 +155,6 @@ createApp({
     const equipModal = reactive({
       open: false,
       equipamento: null,
-      currentOS: null,
       sensors: [],
       selectedSensor: null,
       readings: [],
@@ -332,8 +331,7 @@ createApp({
       return navigate('ordens');
     }
     async function openDashboardOrder(order) {
-      try { const current = await api('/api/ordens-servico/' + order.id + '/'); if (current) await openEquipamentoDetails(current.equipamento, current); }
-      catch (_) { toast('Não foi possível abrir esta ordem. Atualize as prioridades.', 'error'); }
+      return openOrderDetails(order);
     }
     function dashboardAction(action) {
       if (action === 'alertas') {
@@ -617,14 +615,16 @@ createApp({
     }
 
     function logout() {
+      clearOsPrompt();
       closeABC(); closeEquipModal();
       ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; liveOpen.value = false; telemetryLiveOpen.value = false; performanceOpen.value = false;
       stopTrendPolling(); resetTrendMonitoring(); clearTrendDemo();
       ++dashboardSummaryRequest; dashboardSummary.value = null; dashAlerts.value = []; alertCount.value = 0;
       ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.count = 0; alertHistory.url = ''; alertCount.value = 0;
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      resetTrendOrders();
       Object.assign(telemetry, { rows: [], equipments: [], sensors: [], count: 0, busy: false, updatedAt: null });
-      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
+      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
       token.value = ''; refreshTk.value = ''; me.value = null;
       globalEmpresa.value = ''; dashSetor.value = ''; dashEquipamento.value = ''; dashboardTab.value = 'minhas';
       for (const resource of Object.keys(lists)) lists[resource] = [];
@@ -646,7 +646,11 @@ createApp({
       localizacoes: () => fetchLocalizacoes(),
       prompts: () => fetchPrompts(),
     };
-    function navigate(v) { view.value = v; fetchers[v]?.(); }
+    function navigate(v) {
+      if (v === 'prompts' && !isAdminOrGestor.value) return;
+      if (v !== 'tendencias') { trendPage.listOpen = false; trendPage.expanded = false; }
+      view.value = v; fetchers[v]?.();
+    }
 
     // Navegação dos cards clicáveis do técnico no dashboard
     function navigateMinhasOrdens() { return openDashboardOrders(); }
@@ -722,6 +726,8 @@ createApp({
         if (showAll && view.value === 'tendencias' &&
             pageVersion === trendPageRequest && !trendPage.busy) {
           trendPage.rows = data;
+          ensureTrendSelection();
+          if (trendOrders.open) loadTrendOrders();
           const total = filteredTrends.value.length;
           if (trendPage.offset >= total) trendPage.offset = total ? Math.floor((total - 1) / trendPage.size) * trendPage.size : 0;
           if (trendPage.detail) trendPage.detail = data.find(t => t.sensor_id === trendPage.detail.sensor_id) || null;
@@ -782,12 +788,15 @@ createApp({
     }
 
     let trendConfigRequest = 0;
+    let trendConfigTrigger = null;
     async function openTrendConfig(sensorId, equipamentoId) {
       const request = ++trendConfigRequest;
+      if (!trendConfigModal.open) trendConfigTrigger = document.activeElement;
       trendConfigModal.sensorId = sensorId;
       trendConfigModal.equipamentoId = equipamentoId;
       trendConfigModal.loading = true;
       trendConfigModal.open = true;
+      nextTick(() => document.getElementById('trend-config-close')?.focus());
       trendConfigModal.isGlobal = false;
       trendConfigModal.error = '';
       
@@ -801,7 +810,7 @@ createApp({
           trendConfigModal.form = { ...config };
           trendConfigModal.isGlobal = false;
         } else if (!sensorId) {
-          trendConfigModal.form = { ativo:true, periodo_horas:24, num_leituras:50, minimo_leituras:3, duracao_minima_minutos:30, persistencia_minima:0.7, r2_minimo:0.8, direcao_alerta:'crescente', sensibilidade:'media' };
+          trendConfigModal.form = { ativo:true, periodo_horas:24, num_leituras:50, minimo_leituras:3, duracao_minima_minutos:120, antecedencia_os_minutos:120, persistencia_minima:0.7, r2_minimo:0.8, direcao_alerta:'crescente', sensibilidade:'media' };
         } else {
           // Usa a configuração efetiva, incluindo a global visível pelo backend.
           const trend = await api(`/api/telemetria/tendencias/?sensor_id=${sensorId}`);
@@ -811,7 +820,7 @@ createApp({
         }
       } catch (err) {
         if (request !== trendConfigRequest) return;
-        trendConfigModal.open = false;
+        closeTrendConfig(true);
         toast('Erro ao carregar configuração de tendência', 'error');
       } finally {
         if (request === trendConfigRequest) trendConfigModal.loading = false;
@@ -828,6 +837,7 @@ createApp({
           num_leituras: trendConfigModal.form.num_leituras,
           minimo_leituras: trendConfigModal.form.minimo_leituras,
           duracao_minima_minutos: trendConfigModal.form.duracao_minima_minutos,
+          antecedencia_os_minutos: trendConfigModal.form.antecedencia_os_minutos,
           persistencia_minima: trendConfigModal.form.persistencia_minima,
           r2_minimo: trendConfigModal.form.r2_minimo,
           direcao_alerta: trendConfigModal.form.direcao_alerta,
@@ -845,7 +855,7 @@ createApp({
         
         await api(url, { method, body: JSON.stringify(payload) });
         toast('Configuração de tendência salva', 'success');
-        trendConfigModal.open = false;
+        closeTrendConfig(true);
         
         if (view.value === 'tendencias') await fetchTrends();
         // Refresh trend data if open
@@ -858,6 +868,24 @@ createApp({
       } finally {
         trendConfigModal.saving = false;
       }
+    }
+
+    function closeTrendConfig(force = false) {
+      if (trendConfigModal.saving && !force) return;
+      ++trendConfigRequest;
+      trendConfigModal.open = false;
+      const trigger = trendConfigTrigger;
+      trendConfigTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); });
+    }
+    function trendConfigKeydown(event) {
+      if (event.key === 'Escape') { event.stopPropagation(); closeTrendConfig(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [href]')]
+        .filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
 
     async function fetchEquipamentos() {
@@ -938,15 +966,7 @@ createApp({
     }
     async function openAlertaOS(alerta) {
       if (!alerta.ordem_servico_id) return;
-      const company = globalEmpresa.value;
-      const session = token.value;
-      try {
-        const ordem = await api('/api/ordens-servico/' + alerta.ordem_servico_id + '/');
-        if (company !== globalEmpresa.value || session !== token.value) return;
-        if (!ordem) throw new Error('Ordem indisponível');
-        closeAlertaDetails();
-        await openEquipamentoDetails(ordem.equipamento, ordem);
-      } catch { toast('Não foi possível acessar a O.S. vinculada.', 'error'); }
+      return openOrderDetails({ id: alerta.ordem_servico_id });
     }
     async function openAlertaSensor(alerta) {
       if (!alerta.sensor) return;
@@ -963,6 +983,98 @@ createApp({
     }
 
     const orderState = reactive({ busy: false, error: '', count: 0, total: 0, triage: 0 });
+    const orderDetail = reactive({ open: false, id: null, order: null, busy: false, error: '' });
+    const orderAnalysis = reactive({ busy: false, error: '', text: '' });
+    let orderAnalysisRequest = 0;
+    function resetOrderAnalysis() {
+      ++orderAnalysisRequest;
+      Object.assign(orderAnalysis, { busy: false, error: '', text: '' });
+    }
+    async function analyzeOrder() {
+      if (!orderDetail.open || !orderDetail.order || orderDetail.busy || orderAnalysis.busy) return;
+      const request = ++orderAnalysisRequest;
+      const detailRequest = orderDetailRequest;
+      const id = orderDetail.id, company = globalEmpresa.value, actor = me.value?.id;
+      const current = () => request === orderAnalysisRequest && detailRequest === orderDetailRequest
+        && orderDetail.open && orderDetail.id === id && company === globalEmpresa.value && actor === me.value?.id;
+      Object.assign(orderAnalysis, { busy: true, error: '', text: '' });
+      try {
+        const data = await api(`/api/ordens-servico/${id}/analise-ia/`, { method: 'POST' });
+        if (!current()) return;
+        if (typeof data?.response !== 'string' || !data.response.trim()) throw new Error('Resposta vazia');
+        orderAnalysis.text = data.response.trim();
+      } catch (error) {
+        if (current()) orderAnalysis.error = error.fieldErrors?.detail || 'Não foi possível gerar a análise. Tente novamente.';
+      } finally { if (current()) orderAnalysis.busy = false; }
+    }
+    const orderExtraFilters = computed(() => [filters.ordens.tipo_os, filters.ordens.responsavel_escopo].filter(Boolean).length);
+    let orderDetailRequest = 0;
+    let orderDetailTrigger = null;
+    const orderStatusLabel = status => ({ pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[status] || '—');
+    const orderTypeLabel = type => ({ preventiva: 'Preventiva', corretiva: 'Corretiva', preditiva: 'Preditiva' }[type] || '—');
+    const alertLevelLabel = level => ({ baixo: 'Baixo', medio: 'Médio', critico: 'Crítico' }[level] || 'Não registrado');
+    function orderEscalations(order) {
+      return (order.historico_alertas || []).flatMap(alert => (alert.historico_niveis || []).map(event => ({ ...event, alerta_id: alert.id })))
+        .sort((a, b) => new Date(b.registrado_em || b.ocorrido_em) - new Date(a.registrado_em || a.ocorrido_em));
+    }
+    function orderLastEscalation(order) {
+      return orderEscalations(order)[0] || null;
+    }
+    function fmtTimestamp(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '—';
+      return date.toLocaleString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    function focusOrderDetails() {
+      nextTick(() => document.getElementById('order-detail-close')?.focus());
+    }
+    async function openOrderDetails(order) {
+      resetOrderAnalysis();
+      const request = ++orderDetailRequest;
+      const company = globalEmpresa.value;
+      const actor = me.value?.id;
+      if (!orderDetail.open) orderDetailTrigger = document.activeElement;
+      if (equipModal.open) closeEquipModal();
+      if (alertHistory.detail) closeAlertaDetails();
+      Object.assign(orderDetail, { open: true, id: order.id, order: null, busy: true, error: '' });
+      focusOrderDetails();
+      try {
+        const current = await api('/api/ordens-servico/' + order.id + '/');
+        if (request !== orderDetailRequest || company !== globalEmpresa.value || actor !== me.value?.id) return;
+        if (!current?.id) throw new Error('Ordem indisponível');
+        orderDetail.order = current;
+      } catch {
+        if (request === orderDetailRequest) orderDetail.error = 'Não foi possível carregar esta O.S. Tente novamente.';
+      } finally { if (request === orderDetailRequest) orderDetail.busy = false; }
+    }
+    function closeOrderDetails() {
+      resetOrderAnalysis();
+      ++orderDetailRequest;
+      Object.assign(orderDetail, { open: false, id: null, order: null, busy: false, error: '' });
+      const trigger = orderDetailTrigger;
+      orderDetailTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); });
+    }
+    function orderDetailKeydown(event) {
+      if (event.key === 'Escape') { event.stopPropagation(); closeOrderDetails(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), summary, [href], [tabindex="0"]')]
+        .filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    function syncOrderDetails(saved) {
+      if (!saved?.id) return;
+      if (view.value === 'tendencias') { fetchTrends(); }
+      if (orderDetail.order?.id === saved.id) {
+        resetOrderAnalysis();
+        orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
+      }
+      const listed = lists.ordens.find(order => order.id === saved.id);
+      if (listed) Object.assign(listed, saved);
+    }
     let orderRequest = 0;
     function orderParams() {
       const p = new URLSearchParams();
@@ -1005,7 +1117,7 @@ createApp({
     let guideRequest = 0, criteriaRequest = 0, assessmentRequest = 0, priorityRequest = 0;
     function criticidadeLabel(value, legacy = false) { if (legacy && value) return value + ' — ' + ({A:'Crítica', B:'Alta', C:'Moderada', D:'Baixa'}[value] || value) + ' (legado)'; return { A: 'A — Alta criticidade', B: 'B — Média criticidade', C: 'C — Baixa criticidade', D: 'D — Baixa (legado)' }[value] || 'Não avaliada'; }
     function historicPriorityLabel(value) { return { alta: 'Alta (legado)', critica: 'Crítica (legado)', media: 'Média (legado)', baixa: 'Baixa (legado)' }[value] || prioridadeLabel(value); }
-    function priorityOrigin(value) { return { herdada: 'Herdada', ajustada: 'Ajustada', convertida: 'Convertida do legado' }[value] || 'Legado'; }
+    function priorityOrigin(value) { return { herdada: 'Definição na abertura', ajustada: 'Ajuste de prioridade', ajuste: 'Ajuste de prioridade', restauracao: 'Prioridade da abertura restaurada', convertida: 'Conversão de registro antigo', migracao: 'Conversão de registro antigo' }[value] || 'Registro antigo'; }
     async function loadEquipmentGuide() {
       const request = ++guideRequest;
       equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.error = '';
@@ -1088,7 +1200,7 @@ createApp({
         if (!restore) payload.prioridade = priorityModal.choice;
         const saved = await api('/api/ordens-servico/' + priorityModal.order.id + '/' + (restore ? 'restaurar_prioridade' : 'ajustar_prioridade') + '/', { method: 'POST', body: JSON.stringify(payload) });
         if (!saved || request !== priorityRequest || actor !== me.value?.id || !priorityModal.open) return;
-        if (equipModal.currentOS?.id === saved.id) equipModal.currentOS = saved;
+        syncOrderDetails(saved);
         if (equipModal.open) await fetchEquipamentoOrdens(equipModal.equipamento.id);
         await openPriority(saved);
         if (view.value === 'ordens') await fetchOrdens();
@@ -1098,6 +1210,7 @@ createApp({
       finally { priorityModal.saving = false; }
     }
     function closeABC() {
+      closeOrderDetails();
       ++guideRequest; ++criteriaRequest; ++assessmentRequest; ++priorityRequest; ++orderRequest;
       criteriaModal.open = false; priorityModal.open = false; modal.open = false;
       equipmentGuide.current = null; equipmentGuide.types = []; equipmentGuide.busy = false;
@@ -1114,12 +1227,16 @@ createApp({
     });
     const trendPage = reactive({
       equipment: '', sensor: '', condition: '', size: 20, offset: 0,
+      search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false,
       rows: [], busy: false, error: '', updatedAt: null, detail: null,
     });
     let trendPageRequest = 0;
     const trendEquipments = computed(() => [...new Map(trendPage.rows.map(trend =>
       [trend.sensor_info.equipamento_id, { id: trend.sensor_info.equipamento_id, nome: trend.sensor_info.equipamento_nome }])).values()]
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
+    const trendEquipmentOptions = computed(() => trendEquipments.value.filter(e =>
+      searchKey(e.nome).includes(searchKey(trendPage.equipmentSearch))));
+    function searchKey(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim(); }
     const trendSensors = computed(() => trendPage.rows.filter(trend => !trendPage.equipment ||
       Number(trend.sensor_info.equipamento_id) === Number(trendPage.equipment))
       .map(trend => trend.sensor_info).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
@@ -1142,22 +1259,106 @@ createApp({
     }
     const scopedTrends = computed(() => trendPage.rows.filter(trend =>
       (!trendPage.equipment || Number(trend.sensor_info.equipamento_id) === Number(trendPage.equipment)) &&
-      (!trendPage.sensor || trend.sensor_id === Number(trendPage.sensor))));
-    const filteredTrends = computed(() => scopedTrends.value.filter(trend =>
+      searchKey(trend.sensor_info.nome + ' ' + trend.sensor_info.equipamento_nome + ' ' + trend.sensor_info.tipo_display).includes(searchKey(trendPage.search))));
+    function trendOrderSummary(trend) {
+      return trend?.predictive_orders_summary || {total:0, open_count:0, primary_order:null};
+    }
+    function matchesTrendOrders(trend) {
+      const summary = trendOrderSummary(trend);
+      return !trendPage.orderFilter || (trendPage.orderFilter === 'open' ? summary.open_count > 0
+        : trendPage.orderFilter === 'history' ? summary.total > 0 : summary.total === 0);
+    }
+    const orderScopedTrends = computed(() => scopedTrends.value.filter(matchesTrendOrders));
+    const filteredTrends = computed(() => orderScopedTrends.value.filter(trend =>
       !trendPage.condition || trendCondition(trend) === trendPage.condition));
+    const scopedTrendCount = computed(() => orderScopedTrends.value.length);
     const telemetryCount = computed(() => telemetry.count);
     const telemetryRows = computed(() => telemetry.rows);
     const trendCount = computed(() => filteredTrends.value.length);
     const trendRows = computed(() => filteredTrends.value.slice(trendPage.offset, trendPage.offset + trendPage.size));
     const trendSummary = computed(() => ({
-      anomalous: scopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
-      normal: scopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
-      insufficient: scopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
-      disabled: scopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
+      anomalous: orderScopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
+      normal: orderScopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
+      insufficient: orderScopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
+      disabled: orderScopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
     }));
-    const selectedTrend = computed(() => trendPage.equipment && trendPage.sensor
-      ? trendPage.rows.find(trend => trend.sensor_id === Number(trendPage.sensor) &&
-        trend.sensor_info.equipamento_id === Number(trendPage.equipment)) || null : null);
+    const selectedTrend = computed(() => trendPage.rows.find(trend => trend.sensor_id === Number(trendPage.sensor)) || null);
+    const trendOrders = reactive({open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
+    let trendOrdersRequest = 0, trendBrowserTrigger = null, trendExpandTrigger = null;
+    function trendForecastState(trend) {
+      return !trend.analysis_enabled ? 'Análise desativada' : trend.insufficient_data ? 'Em confirmação'
+        : ['increasing','decreasing'].includes(trend.direction) ? 'Tendência confirmada' : 'Sem tendência confirmada';
+    }
+    function trendHistoryProgress(trend) {
+      return 'Histórico observado: ' + trendMinutes(Math.floor(trend.source_duration_minutes ?? trend.sample_duration_minutes)) + ' de '
+        + trendMinutes(trend.config_used.duracao_minima_minutos) + ' necessárias · '
+        + trend.readings_count + ' leituras (mín. ' + trend.config_used.minimo_leituras + ')';
+    }
+    function focusTrendControl(id) { nextTick(() => document.getElementById(id)?.focus()); }
+    function openTrendBrowser() {
+      trendBrowserTrigger = document.activeElement; trendPage.listOpen = true;
+      focusTrendControl('trends-sensor-search');
+    }
+    function closeTrendBrowser() {
+      trendPage.listOpen = false;
+      const trigger = trendBrowserTrigger; trendBrowserTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); else document.getElementById('trend-change-sensor')?.focus(); });
+    }
+    function expandTrendChart() {
+      trendExpandTrigger = document.activeElement; trendPage.expanded = true;
+      focusTrendControl('trend-chart-shrink');
+    }
+    function closeExpandedTrendChart() {
+      trendPage.expanded = false;
+      const trigger = trendExpandTrigger; trendExpandTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); else document.getElementById('trend-chart-expand')?.focus(); });
+    }
+    function trendDialogKeydown(event, close) {
+      if (event.key === 'Escape') { event.stopPropagation(); close(); return; }
+      if (event.key !== 'Tab') return;
+      const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [href], [tabindex="0"]')]
+        .filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls[controls.length-1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    async function loadTrendOrders(url = null) {
+      const sensorId = selectedTrend.value?.sensor_id;
+      if (!sensorId) return;
+      const request = ++trendOrdersRequest, company = globalEmpresa.value;
+      const targetUrl = url || (trendOrders.sensorId === sensorId && trendOrders.url) || '/api/ordens-servico/?' + new URLSearchParams({sensor_origem:sensorId, historico_preditivo:'true', limit:10});
+      trendOrders.busy = true; trendOrders.error = ''; trendOrders.sensorId = sensorId;
+      try {
+        const data = await api(targetUrl);
+        if (request !== trendOrdersRequest || sensorId !== selectedTrend.value?.sensor_id || company !== globalEmpresa.value) return;
+        Object.assign(trendOrders, {rows:normList(data), count:data.count ?? normList(data).length, next:data.next, previous:data.previous, url:targetUrl});
+      } catch {
+        if (request === trendOrdersRequest) trendOrders.error = 'Não foi possível consultar as O.S. Tente novamente.';
+      } finally { if (request === trendOrdersRequest) trendOrders.busy = false; }
+    }
+    function toggleTrendOrders() {
+      trendOrders.open = !trendOrders.open;
+      if (trendOrders.open) loadTrendOrders();
+    }
+    function resetTrendOrders() {
+      ++trendOrdersRequest;
+      Object.assign(trendOrders, {open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
+    }
+    watch(() => selectedTrend.value?.sensor_id, resetTrendOrders);
+    function trendMinutes(value) {
+      const minutes = Number(value);
+      if (!Number.isFinite(minutes)) return '—';
+      const rounded = Math.max(0, Math.round(minutes));
+      return rounded >= 60 ? Math.floor(rounded / 60) + ' h' + (rounded % 60 ? ' ' + (rounded % 60) + ' min' : '') : rounded + ' min';
+    }
+    function trendInterventionLabel(trend) {
+      return {disabled:'Análise desativada', insufficient_data:'Aguardando histórico e leituras suficientes',
+        no_anomaly:'Sem tendência anormal confirmada', no_upper_limit_projection:'Sem projeção para o limite superior',
+        expired_projection:'Estimativa vencida · aguardando novas leituras', limit_reached:'Limite atingido · consultar alerta por limite',
+        outside_horizon:'Previsão além da antecedência · em acompanhamento', within_horizon:'Previsão dentro da antecedência da O.S.'}[trend?.intervention_reason] || 'Aguardando análise';
+    }
+    const trendPersistencePercent = computed({get:() => Math.round(trendConfigModal.form.persistencia_minima * 100), set:value => { trendConfigModal.form.persistencia_minima = Number(value) / 100; }});
+    const trendR2Percent = computed({get:() => Math.round(trendConfigModal.form.r2_minimo * 100), set:value => { trendConfigModal.form.r2_minimo = Number(value) / 100; }});
     function buildTrendChart(trend) {
       const rows = trend?.readings_summary || [];
       if (!rows.length) return { points: '', min: 0, max: 0, from: '', to: '', ticks: [], limitY: null, limit: null };
@@ -1178,6 +1379,7 @@ createApp({
     function setTrendTimePreset(minutes) {
       const form = trendConfigModal.form;
       form.duracao_minima_minutos = minutes;
+      form.periodo_horas = Math.max(form.periodo_horas, Math.ceil(minutes / 60));
       if (minutes === 1) { form.minimo_leituras = 7; form.num_leituras = 500; }
     }
     const trendDemo = reactive({ busy: false, error: '', session: null, company: '', scenario: 'aumento' });
@@ -1358,6 +1560,8 @@ createApp({
         ++trendMonitorRequest; trendMonitor.busy = false;
         acceptTrendSnapshot(data);
         trendPage.rows = data;
+        ensureTrendSelection();
+        if (trendOrders.open) loadTrendOrders();
         clampTrendPage();
         if (trendPage.detail) trendPage.detail = data.find(trend => trend.sensor_id === trendPage.detail.sensor_id) || null;
         trendPage.updatedAt = new Date().toISOString();
@@ -1372,28 +1576,40 @@ createApp({
         ? Math.floor((trendCount.value - 1) / trendPage.size) * trendPage.size : 0;
     }
     function applyTrendFilters(equipmentChanged = false) {
-      if (equipmentChanged) {
-        const candidates = trendPage.rows.filter(row => row.sensor_info.equipamento_id === Number(trendPage.equipment));
-        trendPage.sensor = candidates.length === 1 ? candidates[0].sensor_id : '';
-      }
-      if (trendPage.sensor && !trendPage.equipment) {
-        const row = trendPage.rows.find(row => row.sensor_id === Number(trendPage.sensor));
-        if (row) trendPage.equipment = row.sensor_info.equipamento_id;
-      }
       trendPage.offset = 0; trendPage.detail = null;
+      ensureTrendSelection(true);
+    }
+    function ensureTrendSelection(checkFilters = false) {
+      const candidates = filteredTrends.value;
+      if (!selectedTrend.value || (checkFilters && !candidates.some(t => t.sensor_id === Number(trendPage.sensor)))) {
+        resetTrendOrders();
+        trendPage.sensor = candidates[0]?.sensor_id || '';
+        trendPage.chartMode = 'live';
+      }
+    }
+    function selectTrendEquipment(id, event) {
+      trendPage.equipment = id; trendPage.equipmentSearch = '';
+      if (event) {
+        const picker = event.target.closest('details');
+        picker.open = false; picker.querySelector('summary')?.focus();
+      }
+      applyTrendFilters(true);
     }
     function clearTrendFilters() {
-      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', offset: 0, detail: null });
+      Object.assign(trendPage, { equipment: '', search: '', equipmentSearch: '', condition: '', orderFilter: '', offset: 0, detail: null });
+      ensureTrendSelection(true);
     }
     function changeTrendPage(delta) {
       trendPage.offset = Math.max(0, trendPage.offset + delta * trendPage.size);
     }
     function openTrendDetail(trend) {
-      trendPage.detail = trend;
-      nextTick(() => document.getElementById('trend-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      if (Number(trendPage.sensor) !== trend.sensor_id) trendPage.chartMode = 'live';
+      if (Number(trendPage.sensor) !== trend.sensor_id) resetTrendOrders();
+      trendPage.sensor = trend.sensor_id; closeTrendBrowser();
     }
     function showTrends(equipment = '', sensor = '') {
-      Object.assign(trendPage, { equipment, sensor, condition: '', offset: 0, detail: null });
+      resetTrendOrders();
+      Object.assign(trendPage, { equipment, sensor, search: '', condition: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, offset: 0, detail: null });
       view.value = 'tendencias'; closeEquipModal(); return fetchTrends();
     }
 
@@ -1442,15 +1658,54 @@ createApp({
       });
     }
 
-    async function fetchPrompts() {
-      await withLoading(async () => {
-        const d = await api('/api/gemini/prompts/');
-        lists.prompts = d.map(p => ({
-          ...p,
-          edit_text: p.custom_text || p.original_text
-        }));
-      });
+    const osPrompt = reactive({ busy: false, saving: false, loaded: false, error: '', edit_text: '', original_text: '', is_customized: false });
+    const promptCompanyId = computed(() => isAdmin.value ? globalEmpresa.value : me.value?.empresa);
+    let osPromptRequest = 0;
+    function clearOsPrompt() {
+      ++osPromptRequest;
+      Object.assign(osPrompt, { busy: false, saving: false, loaded: false, error: '', edit_text: '', original_text: '', is_customized: false });
     }
+    function applyOsPrompt(data) {
+      Object.assign(osPrompt, { loaded: true, edit_text: data.effective_text, original_text: data.original_text, is_customized: data.is_customized });
+    }
+    async function fetchPrompts() {
+      clearOsPrompt();
+      if (!isAdminOrGestor.value || !promptCompanyId.value) return;
+      const request = osPromptRequest, company = promptCompanyId.value, actor = me.value?.id;
+      const current = () => request === osPromptRequest && company === promptCompanyId.value && actor === me.value?.id;
+      osPrompt.busy = true;
+      try {
+        const data = await api('/api/gemini/prompts/analise-os/?empresa=' + company);
+        if (current() && data) applyOsPrompt(data);
+      } catch {
+        if (current()) osPrompt.error = 'Não foi possível carregar as instruções. Tente novamente.';
+      } finally { if (current()) osPrompt.busy = false; }
+    }
+    async function saveOsPrompt(restore = false) {
+      if (!isAdminOrGestor.value || !promptCompanyId.value || !osPrompt.loaded || osPrompt.busy || osPrompt.saving) return;
+      const request = ++osPromptRequest, company = promptCompanyId.value, actor = me.value?.id;
+      const current = () => request === osPromptRequest && company === promptCompanyId.value && actor === me.value?.id;
+      osPrompt.saving = true; osPrompt.error = '';
+      try {
+        const text = osPrompt.edit_text.trim();
+        const data = await api('/api/gemini/prompts/analise-os/' + (restore ? 'reset/' : '') + '?empresa=' + company, {
+          method: restore ? 'POST' : 'PATCH',
+          ...(restore ? {} : { body: JSON.stringify({ custom_text: text === osPrompt.original_text ? '' : text }) })
+        });
+        if (current() && data) { applyOsPrompt(data); toast(restore ? 'Instruções padrão restauradas.' : 'Instruções salvas.'); }
+      } catch (error) {
+        if (current()) osPrompt.error = parseDjangoErrors(error.fieldErrors).custom_text || error.fieldErrors?.detail || 'Não foi possível salvar as instruções. Tente novamente.';
+      } finally { if (current()) osPrompt.saving = false; }
+    }
+    async function fetchLegacyPrompts() {
+      if (!isAdmin.value) return;
+      const actor = me.value?.id;
+      try {
+        const data = await api('/api/gemini/prompts/');
+        if (isAdmin.value && me.value?.id === actor && data) lists.prompts = data.map(p => ({ ...p, edit_text: p.custom_text || p.original_text }));
+      } catch { if (isAdmin.value && me.value?.id === actor) toast('Não foi possível carregar os outros prompts.', 'error'); }
+    }
+    function loadOtherPrompts(event) { if (event.target.open) fetchLegacyPrompts(); }
 
     async function savePrompt(promptId, customText) {
       try {
@@ -1458,10 +1713,10 @@ createApp({
           method: 'PATCH',
           body: JSON.stringify({ custom_text: customText })
         });
-        showToast('Prompt salvo com sucesso!', 'success');
-        fetchPrompts();
+        toast('Prompt salvo com sucesso!', 'success');
+        await fetchLegacyPrompts();
       } catch (e) {
-        showToast('Erro ao salvar prompt', 'error');
+        toast('Erro ao salvar prompt', 'error');
       }
     }
 
@@ -1469,10 +1724,10 @@ createApp({
       if (!confirm('Tem certeza que deseja restaurar o prompt original?')) return;
       try {
         await api(`/api/gemini/prompts/${promptId}/reset/`, { method: 'POST' });
-        showToast('Prompt restaurado para o original!', 'success');
-        fetchPrompts();
+        toast('Prompt restaurado para o original!', 'success');
+        await fetchLegacyPrompts();
       } catch (e) {
-        showToast('Erro ao restaurar prompt', 'error');
+        toast('Erro ao restaurar prompt', 'error');
       }
     }
 
@@ -1684,10 +1939,11 @@ createApp({
 
         let createdOsId = modal.editId;
         if (modal.editId) {
-          await api(cfg.endpoint + modal.editId + '/', {
+          const saved = await api(cfg.endpoint + modal.editId + '/', {
             method: 'PUT',
             body: JSON.stringify(payload),
           });
+          if (modal.type === 'ordem' || modal.type === 'encerrar_os') syncOrderDetails(saved);
         } else {
           const res = await api(cfg.endpoint, { method: 'POST', body: JSON.stringify(payload) });
           if ((modal.type === 'ordem' || modal.type === 'encerrar_os') && res) createdOsId = res.id;
@@ -1733,10 +1989,12 @@ createApp({
       const payload = { responsavel: me.value.id };
       if (o.status === 'pendente') payload.status = 'andamento';
       try {
-        await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
+        const saved = await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
         toast('O.S. assumida com sucesso!', 'success');
         o.responsavel = me.value.id;
         if (payload.status) o.status = payload.status;
+        o.responsavel_nome = me.value.first_name || me.value.username || 'Você';
+        syncOrderDetails(saved || o);
       } catch(e) {
         toast('Erro ao assumir O.S.', 'error');
         return;
@@ -1759,10 +2017,11 @@ createApp({
       o._assumindo = true;
       const payload = { responsavel: me.value.id, status: 'andamento' };
       try {
-        await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
+        const saved = await api('/api/ordens-servico/' + o.id + '/', { method: 'PATCH', body: JSON.stringify(payload) });
         toast('Atendimento iniciado!', 'success');
         o.responsavel = me.value.id;
         o.status = 'andamento';
+        syncOrderDetails(saved || o);
       } catch(e) {
         toast('Erro ao iniciar atendimento.', 'error');
         return;
@@ -2153,7 +2412,7 @@ createApp({
       }
     }
 
-    async function openEquipamentoDetails(eq, os = null) {
+    async function openEquipamentoDetails(eq) {
       stopEquipModalPolling();
       equipModal.open = true;
       let equipment = (typeof eq === 'number' || typeof eq === 'string')
@@ -2167,7 +2426,6 @@ createApp({
         }
       }
       equipModal.equipamento = equipment;
-      equipModal.currentOS = os || null;
       loadEquipmentAssessment(equipment);
       equipModal.selectedSensor = null;
       equipModal.readings = [];
@@ -2187,7 +2445,6 @@ createApp({
       ++assessmentRequest; equipmentAssessment.history = []; equipmentAssessment.busy = false;
       equipModal.open = false;
       equipModal.equipamento = null;
-      equipModal.currentOS = null;
       equipModal.sensors = [];
       equipModal.selectedSensor = null;
       equipModal.readings = [];
@@ -2319,8 +2576,9 @@ createApp({
       ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.url = ''; alertHistory.count = 0;
       Object.assign(filters.alertas, { search: '', nivel: '', origem: '', equipamento: '', sensor: '', from: '', to: '' });
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      resetTrendOrders();
       Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, rows: [], equipments: [], sensors: [], busy: false });
-      Object.assign(trendPage, { equipment: '', sensor: '', condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
+      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
       // Recarrega a aba atual ao mudar o filtro global
       // Também recarrega o dashboard se estiver nele
       const currentView = view.value;
@@ -2337,9 +2595,11 @@ createApp({
       // Adicionar listener para fechar janelas com ESC
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-          if (priorityModal.open) { priorityModal.open = false; ++priorityRequest; }
+          if (trendPage.listOpen) { closeTrendBrowser(); }
+          else if (trendPage.expanded) { closeExpandedTrendChart(); }
+          else if (priorityModal.open) { priorityModal.open = false; ++priorityRequest; }
           else if (criteriaModal.open) { criteriaModal.open = false; ++criteriaRequest; }
-          else if (trendConfigModal.open) trendConfigModal.open = false;
+          else if (trendConfigModal.open) closeTrendConfig();
           else if (trendPage.detail && view.value === 'tendencias') trendPage.detail = null;
           else if (modal.open) modal.open = false;
           else if (equipModal.open) closeEquipModal();
@@ -2365,9 +2625,15 @@ createApp({
       if (!document.hidden) { refreshTrendMonitoring(); if (token.value && view.value === 'dashboard') fetchDashboard({ silent: true }); }
     }
     onUnmounted(() => {
+      closeOrderDetails();
       if (dashboardTimer !== null) clearInterval(dashboardTimer); ++dashboardRequest;
       stopTrendPolling(); stopDemoPolling(); ++demoRequest; ++trendMonitorRequest;
       document.removeEventListener('visibilitychange', onTrendVisibilityChange);
+    });
+
+    // As janelas de edição, prioridade e equipamento devolvem o foco à O.S.
+    watch(() => [modal.open, priorityModal.open, equipModal.open, !!alertHistory.detail], (current, previous) => {
+      if (orderDetail.open && previous?.some(Boolean) && !current.some(Boolean)) focusOrderDetails();
     });
 
     // ─ Chat AI (NanaSmart AI) ────────────────────────
@@ -2623,6 +2889,9 @@ createApp({
     }
 
     return {
+      orderAnalysis, analyzeOrder, osPrompt, promptCompanyId, saveOsPrompt, loadOtherPrompts,
+      orderDetail, openOrderDetails, closeOrderDetails, orderDetailKeydown, orderStatusLabel, orderTypeLabel, orderExtraFilters,
+      alertLevelLabel, orderEscalations, orderLastEscalation, fmtTimestamp,
       orderState, orderParams, selectOrderPriority, clearOrderFilters, equipmentGuide, equipmentAssessment, criteriaModal,
       loadEquipmentGuide, acceptEquipmentSuggestion, openCriteria, loadCriteria, saveCriteria, criticidadeLabel, historicPriorityLabel, priorityOrigin,
       priorityModal, openPriority, savePriority, orderEquipmentOptions,
@@ -2638,6 +2907,10 @@ createApp({
       doLogin, logout, navigate, debouncedFetch,
       telemetry, telemetrySensors, telemetryCount, telemetryRows, trendSummary, trendChart, trendPage, trendCount, trendRows, trendEquipments, trendSensors,
       selectedTrend, selectedTrendChart, buildTrendChart, setTrendTimePreset,
+      trendEquipmentOptions, selectTrendEquipment, trendMinutes, trendInterventionLabel, trendPersistencePercent, trendR2Percent,
+      scopedTrendCount,
+      closeTrendConfig, trendConfigKeydown, trendOrders, trendOrderSummary, trendForecastState, trendHistoryProgress,
+      openTrendBrowser, closeTrendBrowser, expandTrendChart, closeExpandedTrendChart, trendDialogKeydown, loadTrendOrders, toggleTrendOrders,
       trendDemo, runTrendDemo, toggleTrendTestMode,
       fetchTrends, applyTrendFilters, clearTrendFilters, changeTrendPage, openTrendDetail, showTrends,
       sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,

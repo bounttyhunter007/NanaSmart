@@ -15,11 +15,11 @@ class AlertaSerializer(serializers.ModelSerializer):
             'evento_chave', 'dados_analise', 'analise_ia',
             'data_ultima_analise', 'nivel', 'descricao', 'data_alerta',
             'status', 'ordem_servico_id', 'equipamento_nome', 'sensor_nome',
-            'dados_deteccao', 'data_normalizacao', 'legado',
+            'dados_deteccao', 'data_normalizacao', 'legado', 'historico_niveis',
         ]
         read_only_fields = fields
 
-    def get_ordem_servico_id(self, obj):
+    def get_ordem_servico_id(self, obj) -> int | None:
         if obj.ordem_servico_id:
             return obj.ordem_servico_id
         try:
@@ -28,8 +28,8 @@ class AlertaSerializer(serializers.ModelSerializer):
             ordem = None
         return ordem.id if ordem else None
 
-    def get_sensor_nome(self, obj):
+    def get_sensor_nome(self, obj) -> str:
         return obj.sensor.nome if obj.sensor_id else (obj.dados_deteccao or {}).get('sensor_nome', '')
 
-    def get_legado(self, obj):
+    def get_legado(self, obj) -> bool:
         return not obj.dados_deteccao or obj.dados_deteccao.get('legado', False)

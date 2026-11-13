@@ -22,13 +22,15 @@ class TrendAnalysisRulesTests(TestCase):
         equipamento = Equipamento.objects.create(
             empresa=empresa, nome='Motor Trend', numero_serie='TREND-001'
         )
+        # Critérios já salvos continuam válidos após a mudança dos defaults.
+        TrendConfig.objects.create(duracao_minima_minutos=30)
         self.sensor = Sensor.objects.create(
             equipamento=equipamento, nome='Temperatura', tipo='temperatura',
             unidade_medida='C', limite_alerta=100,
         )
 
     def _readings(self, values, start=None, step_minutes=30):
-        start = start or (timezone.now() - timedelta(hours=2))
+        start = start or (timezone.now() - timedelta(minutes=(len(values) - 1) * step_minutes))
         leituras = Telemetria.objects.bulk_create([
             Telemetria(sensor=self.sensor, valor=value,
                        timestamp=start + timedelta(minutes=index * step_minutes))
@@ -42,12 +44,53 @@ class TrendAnalysisRulesTests(TestCase):
             )
 
     def test_uses_the_most_recent_readings(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3, periodo_horas=24)
         self._readings([10, 11, 12, 20, 30])
         result = analyze_sensor_trend(self.sensor.id)
         self.assertEqual(result['readings_count'], 3)
         self.assertEqual([item['valor'] for item in result['readings_summary']], [12, 20, 30])
         self.assertEqual(result['direction'], 'increasing')
+
+    def test_fast_collection_preserves_duration_and_one_predictive_episode(self):
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=5)
+        self._readings([80 + i * .1 for i in range(125)],
+                       start=timezone.now() - timedelta(minutes=32), step_minutes=.25)
+        for _ in range(2):
+            result = sync_sensor_trend(self.sensor.pk)
+            self.assertEqual(result['sample_selection'], 'time_distributed')
+            self.assertEqual(result['readings_count'], 5)
+            self.assertEqual(result['source_readings_count'], 121)
+            self.assertEqual(result['sample_duration_minutes'], 30)
+            self.assertFalse(result['insufficient_data'])
+            self.assertTrue(result['is_anomalous'])
+            self.assertAlmostEqual(result['current_value'], 92.4)
+            self.assertEqual(result['source_persistence_ratio'], 1)
+        self.assertEqual(Alerta.objects.filter(origem='tendencia').count(), 1)
+        self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)
+
+    def test_sampling_does_not_turn_hidden_spikes_or_oscillations_into_trends(self):
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3)
+        for values in ([10 + i * .2 + (100 if i == 17 else 0) for i in range(31)],
+                       [10 + i * .2 + (10 if i % 2 else 0) for i in range(31)]):
+            with self.subTest(values=values):
+                Telemetria.objects.all().delete()
+                self._readings(values, start=timezone.now() - timedelta(minutes=31), step_minutes=1)
+                result = sync_sensor_trend(self.sensor.pk)
+                self.assertEqual(result['sample_selection'], 'time_distributed')
+                self.assertFalse(result['insufficient_data'])
+                self.assertFalse(result['is_anomalous'])
+                self.assertFalse(Alerta.objects.exists())
+                self.assertFalse(OrdemServico.objects.exists())
+
+    def test_fast_collection_cannot_invent_missing_observation_time(self):
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=5)
+        self._readings(range(25), start=timezone.now() - timedelta(minutes=7), step_minutes=.25)
+        result = sync_sensor_trend(self.sensor.pk)
+        self.assertEqual(result['readings_count'], 5)
+        self.assertEqual(result['sample_selection'], 'recent')
+        self.assertTrue(result['insufficient_data'])
+        self.assertIsNone(result['projected_breach_at'])
+        self.assertFalse(Alerta.objects.exists())
 
     def test_insufficient_data_has_no_projection(self):
         self._readings([40, 41])
@@ -70,7 +113,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(result['data_quality'], 'valid')
 
     def test_relevant_trend_creates_one_predictive_alert_and_work_order(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3, periodo_horas=24)
         self._readings([80, 90, 98])
         sync_sensor_trend(self.sensor.id)
         sync_sensor_trend(self.sensor.id)
@@ -78,8 +121,8 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva', alerta_origem__sensor=self.sensor).count(), 1)
 
     def test_stable_follow_up_resolves_active_trend(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
-        start = timezone.now() - timedelta(hours=2)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3, periodo_horas=24)
+        start = timezone.now() - timedelta(hours=1)
         self._readings([80, 90, 98], start=start)
         sync_sensor_trend(self.sensor.id)
         self._readings([50, 50, 50], start=timezone.now() - timedelta(minutes=40), step_minutes=15)
@@ -89,7 +132,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(OrdemServico.objects.get(tipo_os='preditiva').status, 'pendente')
 
     def test_predictive_order_is_linked_and_not_recreated_after_conclusion(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, periodo_horas=24)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3, periodo_horas=24)
         self._readings([80, 90, 98])
         sync_sensor_trend(self.sensor.id)
         alerta = Alerta.objects.get(sensor=self.sensor, origem='tendencia', status='ativo')
@@ -105,7 +148,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(OrdemServico.objects.count(), 1)
 
     def test_configured_minimum_is_required_even_with_valid_slope(self):
-        TrendConfig.objects.create(sensor=self.sensor, minimo_leituras=5)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, minimo_leituras=5)
         self._readings([10, 20, 30, 40])
         result = sync_sensor_trend(self.sensor.pk)
         self.assertTrue(result['insufficient_data'])
@@ -113,7 +156,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertFalse(OrdemServico.objects.exists())
 
     def test_minimum_and_maximum_are_independent(self):
-        TrendConfig.objects.create(sensor=self.sensor, minimo_leituras=4, num_leituras=5)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, minimo_leituras=4, num_leituras=5)
         self._readings([10, 20, 30, 40])
         result = sync_sensor_trend(self.sensor.pk)
         self.assertFalse(result['insufficient_data'])
@@ -127,7 +170,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertFalse(OrdemServico.objects.exists())
 
     def test_confirmed_trend_opens_order_before_limit_or_warning_threshold(self):
-        self._readings([10, 20, 30])
+        self._readings([20, 40, 60])
         result = sync_sensor_trend(self.sensor.pk)
         order = OrdemServico.objects.get(tipo_os='preditiva')
         alert = Alerta.objects.get(origem='tendencia')
@@ -139,26 +182,29 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertIn(self.sensor.nome, alert.descricao)
         self.assertEqual(alert.dados_analise['config_used']['minimo_leituras'], 3)
 
-    def test_far_from_limit_still_generates_inspection_order(self):
+    def test_far_from_limit_remains_an_alert_without_inspection_order(self):
         self._readings([10, 11.5, 13])
         result = sync_sensor_trend(self.sensor.pk)
         self.assertGreater(result['projected_breach_hours'], 24)
-        self.assertTrue(result['intervention_recommended'])
-        self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)
+        self.assertTrue(result['is_anomalous'])
+        self.assertFalse(result['intervention_recommended'])
+        self.assertEqual(result['intervention_reason'], 'outside_horizon')
+        self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 0)
 
-    def test_decreasing_anomaly_opens_order_only_when_configured(self):
+    def test_decreasing_anomaly_is_tracked_without_upper_limit_prediction(self):
         self._readings([60, 50, 40])
         self.assertFalse(sync_sensor_trend(self.sensor.pk)['is_anomalous'])
         self.assertFalse(Alerta.objects.exists())
-        TrendConfig.objects.create(sensor=self.sensor, direcao_alerta='decrescente')
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, direcao_alerta='decrescente')
         result = sync_sensor_trend(self.sensor.pk)
         self.assertTrue(result['is_anomalous'])
         self.assertIsNone(result['projected_breach_hours'])
         self.assertIn('redução persistente', Alerta.objects.get().descricao)
-        self.assertEqual(OrdemServico.objects.get().tipo_os, 'preditiva')
+        self.assertFalse(OrdemServico.objects.exists())
+        self.assertEqual(result['intervention_reason'], 'no_upper_limit_projection')
 
     def test_direction_change_creates_new_episode(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3, direcao_alerta='ambas')
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3, direcao_alerta='ambas')
         self._readings([10, 20, 30], start=timezone.now() - timedelta(hours=3))
         sync_sensor_trend(self.sensor.pk)
         first = Alerta.objects.get()
@@ -168,12 +214,12 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(first.status, 'resolvido')
         self.assertEqual(result['direction'], 'decreasing')
         self.assertEqual(Alerta.objects.filter(status='ativo').count(), 1)
-        self.assertEqual(OrdemServico.objects.count(), 2)
+        self.assertFalse(OrdemServico.objects.exists())
 
     def test_sensor_disable_overrides_enabled_global_without_resolving_episode(self):
-        TrendConfig.objects.create(ativo=True)
-        config = TrendConfig.objects.create(sensor=self.sensor)
-        self._readings([10, 20, 30])
+        TrendConfig.objects.create(duracao_minima_minutos=30, ativo=True)
+        config = TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor)
+        self._readings([20, 40, 60])
         sync_sensor_trend(self.sensor.pk)
         config.ativo = False
         config.save()
@@ -184,16 +230,16 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(OrdemServico.objects.count(), 1)
 
     def test_disabled_global_does_not_fall_back_to_defaults(self):
-        TrendConfig.objects.create(ativo=False)
+        TrendConfig.objects.create(duracao_minima_minutos=30, ativo=False)
         self._readings([10, 20, 30])
         self.assertFalse(sync_sensor_trend(self.sensor.pk)['analysis_enabled'])
         self.assertFalse(Alerta.objects.exists())
 
     def test_specific_config_overrides_global_and_latest_global_wins(self):
-        TrendConfig.objects.create(sensibilidade='alta')
-        TrendConfig.objects.create(sensibilidade='baixa')
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensibilidade='alta')
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensibilidade='baixa')
         self.assertEqual(get_effective_config(self.sensor)['sensibilidade'], 'baixa')
-        TrendConfig.objects.create(sensor=self.sensor, sensibilidade='media')
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, sensibilidade='media')
         config = get_effective_config(self.sensor)
         self.assertEqual(config['sensibilidade'], 'media')
         self.assertEqual(config['source'], 'sensor')
@@ -209,7 +255,7 @@ class TrendAnalysisRulesTests(TestCase):
                 self.assertFalse(Alerta.objects.exists())
 
     def test_persistence_is_checked_independently_of_fit(self):
-        config = TrendConfig.objects.create(sensor=self.sensor, persistencia_minima=1, r2_minimo=0.5)
+        config = TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, persistencia_minima=1, r2_minimo=0.5)
         self._readings([10, 20, 19, 30, 40])
         result = sync_sensor_trend(self.sensor.pk)
         self.assertGreater(result['r_squared'], 0.8)
@@ -220,7 +266,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertTrue(sync_sensor_trend(self.sensor.pk)['is_anomalous'])
 
     def test_duplicates_do_not_consume_reading_budget(self):
-        TrendConfig.objects.create(sensor=self.sensor, num_leituras=3)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, num_leituras=3)
         self._readings([10, 20, 30])
         last = Telemetria.objects.first()
         for _ in range(10):
@@ -248,13 +294,44 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(Alerta.objects.get().status, 'ativo')
 
     def test_real_ingestion_triggers_alert_and_order(self):
-        self._readings([10, 20], start=timezone.now() - timedelta(hours=1))
-        Telemetria.objects.create(sensor=self.sensor, valor=30)
+        self._readings([20, 40], start=timezone.now() - timedelta(hours=1))
+        Telemetria.objects.create(sensor=self.sensor, valor=60)
         self.assertEqual(Alerta.objects.filter(origem='tendencia').count(), 1)
         self.assertEqual(OrdemServico.objects.filter(tipo_os='preditiva').count(), 1)
 
+    def test_real_limit_alert_and_order_are_visible_even_with_trends_disabled(self):
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, ativo=False)
+        self.sensor.limite_alerta_baixo_pct = 60
+        self.sensor.limite_alerta_medio_pct = 75
+        self.sensor.limite_alerta_critico_pct = 90
+        self.sensor.save()
+        Telemetria.objects.create(sensor=self.sensor, valor=90)
+        Telemetria.objects.create(sensor=self.sensor, valor=100)
+        result = analyze_sensor_trend(self.sensor.pk)
+        alert = Alerta.objects.get(origem='limite')
+        self.assertEqual(result['limit_alert']['id'], alert.pk)
+        self.assertEqual(result['limit_alert']['level'], 'critico')
+        self.assertEqual(result['limit_alert']['work_order']['id'], alert.ordem_servico_id)
+        self.assertEqual(result['sensor_info']['limite_alerta_critico_pct'], 90)
+        self.assertEqual(OrdemServico.objects.get().tipo_os, 'corretiva')
+        self.assertFalse(result['analysis_enabled'])
+        self.assertIsNone(result['active_alert_id'])
+
+    def test_predictive_and_real_limit_flows_remain_independent_and_idempotent(self):
+        from .limit_service import sync_limit_reading
+        self._readings([50, 60], start=timezone.now() - timedelta(hours=1))
+        reading = Telemetria.objects.create(sensor=self.sensor, valor=70)
+        for _ in range(2):
+            result = sync_sensor_trend(self.sensor.pk)
+            sync_limit_reading(reading)
+        self.assertEqual(Alerta.objects.count(), 2)
+        self.assertEqual(OrdemServico.objects.count(), 2)
+        self.assertIsNotNone(result['limit_alert'])
+        self.assertIsNotNone(result['predictive_work_order'])
+        self.assertNotEqual(result['limit_alert']['work_order']['id'], result['predictive_work_order']['id'])
+
     def test_periodic_command_is_idempotent_and_get_analysis_is_read_only(self):
-        self._readings([10, 20, 30])
+        self._readings([20, 40, 60])
         analyze_sensor_trend(self.sensor.pk)
         self.assertFalse(Alerta.objects.exists())
         for _ in range(2):
@@ -263,7 +340,7 @@ class TrendAnalysisRulesTests(TestCase):
         self.assertEqual(OrdemServico.objects.count(), 1)
 
     def test_sensitivity_threshold_changes_detection(self):
-        config = TrendConfig.objects.create(sensor=self.sensor, sensibilidade='baixa')
+        config = TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, sensibilidade='baixa')
         self._readings([10, 12, 14])  # 4 unidades/h; limiares: 0,5 / 2 / 5.
         self.assertFalse(sync_sensor_trend(self.sensor.pk)['is_anomalous'])
         config.sensibilidade = 'media'
@@ -282,7 +359,7 @@ class TrendAnalysisRulesTests(TestCase):
                 self.assertFalse(serializer.is_valid())
 
     def test_partial_update_validates_against_existing_criteria(self):
-        config = TrendConfig.objects.create(sensor=self.sensor, minimo_leituras=20)
+        config = TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, minimo_leituras=20)
         serializer = TrendConfigSerializer(config, data={'num_leituras': 10}, partial=True)
         self.assertFalse(serializer.is_valid())
         self.assertIn('minimo_leituras', serializer.errors)
@@ -327,7 +404,7 @@ class TrendPresentationTests(TestCase):
         result = analyze_sensor_trend(self.sensor.pk)
         self.assertIsNone(result['regression_line'])
         self.assertIsNone(result['projected_breach_at'])
-        TrendConfig.objects.create(sensor=self.sensor, ativo=False)
+        TrendConfig.objects.create(duracao_minima_minutos=30, sensor=self.sensor, ativo=False)
         result = analyze_sensor_trend(self.sensor.pk)
         self.assertIsNone(result['regression_line'])
         self.assertIsNone(result['projected_breach_at'])

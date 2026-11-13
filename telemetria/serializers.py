@@ -80,7 +80,8 @@ class TrendConfigSerializer(serializers.ModelSerializer):
             })
         validate_sensor_resource(user, sensor)
         fields = ('periodo_horas', 'num_leituras', 'minimo_leituras', 'duracao_minima_minutos',
-                  'persistencia_minima', 'r2_minimo', 'direcao_alerta', 'sensibilidade', 'ativo')
+                  'persistencia_minima', 'r2_minimo', 'direcao_alerta', 'sensibilidade', 'ativo',
+                  'antecedencia_os_minutos')
         candidate = TrendConfig(**{
             field: data.get(field, getattr(self.instance, field, TrendConfig._meta.get_field(field).default))
             for field in fields

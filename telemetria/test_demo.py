@@ -8,6 +8,7 @@ from ativos.models import Equipamento
 from alertas.models import Alerta
 from manutencao.models import OrdemServico
 from .models import Sensor, Telemetria, TrendConfig, TrendDemo
+from .demo_serializers import TrendDemoSnapshotSerializer
 from scripts.simulador_realtime import obter_sensores_ativos
 
 
@@ -118,6 +119,21 @@ class TrendDemoTests(APITestCase):
         self.assertEqual(Telemetria.objects.count(), 1)
         self.assertEqual(self.act(1900).data['status'], 'parado')
         self.assertEqual(self.act(1910, acao='fase', cenario='aumento').status_code, 400)
+
+    def test_snapshots_match_documented_response_before_and_after_alerts(self):
+        created = self.create('limite')
+        completed = self.complete()
+        self.assertTrue(completed['alertas'])
+        self.assertTrue(completed['ordens'])
+        for payload in (created, completed):
+            contract = TrendDemoSnapshotSerializer(data=payload)
+            self.assertTrue(contract.is_valid(), contract.errors)
+        self.assertEqual(self.client.get(self.demo_url).data['id'], created['id'])
+
+    def test_latest_demo_without_history_preserves_empty_response(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data)
 
     def test_demo_does_not_change_real_sensor_or_global_and_script_ignores_demo(self):
         global_config = TrendConfig.objects.create(duracao_minima_minutos=30)

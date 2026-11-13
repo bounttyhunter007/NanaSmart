@@ -27,6 +27,28 @@ function fixture(handler) {
   return { app, requests };
 }
 
+test('última elevação da OS considera todas as ocorrências e o instante de registro', () => {
+  const { app } = fixture(() => ({}));
+  const order = { historico_alertas: [
+    { id: 1, historico_niveis: [{ nivel_anterior: 'baixo', nivel: 'critico', ocorrido_em: '2026-11-11T14:00:00Z', registrado_em: '2026-11-11T14:00:00Z' }] },
+    { id: 2, historico_niveis: [{ nivel_anterior: 'baixo', nivel: 'medio', ocorrido_em: '2026-11-11T13:00:00Z', registrado_em: '2026-11-11T15:00:00Z' }] },
+  ] };
+  assert.equal(app.orderLastEscalation(order).alerta_id, 2);
+  assert.equal(app.orderLastEscalation(order).nivel, 'medio');
+  assert.equal(app.orderEscalations(order).length, 2);
+  assert.equal(app.orderLastEscalation({}), null);
+  assert.equal(app.orderLastEscalation({ historico_alertas: [{ id: 1, historico_niveis: [] }] }), null);
+  assert.equal(app.alertLevelLabel('medio'), 'Médio');
+  assert.equal(app.alertLevelLabel(null), 'Não registrado');
+});
+
+test('datas da OS sempre incluem calendário completo e segundos', () => {
+  const { app } = fixture(() => ({}));
+  assert.match(app.fmtTimestamp('2026-11-11T14:05:37Z'), /11\/11\/2026.*\d{2}:05:37/);
+  assert.equal(app.fmtTimestamp(null), '—');
+  assert.equal(app.fmtTimestamp('inválido'), '—');
+});
+
 test('fila usa filtros no servidor, preserva ordenação recebida e paginação completa', async () => {
   const next = 'http://127.0.0.1:9000/api/ordens-servico/?prioridade=A&limit=2&offset=2';
   const { app, requests } = fixture(url => new URL(url).searchParams.has('offset')
@@ -182,4 +204,115 @@ test('resposta de publicação de critérios após logout não repovoa o formul�
   release({ empresa: 2, revisao: 1 }); await saving;
   assert.equal(app.criteriaModal.open, false);
   assert.equal(Object.keys(app.criteriaModal.data).length, 0);
+});
+
+test('detalhe da O.S. busca a versão atual sem abrir equipamento, sensores ou edição', async () => {
+  const current = { id: 12, titulo: 'Inspecionar bomba', descricao: 'Verificar vedação.\nRegistrar resultado.', equipamento: 5, status: 'pendente' };
+  const { app, requests } = fixture(() => current);
+  await app.openOrderDetails({ id: 12, titulo: 'Título antigo' });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/api\/ordens-servico\/12\/$/);
+  assert.equal(requests[0].options.method, undefined);
+  assert.equal(app.orderDetail.order.titulo, current.titulo);
+  assert.equal(app.orderDetail.order.descricao, current.descricao);
+  assert.equal(app.orderDetail.busy, false);
+  assert.equal(app.equipModal.open, false);
+  assert.equal(app.modal.open, false);
+});
+
+test('atalho do dashboard abre a própria O.S. sem navegar para equipamento', async () => {
+  const { app, requests } = fixture(() => ({ id: 12, equipamento: 5 }));
+  await app.openDashboardOrder({ id: 12 });
+  assert.equal(app.orderDetail.order.id, 12);
+  assert.equal(app.orderDetail.open, true);
+  assert.equal(app.equipModal.open, false);
+  assert.equal(requests.length, 1);
+});
+
+test('seleção mais recente vence resposta atrasada de outra O.S.', async () => {
+  let release;
+  const { app } = fixture(url => url.endsWith('/12/') ? new Promise(resolve => { release = resolve; }) : { id: 13 });
+  const pending = app.openOrderDetails({ id: 12 });
+  assert.equal(app.orderDetail.busy, true);
+  assert.equal(app.orderDetail.order, null);
+  await app.openOrderDetails({ id: 13 });
+  release({ id: 12 }); await pending;
+  assert.equal(app.orderDetail.order.id, 13);
+  assert.equal(app.orderDetail.busy, false);
+});
+
+test('fechar, sair ou trocar empresa impede retorno de detalhes antigos', async () => {
+  for (const close of [app => app.closeOrderDetails(), app => app.logout(), app => { app.globalEmpresa.value = 3; app.onGlobalEmpresaChange(); }]) {
+    let release;
+    const { app } = fixture(url => url.endsWith('/12/') ? new Promise(resolve => { release = resolve; }) : { results: [] });
+    const pending = app.openOrderDetails({ id: 12 });
+    close(app);
+    release({ id: 12 }); await pending;
+    assert.equal(app.orderDetail.open, false);
+    assert.equal(app.orderDetail.order, null);
+    assert.equal(app.orderDetail.busy, false);
+  }
+});
+
+test('falha na consulta oferece nova tentativa sem exibir dados da ordem anterior', async () => {
+  let fail = false;
+  const { app } = fixture(() => { if (fail) throw Error('Sem conexão'); return { id: 12 }; });
+  await app.openOrderDetails({ id: 12 });
+  fail = true;
+  await app.openOrderDetails({ id: 13 });
+  assert.equal(app.orderDetail.order, null);
+  assert.match(app.orderDetail.error, /Tente novamente/);
+  assert.equal(app.orderDetail.busy, false);
+  fail = false;
+  await app.openOrderDetails({ id: 12 });
+  assert.equal(app.orderDetail.error, '');
+  assert.equal(app.orderDetail.order.id, 12);
+});
+
+test('assumir e iniciar sincronizam detalhes e lista e liberam ações seguintes', async () => {
+  let current = { id: 12, equipamento: 5, status: 'pendente', responsavel: null };
+  const { app } = fixture((url, options) => {
+    if (options.method === 'PATCH') current = { ...current, ...JSON.parse(options.body), responsavel_nome: 'Técnico' };
+    return url.includes('/usuarios/') ? { results: [] } : { ...current };
+  });
+  app.lists.ordens = [{ ...current }];
+  await app.openOrderDetails(current);
+  await app.assumirOS(app.orderDetail.order);
+  assert.equal(app.orderDetail.order.status, 'andamento');
+  assert.equal(app.orderDetail.order.responsavel, 1);
+  assert.equal(app.orderDetail.order.responsavel_nome, 'Técnico');
+  assert.equal(app.orderDetail.order._assumindo, false);
+  assert.equal(app.lists.ordens[0].status, 'andamento');
+  current.status = 'pendente';
+  await app.openOrderDetails(current);
+  await app.iniciarAtendimento(app.orderDetail.order);
+  assert.equal(app.orderDetail.order.status, 'andamento');
+  assert.equal(app.orderDetail.order._assumindo, false);
+});
+
+test('edição, encerramento e ajuste de prioridade atualizam a O.S. aberta', async () => {
+  let current = { id: 12, titulo: 'Inspecionar', descricao: 'Conferir vedação', equipamento: 5, status: 'andamento', responsavel: 1, prioridade: 'B' };
+  const { app } = fixture((url, options) => {
+    if (url.includes('historico_prioridade')) return { results: [] };
+    if (url.includes('/ordens-servico/12/')) {
+      if (['PUT', 'POST'].includes(options.method)) current = { ...current, ...JSON.parse(options.body) };
+      return { ...current };
+    }
+    return { results: [] };
+  });
+  await app.openOrderDetails(current);
+  await app.editItem('ordem', current);
+  app.fd.titulo = 'Inspecionar vedação';
+  await app.saveItem();
+  assert.equal(app.orderDetail.order.titulo, 'Inspecionar vedação');
+  await app.openPriority(current);
+  app.priorityModal.choice = 'A'; app.priorityModal.reason = 'Parada do processo';
+  await app.savePriority();
+  assert.equal(app.orderDetail.order.prioridade, 'A');
+  await app.openEncerrarOS(current);
+  app.fd.descricao_servico_realizado = 'Vedação substituída.';
+  await app.saveItem();
+  assert.equal(app.orderDetail.order.status, 'concluida');
+  assert.match(app.orderDetail.order.descricao, /Vedação substituída/);
+  assert.equal(app.modal.open, false);
 });

@@ -1,0 +1,8 @@
+﻿Nós de Hardware e Ambientes de Execução:
+O cenário local utiliza uma máquina de desenvolvimento com navegador web, Python com Django e PostgreSQL. O navegador abre FrontATT/index.html e o backend executa em 127.0.0.1:9000. Um processo Python CLI opcional executa o simulador de telemetria. Os nós externos são a CDN cdnjs.cloudflare.com e o serviço Google Gemini, acessado quando a integração de IA está configurada.
+
+Protocolos de Rede e Comunicação:
+O navegador consome a API por HTTP/REST em TCP 9000, com mensagens JSON e autenticação JWT Bearer. Django e o simulador acessam PostgreSQL em localhost:5432 por seu protocolo TCP, executando SQL pelo ORM e psycopg2. A CDN e a API Gemini utilizam HTTPS em TCP 443. Os módulos de negócio e os signals se comunicam dentro do processo Python.
+
+Artefatos de Execução Implantados:
+No navegador são carregados index.html, app.js, styles.css e live-chart.js de FrontATT/, além das bibliotecas da CDN. No ambiente Django ficam manage.py, app/ e os apps accounts, authentication, ativos, manutencao, telemetria, alertas, exportacao e gemini_api, com as dependências de requirements.txt. O processo CLI executa scripts/simulador_realtime.py. O PostgreSQL mantém o banco manutencao, com tabelas e índices criados pelas migrations.

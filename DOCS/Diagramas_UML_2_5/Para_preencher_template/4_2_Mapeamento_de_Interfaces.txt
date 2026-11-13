@@ -1,0 +1,5 @@
+﻿Componente	Interface Fornecida (Provided)	Interface Requerida (Required)	Finalidade Técnica / Descrição
+Interface web	Interface visual	INanaSmartREST	Apresentar as telas Vue 3 e consumir a API com JWT.
+API NanaSmart	INanaSmartREST	IPersistenciaORM; IGeracaoConteudo	Oferecer autenticação, ativos, manutenção, telemetria, alertas, dashboards, exportação e IA; aplicar permissões e escopo por empresa.
+Persistência	IPersistenciaORM	Conexão PostgreSQL	Executar consultas e gravações pelo Django ORM e pelo driver psycopg2.
+Google Gemini	IGeracaoConteudo	Credencial de API e acesso HTTPS	Gerar conteúdo de IA solicitado pelo backend por meio do SDK google-genai.

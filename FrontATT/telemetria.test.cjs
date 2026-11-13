@@ -13,7 +13,7 @@ function fixture(handler) {
   let timerId = 0;
   const context = {
     Vue: { ref: value => ({ value }), reactive: value => value,
-      computed: getter => ({ get value() { return getter(); } }), watch() {}, onMounted() {}, onUnmounted(callback) { unmount.push(callback); },
+      computed: getter => ({ get value() { return typeof getter === 'function' ? getter() : getter.get(); }, set value(value) { getter.set(value); } }), watch() {}, onMounted() {}, onUnmounted(callback) { unmount.push(callback); },
       nextTick: callback => callback?.(), createApp: options => ({ mount() { app = options.setup(); } }) },
     localStorage: { getItem() { return ''; }, setItem() {}, removeItem() {} },
     document: { hidden: false, addEventListener() {}, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, getElementById() {} },
@@ -201,14 +201,14 @@ test('filtros e paginação de Telemetria não influenciam a página de Tendênc
   const { app } = fixture(url => url.includes('/tendencias/') ? [anomaly(1), anomaly(2)] : { count: 1, results: [{ id: 99 }] });
   Object.assign(app.telemetry, { equipment: 99, sensor: 999, offset: 40, size: 50 });
   await app.fetchTrends();
-  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendPage.sensor, '');
+  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendPage.sensor, 1);
   assert.equal(app.trendCount.value, 2); assert.equal(app.trendPage.offset, 0);
   app.trendPage.equipment = 3; app.trendPage.sensor = 1; app.applyTrendFilters();
-  assert.equal(app.trendCount.value, 1);
+  assert.equal(app.trendCount.value, 2);
   assert.equal(app.telemetry.equipment, 99); assert.equal(app.telemetry.sensor, 999);
   app.telemetry.equipment = 100; await app.applyTelemetryFilters(true);
   assert.equal(app.trendPage.equipment, 3); assert.equal(app.trendPage.sensor, 1);
-  assert.equal(app.trendCount.value, 1);
+  assert.equal(app.trendCount.value, 2);
 });
 test('equipamento com um único sensor seleciona-o automaticamente, sem alterar Telemetria', async () => {
   const other = anomaly(2); other.sensor_info.equipamento_id = 4; other.sensor_info.equipamento_nome = 'Bomba';
@@ -245,24 +245,112 @@ test('menu permite acessar tendências diretamente e a antiga aba não é aceita
   assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendCount.value, 1);
 });
 
-test('gráfico só aparece com contexto e mantém o limite no eixo, incluindo ultrapassagem', async () => {
+test('seleção inicial abre um único gráfico e mantém a ultrapassagem representável', async () => {
   const row = anomaly(1);
   Object.assign(row.sensor_info, { limite_alerta: 100 });
   row.readings_summary = [{ valor: 40, timestamp: '2026-11-06T10:00:00Z' }, { valor: 108, timestamp: '2026-11-06T11:00:00Z' }];
   const { app } = fixture(() => [row]);
   await app.fetchTrends();
-  assert.equal(app.selectedTrend.value, null);
-  assert.equal(app.selectedTrendChart.value.points, '');
+  assert.equal(app.selectedTrend.value.sensor_id, 1);
+  assert.equal(app.trendPage.chartMode, 'live');
   app.trendPage.equipment = 3; app.applyTrendFilters(true);
   assert.equal(app.selectedTrend.value.sensor_id, 1);
   const chart = app.selectedTrendChart.value;
   assert.equal(chart.max, 108); assert.equal(chart.limit, 100);
   assert.ok(Number(chart.points.split(' ')[1].split(',')[1]) < chart.limitY);
 });
-test('vários sensores do equipamento não criam vários gráficos; escolha é explícita', async () => {
+test('vários sensores mantêm uma seleção; clicar na lista muda somente o gráfico', async () => {
   const { app } = fixture(() => [anomaly(1), anomaly(2)]);
   await app.fetchTrends(); app.trendPage.equipment = 3; app.applyTrendFilters(true);
-  assert.equal(app.trendPage.sensor, ''); assert.equal(app.selectedTrend.value, null);
+  assert.equal(app.trendPage.sensor, 1);
+  app.openTrendDetail(app.trendPage.rows[1]);
+  assert.equal(app.selectedTrend.value.sensor_id, 2);
+  assert.equal(app.trendCount.value, 2);
+});
+
+test('busca ignora acentos, filtra equipamento e mantém a escolha nas atualizações', async () => {
+  const first = anomaly(1), second = anomaly(2);
+  first.sensor_info.nome = 'Vibração';
+  second.sensor_info.equipamento_id = 4;
+  second.sensor_info.equipamento_nome = 'Bomba de circulação';
+  const {app} = fixture(() => [first, second]);
+  await app.fetchTrends();
+  app.trendPage.search = 'vibracao'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value, 1);
+  app.clearTrendFilters();
+  app.selectTrendEquipment(4);
+  assert.equal(app.trendPage.sensor, 2);
+  app.trendPage.chartMode = 'analysis';
+  await app.fetchTrends();
+  assert.equal(app.trendPage.sensor, 2);
+  assert.equal(app.trendPage.chartMode, 'analysis');
+  app.trendPage.search = 'inexistente'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value, 0);
+  assert.equal(app.selectedTrend.value, null);
+});
+
+test('os dois tempos são independentes e percentuais são convertidos ao salvar', async () => {
+  let saved;
+  const {app} = fixture((url, options) => { saved = JSON.parse(options.body); return {}; });
+  app.trendConfigModal.form = {ativo:true, periodo_horas:24, num_leituras:50, minimo_leituras:3,
+    duracao_minima_minutos:30, antecedencia_os_minutos:480, persistencia_minima:.7, r2_minimo:.8,
+    direcao_alerta:'crescente', sensibilidade:'media'};
+  app.setTrendTimePreset(120);
+  app.trendPersistencePercent.value = 75;
+  app.trendR2Percent.value = 90;
+  await app.saveTrendConfig();
+  assert.equal(saved.duracao_minima_minutos, 120);
+  assert.equal(saved.antecedencia_os_minutos, 480);
+  assert.equal(saved.persistencia_minima, .75);
+  assert.equal(saved.r2_minimo, .9);
+});
+
+test('filtro de O.S. distingue atendimento aberto, histórico encerrado e ausência de ordens', async () => {
+  const rows = [anomaly(1), anomaly(2), anomaly(3)];
+  rows[0].is_anomalous = false; // Uma O.S. não desaparece ao normalizar a tendência.
+  rows[0].predictive_orders_summary = {total:2, open_count:1, primary_order:{id:10,status:'andamento'}};
+  rows[1].predictive_orders_summary = {total:1, open_count:0, primary_order:{id:20,status:'concluida'}};
+  rows[2].predictive_orders_summary = {total:0, open_count:0, primary_order:null};
+  const {app, urls} = fixture(() => rows);
+  await app.fetchTrends();
+  app.trendPage.orderFilter = 'open'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value,1); assert.equal(app.selectedTrend.value.sensor_id,1);
+  assert.equal(app.scopedTrendCount.value,1); assert.equal(app.trendSummary.value.anomalous,0);
+  app.trendPage.orderFilter = 'history'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value,2);
+  app.trendPage.orderFilter = 'none'; app.applyTrendFilters();
+  assert.equal(app.selectedTrend.value.sensor_id,3);
+  assert.equal(app.trendCount.value,1); assert.equal(urls.length,1);
+  app.clearTrendFilters(); assert.equal(app.trendCount.value,3);
+});
+
+test('histórico carrega sob demanda e ignora resposta de outro sensor', async () => {
+  let release;
+  const {app,urls} = fixture(url => url.includes('/tendencias/') ? [anomaly(1),anomaly(2)] : new Promise(resolve => {release=resolve;}));
+  await app.fetchTrends();
+  assert.equal(urls.length,1);
+  app.trendOrders.open = true;
+  const pending = app.loadTrendOrders();
+  const query = new URL(urls[1]).searchParams;
+  assert.equal(query.get('sensor_origem'),'1'); assert.equal(query.get('historico_preditivo'),'true');
+  app.openTrendDetail(app.trendPage.rows[1]);
+  release({count:1,results:[{id:80,status:'andamento'}]});await pending;
+  assert.equal(app.trendOrders.rows.length,0); assert.equal(app.trendOrders.busy,false);
+  assert.equal(app.trendOrders.open,false);
+});
+
+test('iniciar atendimento atualiza o status resumido sem aguardar os 30 segundos', async () => {
+  let status='pendente';
+  const row=anomaly(1);
+  const {app}=fixture((url,options)=>{
+    if(options.method==='PATCH'){ status='andamento';return {id:10,status,responsavel:7}; }
+    return [{...row,predictive_orders_summary:{total:1,open_count:1,primary_order:{id:10,status}}}];
+  });
+  app.me.value={id:7};app.view.value='tendencias';
+  await app.fetchTrends();
+  await app.iniciarAtendimento({id:10,status:'pendente'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(app.selectedTrend.value.predictive_orders_summary.primary_order.status,'andamento');
 });
 test('perfil rápido prepara configuração de um minuto sem salvar nem mudar a global', () => {
   const { app, urls } = fixture(() => []);
@@ -409,7 +497,10 @@ test('abrir O.S. consulta exclusivamente o vínculo sem assumir nem alterar a or
   });
   await app.openAlertaOS({ id: 8, equipamento: 3, ordem_servico_id: 42 });
   assert.ok(urls.some(url => url.includes('/api/ordens-servico/42/')));
-  assert.equal(app.equipModal.currentOS.id, 42);
+  assert.equal(app.orderDetail.order.id, 42);
+  assert.equal(app.orderDetail.open, true);
+  assert.equal(app.equipModal.open, false);
+  assert.equal(urls.length, 1);
   assert.ok(methods.every(method => method === 'GET'));
 });
 

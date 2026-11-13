@@ -1,5 +1,20 @@
 # Telemetria: organização da interface e tendências
 
+## Revisão vigente de Tendências — 13/11/2026
+
+O gráfico ocupa a largura do painel. **Trocar sensor** abre uma seleção temporária com busca sem distinção de acentos, equipamento pesquisável, condição e paginação. O sensor de maior risco é selecionado inicialmente; atualizações preservam a escolha. A seleção não altera os filtros de Telemetria.
+
+Os modos são **Ao vivo** (cinco minutos por padrão) e **Previsão para manutenção** (amostra usada pelo servidor). A previsão explica em uma frase o tempo mínimo configurado e informa se está em confirmação, confirmada, sem tendência confirmada ou desativada. Com histórico insuficiente, mantém o gráfico preliminar e mostra duração observada e quantidade de leituras. O período disponível usa `source_duration_minutes`, evitando confundir o tempo das últimas N leituras com o histórico já coletado.
+
+**Ampliar gráfico** aumenta a área real de desenho, com geometria responsiva para eixos, linhas e rótulos. Abrir/fechar preserva período, modo, escala e pausa sem duplicar o componente ou seus timers. Fechamento por Esc e devolução do foco complementam a navegação por teclado. Dashboard e Telemetria preservam o tamanho padrão de seus gráficos.
+
+A identificação da **O.S. preditiva e seu status atual** fica no cabeçalho. Ela continua aparecendo após normalização do alerta. A aberta mais recente tem prioridade; sem abertas, aparece a última encerrada. Múltiplas abertas e o histórico completo são consultados sob demanda. A previsão atual permanece distinta da evidência fixa de abertura preservada na ordem.
+
+O filtro **O.S. preditiva** oferece Todos os sensores, Com O.S. aberta, Com histórico de O.S. e Sem O.S., combinando com busca, equipamento e condição. Aberta significa pendente ou em andamento; histórico inclui concluídas e canceladas. Contadores respeitam os filtros combinados e a visibilidade do perfil. Corretivas não entram nesse filtro; continuam no aviso de limite.
+
+**Ajustar análise** conserva histórico mínimo e antecedência independentes: defaults novos de 2 h e 2 h, sem sobrescrever valores salvos. Escala e ajuste histórico ficam em Opções do gráfico; fórmula e critérios ficam recolhidos. O teste administrativo continua em Demonstração de tendências. Esta revisão substitui os fluxos históricos de Tendências abaixo. Regras completas: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
+
+
 Revisão: 06/11/2026.
 
 **Organização vigente:** Tendências é uma página própria no menu lateral. Telemetria contém somente Leituras e Sensores. As decisões anteriores abaixo registram a evolução inicial; a seção “Página independente de Tendências” ao final substitui a proposta de três abas e o compartilhamento de filtros. Complementa [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md). Não modifica o algoritmo de detecção ou a regra de geração automática de OS.
@@ -84,6 +99,16 @@ python manage.py makemigrations --check --dry-run --settings=app.test_settings
 Conferência manual restante: abrir o frontend com a API atualizada; navegar pelas três abas como gestor/admin e técnico; testar tema claro/escuro, largura de celular, mais de uma página, limpeza de filtros, ausência de dados e edição de configuração. Não executar geração de dados destrutiva para essa conferência.
 
 Limitação conhecida: tendências ainda calcula e devolve todas as análises visíveis antes da paginação local; para volumes elevados, a evolução adequada é paginação/cálculo em lote no backend. Esta entrega não introduz processamento em background ou dados simulados.
+
+## Acompanhamento recente e escala (10/11/2026)
+
+Dashboard, Telemetria e o gráfico principal do sensor em Tendências usam o componente `LiveChart`. Na página Tendências, equipamento/sensor ficam fixados pela seleção da página, sem repetir os seletores dentro do gráfico. Leituras e ajuste visual são atualizados por consulta a cada 5 segundos, sem cache. A lista e as evidências operacionais mantêm o monitoramento de 30 segundos; a amostra usada pelo servidor continua disponível nos detalhes do cálculo.
+
+O modo inicial “Ao vivo” exibe até 60 leituras dentro dos últimos 5 minutos em relação à última medição. Ao receber novas leituras, a janela descarta as antigas e recalcula a inclinação da amostra exibida. Isso evita misturar meses/horas do seed com poucos segundos de coleta recente. O horário e a contagem de novas medições distinguem consulta sem novidade de chegada de dados. Pausar, ocultar a página, trocar sensor/empresa e desmontar continuam interrompendo ou invalidando consultas conforme o contexto. Não se fabricam pontos nem horários ao esperar novas medições.
+
+A escala padrão “Acompanhar variação” considera dados e projeção, com margem e precisão decimal adaptadas. Limites fora do intervalo visível aparecem identificados abaixo, sem linhas posicionadas artificialmente na borda. “Incluir todos os limites” oferece a escala geral. No modo focado, o desktop usa mais largura para as curvas; os valores dos limites ficam nas legendas abaixo. As janelas maiores continuam disponíveis para consultar histórico.
+
+Dois rótulos discretos junto às curvas mostram a última leitura em azul e o valor no fim da projeção em roxo, com “≈” e o tempo à frente (por exemplo, “+30 s”). A precisão acompanha a escala. Os rótulos se afastam quando necessário em telas estreitas ou curvas horizontais; os demais pontos mantêm os valores disponíveis ao passar o mouse ou selecionar. Sem projeção, aparece apenas a última leitura.
 
 ## Ajuda expansível na aba Tendências
 
