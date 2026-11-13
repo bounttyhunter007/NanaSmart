@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema
 from .models import Sensor, Telemetria, TrendConfig
 from .serializers import SensorSerializer, TelemetriaSerializer, TrendConfigSerializer
 from .trend_analysis import analyze_sensor_trend, get_all_sensor_trends
+from .work_order_context import attach_predictive_order_summaries
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 
 
@@ -158,6 +159,7 @@ class TrendDashboardView(APIView):
                     {'detail': 'Sensor não encontrado ou inativo.'},
                     status=404
                 )
+            attach_predictive_order_summaries([trend], request.user)
             return Response(trend)
 
         show_all = request.query_params.get('all', 'false').lower() == 'true'
@@ -166,4 +168,4 @@ class TrendDashboardView(APIView):
             only_atypical=not show_all,
             empresa_id=request.query_params.get('empresa_id'),
         )
-        return Response(trends)
+        return Response(attach_predictive_order_summaries(trends, request.user))

@@ -304,6 +304,54 @@ test('os dois tempos são independentes e percentuais são convertidos ao salvar
   assert.equal(saved.persistencia_minima, .75);
   assert.equal(saved.r2_minimo, .9);
 });
+
+test('filtro de O.S. distingue atendimento aberto, histórico encerrado e ausência de ordens', async () => {
+  const rows = [anomaly(1), anomaly(2), anomaly(3)];
+  rows[0].is_anomalous = false; // Uma O.S. não desaparece ao normalizar a tendência.
+  rows[0].predictive_orders_summary = {total:2, open_count:1, primary_order:{id:10,status:'andamento'}};
+  rows[1].predictive_orders_summary = {total:1, open_count:0, primary_order:{id:20,status:'concluida'}};
+  rows[2].predictive_orders_summary = {total:0, open_count:0, primary_order:null};
+  const {app, urls} = fixture(() => rows);
+  await app.fetchTrends();
+  app.trendPage.orderFilter = 'open'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value,1); assert.equal(app.selectedTrend.value.sensor_id,1);
+  assert.equal(app.scopedTrendCount.value,1); assert.equal(app.trendSummary.value.anomalous,0);
+  app.trendPage.orderFilter = 'history'; app.applyTrendFilters();
+  assert.equal(app.trendCount.value,2);
+  app.trendPage.orderFilter = 'none'; app.applyTrendFilters();
+  assert.equal(app.selectedTrend.value.sensor_id,3);
+  assert.equal(app.trendCount.value,1); assert.equal(urls.length,1);
+  app.clearTrendFilters(); assert.equal(app.trendCount.value,3);
+});
+
+test('histórico carrega sob demanda e ignora resposta de outro sensor', async () => {
+  let release;
+  const {app,urls} = fixture(url => url.includes('/tendencias/') ? [anomaly(1),anomaly(2)] : new Promise(resolve => {release=resolve;}));
+  await app.fetchTrends();
+  assert.equal(urls.length,1);
+  app.trendOrders.open = true;
+  const pending = app.loadTrendOrders();
+  const query = new URL(urls[1]).searchParams;
+  assert.equal(query.get('sensor_origem'),'1'); assert.equal(query.get('historico_preditivo'),'true');
+  app.openTrendDetail(app.trendPage.rows[1]);
+  release({count:1,results:[{id:80,status:'andamento'}]});await pending;
+  assert.equal(app.trendOrders.rows.length,0); assert.equal(app.trendOrders.busy,false);
+  assert.equal(app.trendOrders.open,false);
+});
+
+test('iniciar atendimento atualiza o status resumido sem aguardar os 30 segundos', async () => {
+  let status='pendente';
+  const row=anomaly(1);
+  const {app}=fixture((url,options)=>{
+    if(options.method==='PATCH'){ status='andamento';return {id:10,status,responsavel:7}; }
+    return [{...row,predictive_orders_summary:{total:1,open_count:1,primary_order:{id:10,status}}}];
+  });
+  app.me.value={id:7};app.view.value='tendencias';
+  await app.fetchTrends();
+  await app.iniciarAtendimento({id:10,status:'pendente'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(app.selectedTrend.value.predictive_orders_summary.primary_order.status,'andamento');
+});
 test('perfil rápido prepara configuração de um minuto sem salvar nem mudar a global', () => {
   const { app, urls } = fixture(() => []);
   app.trendConfigModal.form = { duracao_minima_minutos: 30, minimo_leituras: 3, num_leituras: 50 };

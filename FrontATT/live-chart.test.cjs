@@ -691,3 +691,17 @@ test('operational horizon shows two hours ahead independently of the two-hour hi
   const live = api.projectForward(rows,fitted,{visual:true,horizonMinutes:120});
   assert.equal(live.horizon,3600000);
 });
+
+test('large plots use the available drawing width and height without distorting values or annotations', () => {
+  const {api}=fixture(()=>({}));
+  const rows=[reading(1,0,60),reading(2,3600,70),reading(3,7200,80)];
+  const projected=api.projectForward(rows,api.fitLine(rows),{visual:true});
+  for(const [width,height] of [[1120,440],[1360,700],[290,260]]){
+    const plot=api.chart(rows,sensor,null,'auto',null,width<700,[],projected,{focus:true,futureSpace:true,width,height});
+    assert.equal(plot.width,width);assert.equal(plot.height,height);
+    assert.equal(plot.bottom,height-55);
+    assert.ok(plot.right>width-30);
+    assert.ok(plot.points.every(point=>point.y>=42 && point.y<=height-55));
+    assert.ok(plot.annotations.every(label=>label.y>=56 && label.y<=height-55));
+  }
+});

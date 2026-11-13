@@ -622,8 +622,9 @@ createApp({
       ++dashboardSummaryRequest; dashboardSummary.value = null; dashAlerts.value = []; alertCount.value = 0;
       ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.count = 0; alertHistory.url = ''; alertCount.value = 0;
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      resetTrendOrders();
       Object.assign(telemetry, { rows: [], equipments: [], sensors: [], count: 0, busy: false, updatedAt: null });
-      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
+      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, condition: '', rows: [], detail: null, offset: 0, busy: false, updatedAt: null, error: '' });
       token.value = ''; refreshTk.value = ''; me.value = null;
       globalEmpresa.value = ''; dashSetor.value = ''; dashEquipamento.value = ''; dashboardTab.value = 'minhas';
       for (const resource of Object.keys(lists)) lists[resource] = [];
@@ -647,6 +648,7 @@ createApp({
     };
     function navigate(v) {
       if (v === 'prompts' && !isAdminOrGestor.value) return;
+      if (v !== 'tendencias') { trendPage.listOpen = false; trendPage.expanded = false; }
       view.value = v; fetchers[v]?.();
     }
 
@@ -725,6 +727,7 @@ createApp({
             pageVersion === trendPageRequest && !trendPage.busy) {
           trendPage.rows = data;
           ensureTrendSelection();
+          if (trendOrders.open) loadTrendOrders();
           const total = filteredTrends.value.length;
           if (trendPage.offset >= total) trendPage.offset = total ? Math.floor((total - 1) / trendPage.size) * trendPage.size : 0;
           if (trendPage.detail) trendPage.detail = data.find(t => t.sensor_id === trendPage.detail.sensor_id) || null;
@@ -1064,6 +1067,7 @@ createApp({
     }
     function syncOrderDetails(saved) {
       if (!saved?.id) return;
+      if (view.value === 'tendencias') { fetchTrends(); }
       if (orderDetail.order?.id === saved.id) {
         resetOrderAnalysis();
         orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
@@ -1223,7 +1227,7 @@ createApp({
     });
     const trendPage = reactive({
       equipment: '', sensor: '', condition: '', size: 20, offset: 0,
-      search: '', equipmentSearch: '', chartMode: 'live', listOpen: false,
+      search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false,
       rows: [], busy: false, error: '', updatedAt: null, detail: null,
     });
     let trendPageRequest = 0;
@@ -1256,24 +1260,96 @@ createApp({
     const scopedTrends = computed(() => trendPage.rows.filter(trend =>
       (!trendPage.equipment || Number(trend.sensor_info.equipamento_id) === Number(trendPage.equipment)) &&
       searchKey(trend.sensor_info.nome + ' ' + trend.sensor_info.equipamento_nome + ' ' + trend.sensor_info.tipo_display).includes(searchKey(trendPage.search))));
-    const filteredTrends = computed(() => scopedTrends.value.filter(trend =>
+    function trendOrderSummary(trend) {
+      return trend?.predictive_orders_summary || {total:0, open_count:0, primary_order:null};
+    }
+    function matchesTrendOrders(trend) {
+      const summary = trendOrderSummary(trend);
+      return !trendPage.orderFilter || (trendPage.orderFilter === 'open' ? summary.open_count > 0
+        : trendPage.orderFilter === 'history' ? summary.total > 0 : summary.total === 0);
+    }
+    const orderScopedTrends = computed(() => scopedTrends.value.filter(matchesTrendOrders));
+    const filteredTrends = computed(() => orderScopedTrends.value.filter(trend =>
       !trendPage.condition || trendCondition(trend) === trendPage.condition));
-    const scopedTrendCount = computed(() => scopedTrends.value.length);
+    const scopedTrendCount = computed(() => orderScopedTrends.value.length);
     const telemetryCount = computed(() => telemetry.count);
     const telemetryRows = computed(() => telemetry.rows);
     const trendCount = computed(() => filteredTrends.value.length);
     const trendRows = computed(() => filteredTrends.value.slice(trendPage.offset, trendPage.offset + trendPage.size));
     const trendSummary = computed(() => ({
-      anomalous: scopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
-      normal: scopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
-      insufficient: scopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
-      disabled: scopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
+      anomalous: orderScopedTrends.value.filter(t => trendCondition(t) === 'anomalous').length,
+      normal: orderScopedTrends.value.filter(t => trendCondition(t) === 'normal').length,
+      insufficient: orderScopedTrends.value.filter(t => trendCondition(t) === 'insufficient').length,
+      disabled: orderScopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
     }));
     const selectedTrend = computed(() => trendPage.rows.find(trend => trend.sensor_id === Number(trendPage.sensor)) || null);
+    const trendOrders = reactive({open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
+    let trendOrdersRequest = 0, trendBrowserTrigger = null, trendExpandTrigger = null;
+    function trendForecastState(trend) {
+      return !trend.analysis_enabled ? 'Análise desativada' : trend.insufficient_data ? 'Em confirmação'
+        : ['increasing','decreasing'].includes(trend.direction) ? 'Tendência confirmada' : 'Sem tendência confirmada';
+    }
+    function trendHistoryProgress(trend) {
+      return 'Histórico observado: ' + trendMinutes(Math.floor(trend.source_duration_minutes ?? trend.sample_duration_minutes)) + ' de '
+        + trendMinutes(trend.config_used.duracao_minima_minutos) + ' necessárias · '
+        + trend.readings_count + ' leituras (mín. ' + trend.config_used.minimo_leituras + ')';
+    }
+    function focusTrendControl(id) { nextTick(() => document.getElementById(id)?.focus()); }
+    function openTrendBrowser() {
+      trendBrowserTrigger = document.activeElement; trendPage.listOpen = true;
+      focusTrendControl('trends-sensor-search');
+    }
+    function closeTrendBrowser() {
+      trendPage.listOpen = false;
+      const trigger = trendBrowserTrigger; trendBrowserTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); else document.getElementById('trend-change-sensor')?.focus(); });
+    }
+    function expandTrendChart() {
+      trendExpandTrigger = document.activeElement; trendPage.expanded = true;
+      focusTrendControl('trend-chart-shrink');
+    }
+    function closeExpandedTrendChart() {
+      trendPage.expanded = false;
+      const trigger = trendExpandTrigger; trendExpandTrigger = null;
+      nextTick(() => { if (trigger?.isConnected) trigger.focus(); else document.getElementById('trend-chart-expand')?.focus(); });
+    }
+    function trendDialogKeydown(event, close) {
+      if (event.key === 'Escape') { event.stopPropagation(); close(); return; }
+      if (event.key !== 'Tab') return;
+      const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [href], [tabindex="0"]')]
+        .filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls[controls.length-1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    async function loadTrendOrders(url = null) {
+      const sensorId = selectedTrend.value?.sensor_id;
+      if (!sensorId) return;
+      const request = ++trendOrdersRequest, company = globalEmpresa.value;
+      const targetUrl = url || (trendOrders.sensorId === sensorId && trendOrders.url) || '/api/ordens-servico/?' + new URLSearchParams({sensor_origem:sensorId, historico_preditivo:'true', limit:10});
+      trendOrders.busy = true; trendOrders.error = ''; trendOrders.sensorId = sensorId;
+      try {
+        const data = await api(targetUrl);
+        if (request !== trendOrdersRequest || sensorId !== selectedTrend.value?.sensor_id || company !== globalEmpresa.value) return;
+        Object.assign(trendOrders, {rows:normList(data), count:data.count ?? normList(data).length, next:data.next, previous:data.previous, url:targetUrl});
+      } catch {
+        if (request === trendOrdersRequest) trendOrders.error = 'Não foi possível consultar as O.S. Tente novamente.';
+      } finally { if (request === trendOrdersRequest) trendOrders.busy = false; }
+    }
+    function toggleTrendOrders() {
+      trendOrders.open = !trendOrders.open;
+      if (trendOrders.open) loadTrendOrders();
+    }
+    function resetTrendOrders() {
+      ++trendOrdersRequest;
+      Object.assign(trendOrders, {open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
+    }
+    watch(() => selectedTrend.value?.sensor_id, resetTrendOrders);
     function trendMinutes(value) {
       const minutes = Number(value);
       if (!Number.isFinite(minutes)) return '—';
-      return minutes >= 60 ? Math.floor(minutes / 60) + ' h' + (minutes % 60 ? ' ' + Math.round(minutes % 60) + ' min' : '') : Math.round(minutes) + ' min';
+      const rounded = Math.max(0, Math.round(minutes));
+      return rounded >= 60 ? Math.floor(rounded / 60) + ' h' + (rounded % 60 ? ' ' + (rounded % 60) + ' min' : '') : rounded + ' min';
     }
     function trendInterventionLabel(trend) {
       return {disabled:'Análise desativada', insufficient_data:'Aguardando histórico e leituras suficientes',
@@ -1485,6 +1561,7 @@ createApp({
         acceptTrendSnapshot(data);
         trendPage.rows = data;
         ensureTrendSelection();
+        if (trendOrders.open) loadTrendOrders();
         clampTrendPage();
         if (trendPage.detail) trendPage.detail = data.find(trend => trend.sensor_id === trendPage.detail.sensor_id) || null;
         trendPage.updatedAt = new Date().toISOString();
@@ -1505,6 +1582,7 @@ createApp({
     function ensureTrendSelection(checkFilters = false) {
       const candidates = filteredTrends.value;
       if (!selectedTrend.value || (checkFilters && !candidates.some(t => t.sensor_id === Number(trendPage.sensor)))) {
+        resetTrendOrders();
         trendPage.sensor = candidates[0]?.sensor_id || '';
         trendPage.chartMode = 'live';
       }
@@ -1518,7 +1596,7 @@ createApp({
       applyTrendFilters(true);
     }
     function clearTrendFilters() {
-      Object.assign(trendPage, { equipment: '', search: '', equipmentSearch: '', condition: '', offset: 0, detail: null });
+      Object.assign(trendPage, { equipment: '', search: '', equipmentSearch: '', condition: '', orderFilter: '', offset: 0, detail: null });
       ensureTrendSelection(true);
     }
     function changeTrendPage(delta) {
@@ -1526,10 +1604,12 @@ createApp({
     }
     function openTrendDetail(trend) {
       if (Number(trendPage.sensor) !== trend.sensor_id) trendPage.chartMode = 'live';
-      trendPage.sensor = trend.sensor_id; trendPage.listOpen = false;
+      if (Number(trendPage.sensor) !== trend.sensor_id) resetTrendOrders();
+      trendPage.sensor = trend.sensor_id; closeTrendBrowser();
     }
     function showTrends(equipment = '', sensor = '') {
-      Object.assign(trendPage, { equipment, sensor, search: '', condition: '', chartMode: 'live', listOpen: false, offset: 0, detail: null });
+      resetTrendOrders();
+      Object.assign(trendPage, { equipment, sensor, search: '', condition: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, offset: 0, detail: null });
       view.value = 'tendencias'; closeEquipModal(); return fetchTrends();
     }
 
@@ -2496,8 +2576,9 @@ createApp({
       ++alertRequest; closeAlertaDetails(); lists.alertas = []; alertHistory.url = ''; alertHistory.count = 0;
       Object.assign(filters.alertas, { search: '', nivel: '', origem: '', equipamento: '', sensor: '', from: '', to: '' });
       ++telemetryRequest; ++telemetryOptionsRequest; ++trendPageRequest;
+      resetTrendOrders();
       Object.assign(telemetry, { equipment: '', sensor: '', offset: 0, rows: [], equipments: [], sensors: [], busy: false });
-      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
+      Object.assign(trendPage, { equipment: '', sensor: '', search: '', equipmentSearch: '', chartMode: 'live', listOpen: false, orderFilter: '', expanded: false, condition: '', offset: 0, rows: [], detail: null, busy: false, updatedAt: null, error: '' });
       // Recarrega a aba atual ao mudar o filtro global
       // Também recarrega o dashboard se estiver nele
       const currentView = view.value;
@@ -2514,7 +2595,9 @@ createApp({
       // Adicionar listener para fechar janelas com ESC
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-          if (priorityModal.open) { priorityModal.open = false; ++priorityRequest; }
+          if (trendPage.listOpen) { closeTrendBrowser(); }
+          else if (trendPage.expanded) { closeExpandedTrendChart(); }
+          else if (priorityModal.open) { priorityModal.open = false; ++priorityRequest; }
           else if (criteriaModal.open) { criteriaModal.open = false; ++criteriaRequest; }
           else if (trendConfigModal.open) closeTrendConfig();
           else if (trendPage.detail && view.value === 'tendencias') trendPage.detail = null;
@@ -2826,7 +2909,8 @@ createApp({
       selectedTrend, selectedTrendChart, buildTrendChart, setTrendTimePreset,
       trendEquipmentOptions, selectTrendEquipment, trendMinutes, trendInterventionLabel, trendPersistencePercent, trendR2Percent,
       scopedTrendCount,
-      closeTrendConfig, trendConfigKeydown,
+      closeTrendConfig, trendConfigKeydown, trendOrders, trendOrderSummary, trendForecastState, trendHistoryProgress,
+      openTrendBrowser, closeTrendBrowser, expandTrendChart, closeExpandedTrendChart, trendDialogKeydown, loadTrendOrders, toggleTrendOrders,
       trendDemo, runTrendDemo, toggleTrendTestMode,
       fetchTrends, applyTrendFilters, clearTrendFilters, changeTrendPage, openTrendDetail, showTrends,
       sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,

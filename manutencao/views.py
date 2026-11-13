@@ -4,6 +4,7 @@ from django_filters import rest_framework as df_filters
 from .models import OrdemServico, HistoricoManutencao
 from .filters import OrdemServicoFilter
 from .ordering import ordenar_ordens
+from .visibility import visible_work_orders
 from .services import alterar_prioridade
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -140,21 +141,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             'alerta_origem__sensor',
         ).prefetch_related('alertas_relacionados__sensor'))
         
-        if user.tipo_usuario == 'admin':
-            return qs.all()
-        
-        if user.empresa:
-            base_qs = qs.filter(equipamento__empresa=user.empresa)
-            
-            # Lógica de Visibilidade para Técnicos
-            if user.tipo_usuario == 'tecnico':
-                from django.db.models import Q
-                # Técnico vê: O.S. sem dono OU O.S. que pertence a ele
-                return base_qs.filter(Q(responsavel=user) | Q(responsavel__isnull=True))
-            
-            return base_qs
-            
-        return qs.none()
+        return visible_work_orders(user, qs)
 
 
 class HistoricoManutencaoViewSet(viewsets.ModelViewSet):

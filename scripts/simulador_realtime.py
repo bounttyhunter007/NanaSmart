@@ -39,6 +39,7 @@ def parse_args(argv=None):
     parser.add_argument('--max-falhas', type=int, default=5,
                         help='Encerra após este número de ciclos consecutivos com falha')
     parser.add_argument('--dry-run', action='store_true', help='Consulta e simula sem gravar')
+    parser.add_argument('--check', action='store_true', help='Verifica banco e seleção de sensores, sem simular nem gravar')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args(argv)
     if any(not math.isfinite(v) or v <= 0 for v in (args.interval_min, args.interval_max)):
@@ -206,11 +207,12 @@ def rodar_ciclo(sensores, memoria_valores, dry_run=False, rng=None, cenario='mis
                 # Um sensor com erro não desfaz os demais. Save e sinais continuam
                 # no fluxo oficial (bulk_create pularia os alertas e tendências).
                 with transaction.atomic():
-                    atual = Sensor.objects.select_for_update().select_related('equipamento').get(pk=sensor.pk)
+                    atual = Sensor.objects.select_for_update(of=('self', 'equipamento')).select_related('equipamento').get(
+                        pk=sensor.pk, demonstracao__isnull=True)
                     if not atual.ativo or atual.equipamento.status != 'ativo':
                         ignoradas += 1
                         continue
-                    if limites_sensor(atual) != limites_sensor(sensor):
+                    if atual.limite_alerta != sensor.limite_alerta or limites_sensor(atual) != limites_sensor(sensor):
                         ignoradas += 1
                         continue  # configuração mudou: atualizar no próximo ciclo
                     Telemetria.objects.create(sensor=atual, valor=valor)
@@ -242,6 +244,36 @@ def verificar_banco():
                 connection.settings_dict.get('HOST') or 'local')
 
 
+def informar_selecao(sensores, args):
+    """Resumo da seleção efetiva; explicita filtros sem correspondência."""
+    logger.info('Seleção inicial: %s sensores elegíveis em %s equipamentos.',
+                len(sensores), len({s.equipamento_id for s in sensores}))
+    for nome, pedidos, encontrados in [
+        ('sensor', args.sensor, {s.pk for s in sensores}),
+        ('equipamento', args.equipamento, {s.equipamento_id for s in sensores}),
+        ('empresa', args.empresa, {s.equipamento.empresa_id for s in sensores}),
+    ]:
+        ausentes = set(pedidos or []) - encontrados
+        if ausentes:
+            logger.warning('Filtro %s: IDs sem sensores elegíveis nesta seleção: %s', nome, sorted(ausentes))
+    for sensor in sensores[:20]:
+        logger.info('  sensor=%s equipamento=%s | %s | %s (%s)', sensor.pk, sensor.equipamento_id,
+                    sensor.equipamento.nome, sensor.nome, sensor.unidade_medida)
+    if len(sensores) > 20:
+        logger.info('  ... e mais %s sensores.', len(sensores) - 20)
+    if not sensores:
+        logger.warning('A seleção exige sensor ativo, equipamento ativo e ausência de vínculo com demonstração guiada.')
+    media = (args.interval_min + args.interval_max) / 2
+    if args.cycles:
+        logger.info('Duração estimada da execução: %.1f s, mais processamento.', max(0, args.cycles - 1) * media)
+    if args.cenario == 'escalada':
+        logger.info('Escalada completa: aproximadamente %.1f min; %.1f min/fase. '
+                    'A fase define o alvo; transições suaves podem levar vários ciclos.',
+                    5 * args.fase_ciclos * media / 60, args.fase_ciclos * media / 60)
+    elif args.cenario == 'misto':
+        logger.info('Cenário misto é aleatório: não garante anomalia durante uma apresentação curta.')
+
+
 def run_simulator(args):
     from django.db import OperationalError, InterfaceError, close_old_connections, connections
     configurar_logging(args.debug)
@@ -250,7 +282,8 @@ def run_simulator(args):
     memoria = {}
     dinamica = {}
     ultimo_inicio = None
-    concluidos = consecutivas = total = erros = 0
+    concluidos = consecutivas = total = simuladas = erros = 0
+    teve_falha = False
     try:
         verificar_banco()
         logger.info('Iniciando cenário=%s dry_run=%s empresa=%s equipamento=%s sensor=%s',
@@ -264,6 +297,8 @@ def run_simulator(args):
             try:
                 close_old_connections()
                 sensores = list(obter_sensores_ativos(args.sensor, args.equipamento, args.empresa))
+                if concluidos == 0:
+                    informar_selecao(sensores, args)
                 validos = []
                 for sensor in sensores:
                     try:
@@ -273,6 +308,12 @@ def run_simulator(args):
                         falhou = True
                     else:
                         validos.append(sensor)
+                if args.check:
+                    logger.info('Verificação concluída; nenhum dado foi alterado.')
+                    return 0 if validos and not falhou else 1
+                if args.cycles and not validos:
+                    logger.error('Execução finita sem sensores elegíveis; revise filtros, ativação e limites.')
+                    return 1
                 memoria = inicializar_memoria_sensores(validos, memoria)
                 dinamica = {sensor.pk: dinamica[sensor.pk] for sensor in validos if sensor.pk in dinamica}
                 fase = fase_cenario(args.cenario, concluidos + 1, args.fase_ciclos)
@@ -282,6 +323,7 @@ def run_simulator(args):
                 ultimo_inicio = inicio
                 falhou |= resumo['falhas'] > 0
                 total += resumo['gravadas']
+                simuladas += resumo['simuladas']
                 erros += resumo['falhas']
                 logger.info('Ciclo %s | fase=%s sensores=%s | %s', concluidos + 1, fase, len(validos), resumo)
                 if not sensores:
@@ -292,6 +334,7 @@ def run_simulator(args):
                 falhou = True
                 erros += 1
             concluidos += 1
+            teve_falha |= falhou
             consecutivas = consecutivas + 1 if falhou else 0
             if consecutivas >= args.max_falhas:
                 logger.error('Limite de %s ciclos consecutivos com falha atingido.', args.max_falhas)
@@ -299,7 +342,7 @@ def run_simulator(args):
             if args.cycles and concluidos >= args.cycles:
                 break
             time.sleep(max(0, espera.uniform(args.interval_min, args.interval_max) - (time.monotonic() - inicio)))
-        return 1 if consecutivas else 0
+        return 1 if teve_falha or not (total + simuladas) else 0
     except KeyboardInterrupt:
         logger.info('Interrompido pelo operador.')
         return 130
@@ -308,7 +351,8 @@ def run_simulator(args):
         return 1
     finally:
         connections.close_all()
-        logger.info('Finalizado: %s ciclos, %s leituras gravadas, %s erros de banco.', concluidos, total, erros)
+        logger.info('Finalizado: %s ciclos, %s leituras gravadas, %s simuladas, %s erros de banco.',
+                    concluidos, total, simuladas, erros)
 
 
 def main(argv=None):

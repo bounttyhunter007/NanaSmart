@@ -4,39 +4,44 @@ Este documento descreve brevemente os scripts disponíveis em `scripts/` e como 
 
 ## 1. `seed_db.py`
 
-**O que faz**
-- Popula o banco de dados com dados falsos industriais realistas.
-- Cria empresas, gestores, técnicos, equipamentos, sensores, planos de manutenção, telemetria, ordens de serviço e alertas.
-- Gera histórico de telemetria e cronogramas de manutenção mais coesos para MTTR/MTBF.
+Substitui a base por dados sintéticos `[DEMO]`, com cadastros compatíveis,
+cronologia validada, histórico recente para KPIs e cenários previsíveis.
+O [roteiro completo](../DOCS/APRESENTACAO_DADOS.md) explica as contas e os três perfis.
 
-**Como ficam as leituras**
-- Os intervalos variam aleatoriamente entre **40 e 85 minutos**, mantendo os horários reais no banco. A última leitura fica entre 2 e 12 minutos antes do instante de referência do seed.
-- Em cada grupo de cinco sensores, três têm operação estável, um tem aumento gradual e um tem recuperação; a ordem dos perfis é embaralhada.
-- Há pequenas oscilações suaves e ruído proporcional ao limite de cada sensor. Sensores de vibração ou pressão não recebem o mesmo ruído absoluto de uma temperatura.
-- Nos perfis de aumento e recuperação, a mudança aparece nas últimas 24 horas. O histórico antigo não acumula desgaste durante meses até ficar preso em um teto.
-- Os dados de exemplo passam pelos serviços reais de tendência e limite após a importação. O seed não acrescenta mais picos de 110% seguidos de quedas a 30% apenas para gerar alertas. As regras operacionais continuam decidindo quais alertas e ordens criar.
-- A projeção continua sendo uma reta: horários irregulares e valores mais variados tornam o histórico e a inclinação mais fáceis de comparar; não alteram o modelo linear do gráfico.
+```powershell
+# Consulta parâmetros e migrações; não altera a base
+python scripts/seed_db.py --check
 
-**Como usar**
-- Execute a partir da raiz do projeto:
-  ```bash
-  python scripts/seed_db.py --empresas 3 --equipamentos 8 --funcionarios 20
-  ```
-- Parâmetros disponíveis:
-  - `--empresas`: número de empresas a criar (default: `2`)
-  - `--equipamentos`: número de equipamentos por empresa (default: `10`)
-  - `--funcionarios`: total de funcionários por empresa, incluindo o gestor (default: `1 gestor + 3 a 5 técnicos aleatórios`)
-  - `--days`: dias de histórico de telemetria e manutenção (default: `120`)
-  - `--clean-only`: apenas limpa o banco de dados sem popular
+# Geração destrutiva, atômica e reproduzível
+python scripts/seed_db.py --empresas 2 --equipamentos 10 --funcionarios 4 --days 120 --seed 42
 
-**Observações**
-- O script já configura o ambiente Django automaticamente.
-- Ele apaga dados existentes em `Empresa`, `Equipamento`, `Sensor`, `Telemetria`, `OrdemServico`, `HistoricoManutencao`, `Alerta` e outros modelos relacionados.
-- Pode ser estendido para aceitar mais parâmetros, por exemplo:
-  - número de técnicos por empresa
-  - número de planos de manutenção por equipamento
-  - nível de criticidade de ordens
-  - quantidade e tipo de alertas
+# Limpeza sem repopulação
+python scripts/seed_db.py --clean-only
+```
+
+- Padrões: duas empresas, dez equipamentos por empresa, quatro funcionários
+  (um gestor e três técnicos), 120 dias e semente 42.
+- Empresas, equipamentos e dias devem ser positivos; funcionários têm mínimo dois.
+  Com menos de três equipamentos/empresa, avisa que a cobertura é parcial.
+- Cada empresa recebe equipamentos A/B/C, trabalho pendente e em andamento para
+  cada técnico, ordens livres e conclusões recentes com custos. Com cinco ativos,
+  também há equipamento em manutenção e inativo.
+- Os três primeiros equipamentos são motor estável, bomba com tendência de
+  temperatura e compressor de reserva com pressão crítica, vibração recuperada
+  e recorrência de temperatura. Os episódios seguem os serviços reais.
+- Leituras estáveis/antigas têm intervalos de 40 a 85 minutos; os cenários das
+  últimas 24 horas usam 10 a 20 minutos. A leitura final dos cenários fica cinco
+  minutos antes da geração. Inativos têm sensores desativados e leituras antigas.
+- A limpeza e a geração são uma transação: falhas revertem ambas. Superusuários e
+  perfis `admin` preservam credenciais e perdem o vínculo com empresas removidas.
+  Superusuários recebem o perfil `admin` utilizado nas permissões da aplicação.
+- O resumo após o commit imprime logins reais, IDs, perfis dos sensores, próximo
+  disparo por horímetro e comandos para movimentar apenas o motor escolhido.
+  `gestor.demo.N` e `tecnico.demo.N.M` usam senha `123`; colisões com contas
+  preservadas recebem sufixo. `admin` novo usa `admin`; senhas existentes não mudam.
+- `--seed` repete dados e valores, mas datas são relativas à execução e IDs podem
+  mudar. As configurações globais continuam com duas horas mínimas para tendência.
+- Saída: `0` sucesso, `1` falha, `2` parâmetros inválidos, `130` interrupção.
 
 ## 2. `simulador_realtime.py`
 
@@ -66,6 +71,7 @@ python scripts/simulador_realtime.py --sensor 1 --interval-min 5 --interval-max 
 
 - `--interval-min` / `--interval-max`: cadência aleatória de **3 a 7 segundos** por padrão.
   O tempo de processamento é descontado da espera; não há espera após o último ciclo.
+- `--check`: confere banco, filtros e limites e encerra sem simular; falha se não houver sensor elegível ou se houver limites inválidos.
 - `--cycles`: ciclos a executar; `0` mantém execução contínua. Ctrl+C encerra.
 - `--empresa`, `--equipamento`, `--sensor`: aceitam vários IDs separados por espaços;
   filtros combinados usam interseção. IDs inexistentes/inativos não geram dados.
@@ -104,7 +110,7 @@ Valores já acima desse teto não são reduzidos artificialmente nesse cenário.
 
 Os horários continuam sendo os instantes reais de gravação. As regras preditivas
 de quantidade, duração, R² e persistência continuam valendo: o simulador não
-reduz o padrão de 30 minutos nem garante uma OS após alguns ciclos. Para uma
+reduz o padrão de duas horas nem garante uma OS após alguns ciclos. Para uma
 apresentação curta, use o teste guiado [DEMO] da página Tendências ou configure
 explicitamente o sensor de teste. O simulador não muda essa configuração.
 
@@ -117,7 +123,7 @@ Sensores e limites são atualizados a cada ciclo, e o histórico é consultado s
 para sensores que entram na simulação. Execuções simultâneas no mesmo sensor
 podem intercalar leituras; prefira filtros sem sobreposição.
 
-Saída: `0` ao terminar sem falha no último ciclo, `1` por erro ou limite de falhas,
+Saída: `0` ao terminar sem falhas e com leituras gravadas/simuladas, `1` por erro, seleção vazia em execução finita ou limite de falhas,
 `130` por interrupção do operador; argumentos inválidos retornam `2`.
 
 ## 3. `stress_telemetry.py`

@@ -86,14 +86,19 @@ Se mudar a porta do backend, atualize também a constante `BASE` em `FrontATT/ap
 
 O script `scripts/seed_db.py` cria empresas, usuários, tipos de equipamento, ativos, sensores, leituras históricas, ordens, alertas, configurações de tendência e prompts Gemini.
 
-**Atenção:** o seed começa apagando dados de várias tabelas, incluindo empresas e usuários que não sejam superusuários. Não execute contra um banco que contenha dados que queira preservar. O modo `--clean-only` também apaga dados; ele apenas não repovoa o banco.
+**Atenção:** o seed apaga dados de várias tabelas, incluindo empresas e usuários sem perfil administrativo. Não execute contra um banco que contenha dados operacionais que queira preservar. O modo `--clean-only` também apaga dados; ele apenas não repovoa o banco.
+
+A limpeza e a geração agora formam uma única transação: falhas revertem a execução. Superusuários e contas com perfil `admin` preservam suas credenciais e são desvinculados das empresas removidas; superusuários recebem o perfil administrativo usado pela aplicação. Parâmetros e migrações são verificados antes da limpeza. O seed só anuncia sucesso após salvar a base validada e retorna código diferente de zero em caso de falha.
 
 ```powershell
 # Padrão: 2 empresas, 10 equipamentos por empresa e 120 dias de histórico
 python scripts/seed_db.py
 
+# Verifica parâmetros e migrações sem alterar a base
+python scripts/seed_db.py --check
+
 # Exemplo com parâmetros personalizados
-python scripts/seed_db.py --empresas 5 --equipamentos 30 --days 60
+python scripts/seed_db.py --empresas 5 --equipamentos 30 --funcionarios 4 --days 60 --seed 42
 
 # Apaga os dados gerenciados pelo seed, sem repopular
 python scripts/seed_db.py --clean-only
@@ -104,22 +109,32 @@ python scripts/seed_db.py --clean-only
 | `--empresas` | `2` | Quantidade de empresas criadas |
 | `--equipamentos` | `10` | Equipamentos criados por empresa |
 | `--days` | `120` | Dias de histórico de telemetria |
+| `--funcionarios` | `4` | Total por empresa: um gestor e três técnicos; mínimo dois |
+| `--seed` | `42` | Reproduz os cadastros e valores; datas são relativas à execução e IDs podem mudar |
+| `--check` | desativada | Verifica parâmetros e migrações sem limpar ou gerar dados |
 | `--clean-only` | desativada | Limpa os dados gerenciados pelo seed e encerra |
 
 Em uma base limpa, o seed cria `admin` com senha `admin` caso esse usuário ainda não exista. Usuários de demonstração recebem a senha `123`. Em bases existentes, não presuma que a senha do superusuário seja `admin`.
 
+Cada empresa recebe `gestor.demo.N` e `tecnico.demo.N.M`, com senha `123`. O resumo imprime os logins reais (com sufixo se houver colisão com conta preservada), os IDs dos equipamentos/sensores, seus cenários e o próximo disparo por horímetro. Com pelo menos três equipamentos por empresa, há exemplos A/B/C, alerta ativo, recuperação, recorrência e O.S. gerada por tendência. Todos os técnicos recebem trabalho pendente e em andamento; todos os equipamentos têm conclusões recentes com custos. Quantidades menores continuam disponíveis, com aviso de cobertura parcial.
+
+O seed importa histórico sintético com datas anteriores ao momento da execução; os episódios por limite são avaliados em ordem pelos serviços operacionais. Não muda o relógio nem encurta os critérios globais de tendência. O [roteiro de apresentação](DOCS/APRESENTACAO_DADOS.md) explica os três perfis, os cenários e a preparação.
+
 ## Simulação de telemetria
 
-O simulador `scripts/simulador_realtime.py` grava leituras para sensores ativos. Por padrão, executa continuamente com intervalos aleatórios entre 1 e 3 segundos; encerre com `Ctrl+C`.
+O simulador `scripts/simulador_realtime.py` grava leituras para sensores ativos de equipamentos ativos e exclui sensores da demonstração guiada. Por padrão, executa continuamente com intervalos aleatórios entre 3 e 7 segundos; encerre com `Ctrl+C`.
 
 ```powershell
 python scripts/simulador_realtime.py
+python scripts/simulador_realtime.py --check
 python scripts/simulador_realtime.py --cycles 50 --interval-min 0.5 --interval-max 1.0
 python scripts/simulador_realtime.py --sensor 1 2 --dry-run --debug
 python scripts/simulador_realtime.py --equipamento 4 5 --seed 42
 ```
 
 `--dry-run` não grava leituras. `--sensor` e `--equipamento` limitam quais sensores serão simulados. Consulte `python scripts/simulador_realtime.py --help` para todas as opções.
+
+`--check` consulta o banco, os filtros e os limites, lista os sensores selecionados e encerra sem simular. Retorna falha se nenhum sensor for elegível ou houver configuração inválida. O início também informa IDs sem correspondência e duração estimada. Execuções finitas sem sensores ou com falhas retornam erro, mesmo que o último ciclo tenha funcionado. O cenário misto não garante uma anomalia em poucos minutos; a escalada padrão tem cinco fases de cerca de cinco minutos cada. Para mostrar a tendência em aproximadamente um minuto, use a demonstração guiada já disponível na interface.
 
 O script `scripts/stress_telemetry.py` envia leituras em paralelo para testar a API. Ele precisa do servidor rodando e de um token válido:
 

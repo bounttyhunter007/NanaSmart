@@ -103,10 +103,41 @@ class SimulatorTests(TransactionTestCase):
 
     def test_execucao_finita_sem_espera_final(self):
         args = sim.parse_args(['--cycles', '1', '--dry-run'])
-        with patch.object(sim, 'verificar_banco'), patch.object(sim, 'obter_sensores_ativos', return_value=[]), \
+        with patch.object(sim, 'verificar_banco'), \
                 patch('time.sleep') as dormir:
             self.assertEqual(sim.run_simulator(args), 0)
         dormir.assert_not_called()
+
+    def test_execucao_finita_sem_sensores_falha_sem_esperar(self):
+        args = sim.parse_args(['--cycles', '1', '--sensor', str(self.sensor.pk + 100)])
+        with patch.object(sim, 'verificar_banco'), patch('time.sleep') as dormir:
+            self.assertEqual(sim.run_simulator(args), 1)
+        dormir.assert_not_called()
+        self.assertFalse(Telemetria.objects.exists())
+
+    def test_check_consulta_sem_gerar_leituras(self):
+        args = sim.parse_args(['--check'])
+        with patch.object(sim, 'verificar_banco'), patch.object(sim, 'rodar_ciclo') as ciclo, \
+                patch('time.sleep') as dormir:
+            self.assertEqual(sim.run_simulator(args), 0)
+        ciclo.assert_not_called()
+        dormir.assert_not_called()
+        self.assertFalse(Telemetria.objects.exists())
+        self.assertFalse(Alerta.objects.exists())
+
+    def test_check_sem_sensores_e_limites_invalidos(self):
+        Sensor.objects.filter(pk=self.sensor.pk).update(limite_alerta=0)
+        with patch.object(sim, 'verificar_banco'):
+            self.assertEqual(sim.run_simulator(sim.parse_args(['--check'])), 1)
+            self.assertEqual(sim.run_simulator(sim.parse_args(['--check', '--sensor', '999999'])), 1)
+
+    def test_falha_intermediaria_nao_vira_sucesso_no_ultimo_ciclo(self):
+        args = sim.parse_args(['--cycles', '2'])
+        falha = dict(gravadas=0, simuladas=0, falhas=1, ignoradas=0)
+        sucesso = dict(gravadas=1, simuladas=0, falhas=0, ignoradas=0)
+        with patch.object(sim, 'verificar_banco'), patch('time.sleep'), \
+                patch.object(sim, 'rodar_ciclo', side_effect=[falha, sucesso]):
+            self.assertEqual(sim.run_simulator(args), 1)
 
     def test_help_funciona_no_terminal_windows_sem_acessar_banco(self):
         saida = TextIOWrapper(BytesIO(), encoding='cp1252')

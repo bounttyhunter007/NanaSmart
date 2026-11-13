@@ -2,13 +2,17 @@
 
 ## Revisão vigente de Tendências — 13/11/2026
 
-A página de Tendências agora usa lista compacta com busca sem distinção de acentos, filtro de equipamento pesquisável e filtros por condição. O sensor de maior risco é selecionado inicialmente; clicar em outro item atualiza um único painel. Atualizações preservam a escolha. Em telas pequenas, a lista é recolhível. A seleção não altera os filtros de Telemetria.
+O gráfico ocupa a largura do painel. **Trocar sensor** abre uma seleção temporária com busca sem distinção de acentos, equipamento pesquisável, condição e paginação. O sensor de maior risco é selecionado inicialmente; atualizações preservam a escolha. A seleção não altera os filtros de Telemetria.
 
-O gráfico abre em **Ao vivo · 5 min**. A aba **Análise operacional** mostra a amostra usada pelo servidor. Prévia gráfica não confirma O.S. e permanece disponível com histórico incompleto. As explicações extensas, cards grandes e detalhe duplicado foram substituídos por situação, previsão, vínculo da O.S. e seções expansíveis de fórmula/critérios. Escala e ajuste no histórico ficam em Opções do gráfico. O teste administrativo continua em Demonstração de tendências.
+Os modos são **Ao vivo** (cinco minutos por padrão) e **Previsão para manutenção** (amostra usada pelo servidor). A previsão explica em uma frase o tempo mínimo configurado e informa se está em confirmação, confirmada, sem tendência confirmada ou desativada. Com histórico insuficiente, mantém o gráfico preliminar e mostra duração observada e quantidade de leituras. O período disponível usa `source_duration_minutes`, evitando confundir o tempo das últimas N leituras com o histórico já coletado.
 
-**Ajustar análise** destaca histórico mínimo e antecedência da O.S., com sugestões de tempo e resumo da regra. Defaults novos: 2 h e 2 h; valores salvos são preservados. Critérios técnicos ficam em opções avançadas, com R² e persistência em percentuais.
+**Ampliar gráfico** aumenta a área real de desenho, com geometria responsiva para eixos, linhas e rótulos. Abrir/fechar preserva período, modo, escala e pausa sem duplicar o componente ou seus timers. Fechamento por Esc e devolução do foco complementam a navegação por teclado. Dashboard e Telemetria preservam o tamanho padrão de seus gráficos.
 
-A O.S. mostra Previsão na abertura, com evidência fixa da análise elegível, separada do acompanhamento atual. Abertura exige previsão confirmada dentro da antecedência; uma anomalia distante pode ter alerta sem O.S. As descrições de Tendências nas seções históricas abaixo foram substituídas por esta revisão. Regras completas: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
+A identificação da **O.S. preditiva e seu status atual** fica no cabeçalho. Ela continua aparecendo após normalização do alerta. A aberta mais recente tem prioridade; sem abertas, aparece a última encerrada. Múltiplas abertas e o histórico completo são consultados sob demanda. A previsão atual permanece distinta da evidência fixa de abertura preservada na ordem.
+
+O filtro **O.S. preditiva** oferece Todos os sensores, Com O.S. aberta, Com histórico de O.S. e Sem O.S., combinando com busca, equipamento e condição. Aberta significa pendente ou em andamento; histórico inclui concluídas e canceladas. Contadores respeitam os filtros combinados e a visibilidade do perfil. Corretivas não entram nesse filtro; continuam no aviso de limite.
+
+**Ajustar análise** conserva histórico mínimo e antecedência independentes: defaults novos de 2 h e 2 h, sem sobrescrever valores salvos. Escala e ajuste histórico ficam em Opções do gráfico; fórmula e critérios ficam recolhidos. O teste administrativo continua em Demonstração de tendências. Esta revisão substitui os fluxos históricos de Tendências abaixo. Regras completas: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
 
 
 Revisão: 06/11/2026.

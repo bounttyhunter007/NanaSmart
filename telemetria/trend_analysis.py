@@ -86,7 +86,8 @@ def _select_sample(rows, maximum, minimum_minutes):
             chosen.add(stamp)
         selected = [(stamp, candidates[stamp]) for stamp in chosen]
     stats = {'count': count, 'mean_x': mean_x, 'mean_y': mean_y,
-             'sxx': sxx, 'syy': syy, 'sxy': sxy, 'rises': rises, 'falls': falls}
+             'sxx': sxx, 'syy': syy, 'sxy': sxy, 'rises': rises, 'falls': falls,
+             'duration_minutes': (latest - previous_stamp).total_seconds() / 60 if latest else 0}
     return sorted(selected), distributed, stats
 
 
@@ -108,6 +109,7 @@ def analyze_sensor_trend(sensor_id):
         'data_quality': 'disabled', 'analysis_window_hours': config['periodo_horas'],
         'sample_duration_minutes': 0.0, 'r_squared': None, 'persistence_ratio': 0.0,
         'sample_selection': 'recent', 'source_readings_count': 0,
+        'source_duration_minutes': 0.0,
         'source_r_squared': None, 'source_persistence_ratio': None,
         'is_anomalous': False, 'intervention_recommended': False,
         'intervention_reason': 'disabled' if not config['ativo'] else 'insufficient_data',
@@ -132,6 +134,7 @@ def analyze_sensor_trend(sensor_id):
         readings_count=len(readings),
         sample_selection='time_distributed' if distributed else 'recent',
         source_readings_count=source['count'],
+        source_duration_minutes=round(source['duration_minutes'], 4),
     )
     duration = (readings[-1][0] - readings[0][0]).total_seconds() / 60 if readings else 0
     result['sample_duration_minutes'] = round(duration, 4)

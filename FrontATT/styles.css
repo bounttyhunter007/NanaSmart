@@ -4867,3 +4867,100 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .trend-config-dialog .field label { font:500 12px/1.5 var(--body); letter-spacing:0; text-transform:none; }
 .trend-config-dialog .field .trend-config-toggle { display:flex; align-items:center; gap:10px; }
 .trend-config-dialog .trend-config-toggle input { width:16px; height:16px; accent-color:var(--ice); }
+
+/* Graph-first trends: temporary sensor navigation, current attendance and a roomy plot. */
+.trends-focus { max-width:1640px; }
+.trends-focus .trends-layout { display:block; }
+.trends-focus .trends-heading { flex-direction:row; align-items:center; gap:12px; }
+.trends-focus .trends-heading h1 { margin:0; }
+.trends-focus .trends-main { padding:22px 24px; }
+.trends-focus .trends-sensor-heading { gap:16px; }
+.trends-focus .trends-sensor-heading h2 { font-size:21px; }
+.trends-sensor-actions { display:flex; align-items:center; justify-content:flex-end; gap:16px; flex-wrap:wrap; }
+.trends-attendance { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.trends-order-link { display:flex; align-items:center; gap:12px; padding:9px 12px; background:var(--s3); color:var(--t1); border:1px solid var(--edge); border-radius:8px; font:500 12px/1.5 var(--body); cursor:pointer; }
+.trends-order-link:hover { border-color:var(--ice); }
+.trends-order-link .order-status { font-size:11px; }
+.trends-history-toggle { background:none; border:0; padding:8px 0; color:var(--t3); font:400 11px/1.5 var(--body); cursor:pointer; text-decoration:underline; text-underline-offset:4px; }
+.trends-focus .trends-overview { margin:12px 0 14px; }
+.trends-plot-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--edge); }
+.trends-focus .trends-chart-tabs { border:0; margin:0; gap:22px; }
+.trends-mode-explanation { display:flex; align-items:center; gap:12px; justify-content:space-between; font-size:12px; line-height:1.6; color:var(--t3); padding:12px 0 4px; }
+.trends-forecast-state { flex-shrink:0; font-size:10px; padding:3px 8px; border:1px solid var(--edge); border-radius:5px; }
+.trends-focus .chart-clean .live-controls { margin-top:8px; }
+.trends-focus .chart-clean .live-measure { padding:0; margin:3px 0; }
+.trends-focus .chart-clean .live-measure strong { font-size:26px; }
+.trends-focus .chart-clean .live-measure small { font-size:13px; }
+.trends-focus .chart-clean .live-status { margin:4px 0 8px; }
+.chart-large svg { max-height:none; }
+.trends-focus .chart-large .live-plot svg, .trends-focus .measurement-sample.chart-large svg { max-height:none; }
+.trends-focus .chart-large .live-plot { margin:4px 0 8px; }
+.trends-focus .live-point-detail { font-size:11px; }
+.trends-focus .trends-decision { gap:12px; padding:12px 14px; margin:12px 0 0; background:var(--s3); border-color:var(--edge); }
+.trends-focus .trends-decision > div { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:baseline; }
+.trends-focus .trends-decision > div > span { font-size:11px; color:var(--t3); }
+.trends-focus .trends-decision strong { font-size:12px; }
+.trends-focus .trends-decision > span { font-size:11px; color:var(--t3); }
+.trends-focus .trends-evidence-note { font-size:11px; color:var(--t3); margin:8px 0 14px; }
+.trends-focus .trends-history-progress { font-size:12px; margin:8px 0; color:var(--t3); }
+.trends-active-filter { display:flex; justify-content:space-between; align-items:center; color:var(--t3); font-size:12px; gap:12px; }
+.trends-order-history { margin:18px 0; border:1px solid var(--edge); border-radius:10px; padding:0 16px; }
+.trends-order-history > header { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 0; }
+.trends-order-history h3 { font:600 13px/1.5 var(--body); }
+.trends-order-history article { display:flex; align-items:center; gap:18px; border-top:1px solid var(--edge); padding:14px 0; }
+.trends-order-history article > div { flex:1; min-width:0; }
+.trends-order-history article strong { display:block; color:var(--t2); font:500 12px/1.6 var(--body); overflow-wrap:anywhere; }
+.trends-order-history article small { display:block; font-size:11px; color:var(--t3); margin-top:5px; }
+.trends-order-history footer { display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:12px 0; border-top:1px solid var(--edge); }
+.trends-drawer-backdrop { position:fixed; inset:0; z-index:1600; background:rgba(0,0,0,.55); backdrop-filter:blur(3px); }
+.trends-focus .trends-sensor-drawer { position:absolute; top:0; bottom:0; right:0; width:min(440px,100%); border-radius:14px 0 0 14px; padding:20px; overflow:auto; box-shadow:var(--shadow); }
+.trends-sensor-drawer .trends-browser-body { display:block; padding:0; }
+.trends-sensor-drawer .trends-browser-heading { display:flex; margin:0 0 18px; }
+.trends-sensor-drawer .trends-browser-heading h2 { font-size:17px; }
+.trends-sensor-drawer h2 small { font-size:11px; font-weight:400; color:var(--t3); margin-left:8px; }
+.trends-sensor-drawer .trends-sensor-items { max-height:none; }
+.trends-sensor-drawer .trends-sensor-item { padding:12px; }
+.trends-order-filter { display:flex; flex-direction:column; gap:7px; color:var(--t3); font:400 11px/1.5 var(--body); margin-bottom:14px; }
+.trends-order-filter select { width:100%; background:var(--s2); color:var(--t2); border:1px solid var(--edge); padding:9px 10px; border-radius:8px; font:400 12px/1.5 var(--body); }
+.trends-item-order { display:block; color:var(--ice); font-size:11px; margin-top:7px; }
+.trends-chart-backdrop { position:fixed; inset:0; z-index:1400; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); }
+.trends-chart-shell.is-expanded { position:fixed; inset:16px; z-index:1450; background:var(--s2); border:1px solid var(--edge); border-radius:12px; padding:18px 24px; overflow:auto; }
+.trends-expanded-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:12px; }
+.trends-expanded-heading > div { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+.trends-expanded-heading strong { font:600 18px/1.5 var(--body); color:var(--t1); }
+.trends-expanded-heading span { font-size:12px; color:var(--t3); }
+@media (max-width:760px) {
+  .trends-focus .trends-heading { flex-wrap:wrap; }
+  .trends-focus .trends-main { padding:16px 12px; }
+  .trends-focus .trends-sensor-heading { flex-direction:column; align-items:stretch; gap:10px; }
+  .trends-focus .trends-sensor-heading h2 { font-size:19px; }
+  .trends-sensor-actions { justify-content:space-between; gap:8px; }
+  .trends-order-link { gap:8px; font-size:11px; padding:7px 9px; }
+  .trends-plot-toolbar { gap:8px; align-items:center; }
+  .trends-focus .trends-chart-tabs { gap:14px; }
+  .trends-focus .trends-chart-tabs button { font-size:11px; }
+  .trends-plot-toolbar > .btn { font-size:10px; padding:6px; }
+  .trends-mode-explanation { font-size:11px; align-items:flex-start; flex-wrap:wrap; gap:6px; }
+  .trends-order-history article { gap:8px; flex-wrap:wrap; }
+  .trends-order-history article > div { flex-basis:100%; }
+  .trends-chart-shell.is-expanded { inset:6px; padding:12px; }
+  .trends-expanded-heading strong { font-size:15px; }
+  .trends-expanded-heading span { font-size:10px; }
+}
+
+@media (min-width:761px) {
+  .trends-focus .live-chart.chart-large { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:24px; }
+  .trends-focus .live-chart.chart-large > .live-controls { grid-column:1; grid-row:1; }
+  .trends-focus .live-chart.chart-large > .live-status { grid-column:1; grid-row:2; }
+  .trends-focus .live-chart.chart-large > .live-measure { grid-column:2; grid-row:1 / 3; align-self:center; gap:16px; }
+  .trends-focus .live-chart.chart-large > .trend-chart-toolbar { grid-column:1 / -1; grid-row:3; margin-top:8px; }
+  .trends-focus .live-chart.chart-large > .live-plot, .trends-focus .live-chart.chart-large > .live-placeholder,
+  .trends-focus .live-chart.chart-large > .telemetry-notice, .trends-focus .live-chart.chart-large > .chart-data-warning { grid-column:1 / -1; }
+}
+
+.trends-focus .trends-chart-tabs button { white-space:nowrap; }
+@media (max-width:520px) {
+  .trends-expand-label { display:none; }
+  .trends-plot-toolbar > .btn { min-width:30px; font-size:15px; padding:5px; }
+  .trends-focus .chart-large .live-status:has(.live-state:not(.paused):not(.failed)) { display:none; }
+}

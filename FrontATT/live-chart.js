@@ -120,14 +120,14 @@
     }
     return message;
   }
-  function lineAnnotations(points, projectedPoints, projection, left, right, format) {
+  function lineAnnotations(points, projectedPoints, projection, left, right, format, bottom = 230) {
     if (!points.length) return [];
     const last = points[points.length - 1];
     const end = projectedPoints[projectedPoints.length - 1];
     const make = (point, id, text, caption, below = false) => {
       const width = Math.max(text.length * 8, caption.length * 6.5);
       const x = Math.min(right - 8, Math.max(left + width + 4, point.x - 8));
-      const y = Math.max(56, Math.min(206, point.y + (below ? 22 : -24)));
+      const y = Math.max(56, Math.min(bottom - 24, point.y + (below ? 22 : -24)));
       return { id, x, y, text, caption, width };
     };
     const latest = make(last, 'latest', format(last.valor), 'Última leitura');
@@ -138,13 +138,15 @@
       const overlaps = () => Math.abs(latest.y - estimate.y) < 34 &&
         latest.x > estimate.x - estimate.width - 10 && estimate.x > latest.x - latest.width - 10;
       if (overlaps()) Object.assign(estimate, make(end, 'estimate', estimate.text, estimate.caption, true));
-      if (overlaps()) estimate.y = latest.y <= 170 ? latest.y + 36 : latest.y - 36;
+      if (overlaps()) estimate.y = latest.y <= bottom - 60 ? latest.y + 36 : latest.y - 36;
       labels.push(estimate);
     }
     return labels;
   }
   function chart(rows, sensor, envelope = null, minutes = 'auto', domain = null, compact = false, trendLine = [], projection = null, view = {}) {
-    if (!rows.length) return { width:compact ? 360 : 900, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], annotations: [], ticks: [], times: [], limits: [], offscaleLimits:[], path: '', trendPath: '', projection: null, domain: null };
+    const width = view.width || (compact ? 360 : 900), height = view.height || 285;
+    const bottom = height - 55;
+    if (!rows.length) return { width, height, bottom, left:compact ? 48 : 72, right:compact ? 344 : 722, points: [], annotations: [], ticks: [], times: [], limits: [], offscaleLimits:[], path: '', trendPath: '', projection: null, domain: null };
     const limits = view.limits || thresholds(sensor), values = rows.map(r => r.valor).concat(view.focus ? [] : limits.map(t => t.value), view.showFit === false ? [] : trendLine.map(p => p.valor), (projection?.points || []).map(p => p.valor));
     const rawMin = Math.min(...values), rawMax = Math.max(...values);
     const minimumRange = view.focus ? Math.max(Math.abs(rawMax) * .002, .000001) : 0;
@@ -165,16 +167,18 @@
     const futureTo = projection?.to || (view.futureSpace ? to + Math.min(Math.max(to-from, 2000)/2, 86400000) : to);
     const bounds = domain || { min, max, from: from === to ? to - 1000 : from, to: futureTo };
     ({ min, max } = bounds);
-    const y = value => 230 - (value - min) / (max - min) * 188;
-    const left = compact ? 48 : 72, right = compact ? 344 : view.focus ? 872 : 722;
+    const y = value => bottom - (value - min) / (max - min) * (bottom - 42);
+    const axisNumber = new Intl.NumberFormat('pt-BR', {maximumFractionDigits:Math.max(2,Math.min(8,1-Math.floor(Math.log10((max-min)/4))))});
+    const labelWidth = Math.max(...Array.from({length:5}, (_, i) => axisNumber.format(min + (max-min)*i/4).length)) * 7 + 16;
+    const left = view.width ? Math.max(compact ? 48 : 72, labelWidth) : compact ? 48 : 72;
+    const right = compact ? width - 16 : view.focus ? width - 28 : width - 178;
     const x = time => left + (time - bounds.from) / Math.max(bounds.to - bounds.from, 1) * (right-left);
     const points = rows.map(r => ({ ...r, x: x(Date.parse(r.timestamp)), y: y(r.valor) }));
     const crossesDate = new Date(bounds.from).toLocaleDateString() !== new Date(bounds.to).toLocaleDateString();
     const timeFormat = new Intl.DateTimeFormat('pt-BR', { ...(crossesDate ? { day: '2-digit', month: '2-digit' } : {}), hour: '2-digit', minute: '2-digit', ...(bounds.to - bounds.from < 3600000 ? { second: '2-digit' } : {}) });
     const projectedPoints = (projection?.points || []).map(p => ({ ...p, x: x(Date.parse(p.timestamp)), y: y(p.valor) }));
-    const axisNumber = new Intl.NumberFormat('pt-BR', {maximumFractionDigits:Math.max(2,Math.min(8,1-Math.floor(Math.log10((max-min)/4))))});
     const plottedLimits = limits.map(t => ({...t,y:y(t.value),visible:t.value>=min && t.value<=max,position:t.value>max?'acima':'abaixo'}));
-    return { points, annotations: lineAnnotations(points, projectedPoints, projection, left, right, value => axisNumber.format(value)), width:compact ? 360 : 900, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
+    return { points, annotations: lineAnnotations(points, projectedPoints, projection, left, right, value => axisNumber.format(value), bottom), width, height, bottom, left, right, domain: bounds, path: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
       ticks: Array.from({ length: 5 }, (_, i) => { const v = min + (max - min) * i / 4; return { value: v, label: axisNumber.format(v), y: y(v) }; }),
       times: Array.from({ length: 3 }, (_, i) => ({ x: left + i * (right-left)/2, label: timeFormat.format(bounds.from + (bounds.to - bounds.from) * i / 2) })),
       trendPath: view.showFit === false ? '' : trendLine.map((p,i) => `${i ? 'L' : 'M'}${x(Date.parse(p.timestamp)).toFixed(2)},${y(p.valor).toFixed(2)}`).join(' '),
@@ -227,11 +231,33 @@
     Vue.onUnmounted(() => media?.removeEventListener?.('change', changed));
     return compact;
   }
+  function useChartDimensions(props, compact) {
+    const host = Vue.ref(null), width = Vue.ref(0), viewportHeight = Vue.ref(root.innerHeight || 900);
+    let observer;
+    const measure = () => {
+      width.value = Math.max(250, host.value?.clientWidth || (compact.value ? 360 : 900));
+      viewportHeight.value = root.innerHeight || 900;
+    };
+    Vue.onMounted(() => {
+      if (!props.large) return;
+      measure();
+      if (root.ResizeObserver && host.value) { observer = new root.ResizeObserver(measure); observer.observe(host.value); }
+      root.addEventListener?.('resize', measure);
+    });
+    Vue.onUnmounted(() => { observer?.disconnect(); root.removeEventListener?.('resize', measure); });
+    const geometry = Vue.computed(() => props.large ? {
+      width: width.value || (compact.value ? 360 : 900),
+      height: props.expanded ? Math.max(240, viewportHeight.value - (compact.value ? 450 : 380))
+        : compact.value ? 260 : Math.round(Math.min(480, Math.max(320, viewportHeight.value * .44))),
+    } : {});
+    return {host, geometry};
+  }
   const component = {
-    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null}, clean:{type:Boolean,default:false} },
+    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null}, clean:{type:Boolean,default:false}, large:{type:Boolean,default:false}, expanded:{type:Boolean,default:false} },
     setup(props) {
       const { ref, computed, watch, onMounted, onUnmounted } = Vue;
       const compact = useCompact();
+      const dimensions = useChartDimensions(props, compact);
       const showTrend = ref(Boolean(props.selectedSensor));
       const showHistoryFit = ref(false);
       const scale = ref('focus'), received = ref(0);
@@ -243,7 +269,7 @@
       const fitted = computed(() => showTrend.value ? fitLine(rows.value) : []);
       const projected = computed(() => showTrend.value ? projectForward(rows.value, fitted.value, {limit:sensor.value?.limite_alerta,visual:true}) : null);
       const fitMessage = computed(() => projectionExplanation(projected.value));
-      const view = () => ({focus:scale.value==='focus', futureSpace:showTrend.value, showFit:showHistoryFit.value || !projected.value});
+      const view = () => ({focus:scale.value==='focus', futureSpace:showTrend.value, showFit:showHistoryFit.value || !projected.value, ...dimensions.geometry.value});
       const latest = computed(() => rows.value[rows.value.length - 1]);
       const age = computed(() => {
         if (!latest.value) return '';
@@ -344,7 +370,7 @@
       function togglePause() { paused.value = !paused.value; if (paused.value) stop(); else start(); }
       function fit() { envelope = null; render(chart(rows.value, sensor.value, null, minutes.value, null, compact.value, fitted.value, projected.value, view()), false); }
       function visibility() { if (document.hidden) stop(); else start(); }
-      watch([compact, showTrend, showHistoryFit, scale], () => {
+      watch([compact, showTrend, showHistoryFit, scale, () => JSON.stringify(dimensions.geometry.value)], () => {
         envelope = null;
         const next = chart(rows.value, sensor.value, envelope, minutes.value, null, compact.value, fitted.value, projected.value, view());
         envelope = next.domain ? { min:next.domain.min, max:next.domain.max } : null;
@@ -357,11 +383,11 @@
       watch(() => props.selectedSensor, loadOptions);
       onMounted(() => { loadOptions(); document.addEventListener('visibilitychange', visibility); });
       onUnmounted(() => { disposed = true; ++optionGeneration; ++equipmentGeneration; stop(); document.removeEventListener('visibilitychange', visibility); });
-      return { compact, showTrend, showHistoryFit, scale, received, fitted, projected, fitMessage, equipment, sensorId, minutes, options, sensors, sensor, rows, displayed, busy, optionsBusy, paused, error, optionsError, updatedAt, truncated, latest, detail, age, selected,
+      return { plotHost: dimensions.host, compact, showTrend, showHistoryFit, scale, received, fitted, projected, fitMessage, equipment, sensorId, minutes, options, sensors, sensor, rows, displayed, busy, optionsBusy, paused, error, optionsError, updatedAt, truncated, latest, detail, age, selected,
         refresh, loadOptions, loadSensors, togglePause, fit, number, date, projectionLabel };
     },
     template: `
-      <section class="live-chart" :class="{'chart-clean':clean}" aria-label="Acompanhamento de medições">
+      <section ref="plotHost" class="live-chart" :class="{'chart-clean':clean,'chart-large':large}" aria-label="Acompanhamento de medições">
         <div class="live-controls">
           <label v-if="!selectedSensor">Equipamento<select v-model="equipment" :disabled="optionsBusy"><option value="">Escolha o equipamento</option><option v-for="e in options" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
           <label v-if="!selectedSensor">Sensor<select v-model="sensorId" :disabled="!equipment || optionsBusy"><option value="">Escolha o sensor</option><option v-for="s in sensors" :key="s.id" :value="s.id">{{ s.nome }} · {{ s.unidade_medida }}{{ s.ativo ? '' : ' · inativo' }}</option></select></label>
@@ -379,18 +405,18 @@
           <div v-if="rows.length" class="trend-chart-toolbar"><label class="trend-chart-toggle"><input type="checkbox" v-model="showTrend"> Mostrar tendência e projeção</label><label v-if="showTrend && projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="displayed.trendPath"><i class="legend-trend"></i>Tendência da janela</span><span v-if="displayed.projection"><i class="legend-projection"></i>{{ projectionLabel(displayed.projection) }}</span><span v-if="displayed.limits.some(t=>t.visible)"><i class="legend-limit"></i>Limites na escala</span></div></div>
           <p v-if="showTrend && rows.length" class="trend-chart-explanation">{{ fitMessage }}</p>
           <div v-if="rows.length" class="live-plot">
-            <svg :viewBox="'0 0 ' + displayed.width + ' 285'" role="img" :aria-label="'Medições de ' + sensor?.nome + ', unidade ' + sensor?.unidade_medida">
-              <defs><clipPath :id="'live-clip-' + $.uid"><rect :x="displayed.left-6" y="25" :width="displayed.right-displayed.left+12" height="212"/></clipPath></defs>
+            <svg :viewBox="'0 0 ' + displayed.width + ' ' + displayed.height" :style="large ? {height:displayed.height + 'px'} : null" role="img" :aria-label="'Medições de ' + sensor?.nome + ', unidade ' + sensor?.unidade_medida">
+              <defs><clipPath :id="'live-clip-' + $.uid"><rect :x="displayed.left-6" y="25" :width="displayed.right-displayed.left+12" :height="displayed.bottom - 19"/></clipPath></defs>
               <text :x="displayed.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
               <g v-if="displayed.future" class="forecast-region">
-              <rect :x="displayed.future.startX" y="36" :width="displayed.future.width" height="200" class="forecast-shade"/>
-              <line :x1="displayed.future.startX" y1="36" :x2="displayed.future.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(displayed.future.timestamp) }}</title></line>
+              <rect :x="displayed.future.startX" y="36" :width="displayed.future.width" :height="displayed.bottom - 30" class="forecast-shade"/>
+              <line :x1="displayed.future.startX" y1="36" :x2="displayed.future.startX" :y2="displayed.bottom + 6" class="forecast-divider"><title>Última leitura real · {{ date(displayed.future.timestamp) }}</title></line>
               <text v-if="!compact" :x="(displayed.left + displayed.future.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Leituras reais</text>
               <text :x="displayed.future.startX + displayed.future.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? ('confirmed' === displayed.projection?.kind ? 'Projeção' : 'Prévia') : projectionLabel(displayed.projection) }}</text>
-              <text v-if="!displayed.projection" :x="displayed.future.startX + displayed.future.width/2" y="140" text-anchor="middle" class="forecast-region-label">Mínimo: 3 horários</text>
+              <text v-if="!displayed.projection" :x="displayed.future.startX + displayed.future.width/2" :y="(displayed.bottom + 42)/2" text-anchor="middle" class="forecast-region-label">Mínimo: 3 horários</text>
             </g>
             <g v-for="tick in displayed.ticks" :key="tick.y"><line :x1="displayed.left" :y1="tick.y" :x2="displayed.right" :y2="tick.y" class="live-grid"/><text :x="displayed.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
-              <g v-for="limit in displayed.limits.filter(t=>t.visible)" :key="limit.name"><line :x1="displayed.left" :y1="limit.y" :x2="displayed.right" :y2="limit.y" :stroke="limit.color" :stroke-dasharray="limit.dash" stroke-width="1.5"/><text v-if="!compact && scale !== 'focus'" x="738" :y="limit.y+4" :fill="limit.color" class="live-limit-label">{{ limit.name }} · {{ number(limit.value) }}</text></g>
+              <g v-for="limit in displayed.limits.filter(t=>t.visible)" :key="limit.name"><line :x1="displayed.left" :y1="limit.y" :x2="displayed.right" :y2="limit.y" :stroke="limit.color" :stroke-dasharray="limit.dash" stroke-width="1.5"/><text v-if="!compact && scale !== 'focus'" :x="displayed.right + 16" :y="limit.y+4" :fill="limit.color" class="live-limit-label">{{ limit.name }} · {{ number(limit.value) }}</text></g>
               <g :clip-path="'url(#live-clip-' + $.uid + ')'">
                 <path :d="displayed.path" fill="none" stroke="var(--ice)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
                 <path v-if="displayed.trendPath" :d="displayed.trendPath" class="trend-fit-line"/>
@@ -403,7 +429,7 @@
               <g v-for="label in displayed.annotations" :key="label.id" class="chart-line-label" :class="'chart-line-label-' + label.id">
                 <text :x="label.x" :y="label.y" text-anchor="end"><tspan class="chart-line-value">{{ label.text }}</tspan><tspan :x="label.x" dy="15" class="chart-line-caption">{{ label.caption }}</tspan></text>
               </g>
-              <text v-for="(time,i) in displayed.times" :key="i" :x="time.x" y="260" :text-anchor="i === 0 ? 'start' : i === 2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
+              <text v-for="(time,i) in displayed.times" :key="i" :x="time.x" :y="displayed.height - 25" :text-anchor="i === 0 ? 'start' : i === 2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
             </svg>
             <p class="live-point-detail" aria-live="polite">{{ detail ? number(detail.valor) + ' ' + sensor?.unidade_medida + ' · ' + date(detail.timestamp) : '' }}</p>
           </div>
@@ -417,9 +443,10 @@
       </section>`
   };
   const sampleComponent = {
-    props: ['readings', 'sensor', 'analysis', 'clean', 'horizonMinutes'],
+    props: ['readings', 'sensor', 'analysis', 'clean', 'horizonMinutes', 'large', 'expanded'],
     setup(props) {
       const compact = useCompact();
+      const dimensions = useChartDimensions(props, compact);
       const showHistoryFit = Vue.ref(false);
       const scale = Vue.ref('focus');
       const fitted = Vue.computed(() => {
@@ -440,28 +467,28 @@
         // thresholds remain available below it, using this sensor's actual rules.
         const references = Number.isFinite(limit) && limit > 0 ? [{name:'Limite superior',value:limit,color:'var(--danger)',dash:'8 5'}] : [];
         return chart(rows, null, null, 'auto', null, compact.value, fitted.value, projected.value,
-          {focus:scale.value==='focus', futureSpace:true, showFit:showHistoryFit.value || !projected.value, limits:references});
+          {focus:scale.value==='focus', futureSpace:true, showFit:showHistoryFit.value || !projected.value, limits:references, ...dimensions.geometry.value});
       });
-      return { compact, showHistoryFit, scale, fitted, projected, estimate, fitMessage, limits, plot, number, date, forecastDate, projectionLabel };
+      return { plotHost: dimensions.host, compact, showHistoryFit, scale, fitted, projected, estimate, fitMessage, limits, plot, number, date, forecastDate, projectionLabel };
     },
     template: `
-      <figure class="measurement-sample" :class="{'chart-clean':clean}">
+      <figure ref="plotHost" class="measurement-sample" :class="{'chart-clean':clean,'chart-large':large}">
         <figcaption>Leituras e projeção · {{ sensor?.unidade_medida }}</figcaption>
         <div class="trend-chart-toolbar"><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="plot.trendPath"><i class="legend-trend"></i>{{ analysis?.insufficient_data ? 'Tendência preliminar' : 'Tendência calculada' }}</span><span v-if="plot.projection"><i class="legend-projection"></i>{{ projectionLabel(plot.projection) }}</span><span v-if="plot.limits.some(t=>t.visible)"><i class="legend-limit"></i>Limite superior</span></div><label v-if="projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label></div>
         <label v-if="!clean" class="trend-chart-toggle">Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir limite superior</option></select></label>
         <details v-if="clean" class="chart-options"><summary>Opções do gráfico</summary><div><label>Escala<select v-model="scale"><option value="focus">Acompanhar variação</option><option value="limits">Incluir limite superior</option></select></label><label><input type="checkbox" v-model="showHistoryFit"> Ajuste no histórico</label></div></details>
         <p class="trend-chart-explanation">{{ fitMessage }}</p>
-        <svg :viewBox="'0 0 ' + plot.width + ' 285'" role="img" :aria-label="'Leituras reais, tendência e projeção de ' + sensor?.nome">
+        <svg :viewBox="'0 0 ' + plot.width + ' ' + plot.height" :style="large ? {height:plot.height + 'px'} : null" role="img" :aria-label="'Leituras reais, tendência e projeção de ' + sensor?.nome">
           <g v-if="plot.future" class="forecast-region">
-              <rect :x="plot.future.startX" y="36" :width="plot.future.width" height="200" class="forecast-shade"/>
-              <line :x1="plot.future.startX" y1="36" :x2="plot.future.startX" y2="236" class="forecast-divider"><title>Última leitura real · {{ date(plot.future.timestamp) }}</title></line>
+              <rect :x="plot.future.startX" y="36" :width="plot.future.width" :height="plot.bottom - 30" class="forecast-shade"/>
+              <line :x1="plot.future.startX" y1="36" :x2="plot.future.startX" :y2="plot.bottom + 6" class="forecast-divider"><title>Última leitura real · {{ date(plot.future.timestamp) }}</title></line>
               <text v-if="!compact" :x="(plot.left + plot.future.startX)/2" y="30" text-anchor="middle" class="forecast-region-label">Leituras reais</text>
               <text :x="plot.future.startX + plot.future.width/2" y="30" text-anchor="middle" class="forecast-region-label">{{ compact ? ('confirmed' === plot.projection?.kind ? 'Projeção' : 'Prévia') : projectionLabel(plot.projection) }}</text>
-              <text v-if="!plot.projection" :x="plot.future.startX + plot.future.width/2" y="140" text-anchor="middle" class="forecast-region-label">{{ analysis?.analysis_enabled === false ? 'Desativada' : 'Mínimo: 3 horários' }}</text>
+              <text v-if="!plot.projection" :x="plot.future.startX + plot.future.width/2" :y="(plot.bottom + 42)/2" text-anchor="middle" class="forecast-region-label">{{ analysis?.analysis_enabled === false ? 'Desativada' : 'Mínimo: 3 horários' }}</text>
             </g>
             <g v-for="tick in plot.ticks" :key="tick.y"><line :x1="plot.left" :y1="tick.y" :x2="plot.right" :y2="tick.y" class="live-grid"/><text :x="plot.left-10" :y="tick.y+4" text-anchor="end" class="live-axis">{{ tick.label }}</text></g>
           <text :x="plot.left" y="18" class="live-axis">{{ sensor?.unidade_medida }}</text>
-          <g v-for="limit in plot.limits.filter(t=>t.visible)" :key="limit.name"><line :x1="plot.left" :y1="limit.y" :x2="plot.right" :y2="limit.y" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="8 5"/><text v-if="!compact && scale !== 'focus'" x="738" :y="limit.y+4" fill="var(--danger)" class="live-limit-label">Limite · {{ number(limit.value) }}</text></g>
+          <g v-for="limit in plot.limits.filter(t=>t.visible)" :key="limit.name"><line :x1="plot.left" :y1="limit.y" :x2="plot.right" :y2="limit.y" stroke="var(--danger)" stroke-width="1.5" stroke-dasharray="8 5"/><text v-if="!compact && scale !== 'focus'" :x="plot.right + 16" :y="limit.y+4" fill="var(--danger)" class="live-limit-label">Limite · {{ number(limit.value) }}</text></g>
           <path :d="plot.path" fill="none" stroke="var(--ice)" stroke-width="2.5"/>
           <path v-if="plot.trendPath" :d="plot.trendPath" class="trend-fit-line"/>
           <g v-if="plot.projection">
@@ -472,7 +499,7 @@
           <g v-for="label in plot.annotations" :key="label.id" class="chart-line-label" :class="'chart-line-label-' + label.id">
             <text :x="label.x" :y="label.y" text-anchor="end"><tspan class="chart-line-value">{{ label.text }}</tspan><tspan :x="label.x" dy="15" class="chart-line-caption">{{ label.caption }}</tspan></text>
           </g>
-          <text v-for="(time,i) in plot.times" :key="i" :x="time.x" y="260" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
+          <text v-for="(time,i) in plot.times" :key="i" :x="time.x" :y="plot.height - 25" :text-anchor="i===0 ? 'start' : i===2 ? 'end' : 'middle'" class="live-axis">{{ time.label }}</text>
         </svg>
         <p v-if="plot.offscaleLimits.length" class="live-note"><span v-for="limit in plot.offscaleLimits" :key="limit.name">{{ limit.name }}: {{ number(limit.value) }} {{ sensor?.unidade_medida }} · {{ limit.position }} da escala. </span>Use “Incluir limite superior” para vê-lo no eixo.</p>
         <p v-if="compact && plot.limits.some(t=>t.visible)" class="live-note">Limite superior: {{ number(plot.limits[0].value) }} {{ sensor?.unidade_medida }}</p>

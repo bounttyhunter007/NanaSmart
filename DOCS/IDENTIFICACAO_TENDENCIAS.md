@@ -72,11 +72,13 @@ Inclui resumo legível, instante de registro, equipamento/sensor/unidade/limite,
 
 ## Tela e API
 
-A página combina lista pesquisável de sensores e um único painel. O padrão é Ao vivo, com até 60 leituras dos últimos cinco minutos; a aba Análise operacional usa o resultado do servidor. A prévia com ao menos três horários distintos continua visível antes da confirmação. A projeção operacional confirmada desenha a antecedência configurada; prévias e outros gráficos conservam seu horizonte curto. Escala e ajuste histórico ficam em Opções do gráfico. Fórmula e critérios ficam em seções expansíveis. Detalhes de UX: [Telemetria e tendências](TELEMETRIA_UX.md).
+A página dá destaque ao gráfico em largura total, com seleção de sensor em um painel temporário. O padrão é Ao vivo, com até 60 leituras dos últimos cinco minutos; o modo Previsão para manutenção usa o resultado do servidor. A opção Ampliar gráfico preserva período, escala e pausa. A prévia com ao menos três horários distintos continua visível antes da confirmação. A projeção operacional confirmada desenha a antecedência configurada; prévias e outros gráficos conservam seu horizonte curto. Escala e ajuste histórico ficam em Opções do gráfico. Fórmula e critérios ficam em seções expansíveis. Detalhes de UX: [Telemetria e tendências](TELEMETRIA_UX.md).
 
 - Configurações: `/api/telemetria/trend-config/`, com novo campo `antecedencia_os_minutos`.
 - Análise: `/api/telemetria/tendencias/?sensor_id=<id>`; `?all=true` inclui estados insuficientes/desativados na lista.
 - A resposta acrescenta `intervention_reason`, `method_version`, `slope_full_precision` e o novo campo em `config_used`, mantendo os campos anteriores.
+- A resposta de Tendências também inclui `source_duration_minutes` (tempo real coberto pelas leituras originais verificadas) e `predictive_orders_summary`: `total`, `open_count` e `primary_order` (`id`, `titulo`, `status`, `data_abertura`). O resumo considera ordens acessíveis pelo perfil, independentemente do estado do alerta. A aberta mais recente é prioritária; sem abertas, a encerrada mais recente. Duas consultas em lote evitam carregar evidências e descrições por sensor.
+- Histórico sob demanda: `/api/ordens-servico/?sensor_origem=<id>&historico_preditivo=true&limit=10`. Inclui vínculo legado pelo sensor do alerta apenas se `sensor_origem` estiver ausente; ordena abertas primeiro, depois abertura e id decrescentes, com paginação existente. O filtro `historico_preditivo` restringe a ordens preditivas. A visibilidade é compartilhada com a tela de atendimento: empresa e, para técnicos, próprias ou sem responsável.
 - O.S.: `/api/ordens-servico/<id>/` expõe `evidencia_preditiva`, protegida contra escrita pela API.
 - Permissões e isolamento por empresa continuam em vigor. Somente admin altera configuração global; gestores alteram sensores da própria empresa.
 
