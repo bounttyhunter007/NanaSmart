@@ -235,6 +235,8 @@ Use o Swagger para consultar a lista completa, filtros, permissões e formatos. 
 - **`Failed to fetch` no login:** confirme que `manage.py runserver 127.0.0.1:9000` está rodando e que `BASE` em `FrontATT/app.js` aponta para a mesma porta.
 - **Erro de conexão com PostgreSQL:** confira se o serviço está ativo, se o banco `manutencao` existe e se os dados em `app/settings.py` estão corretos.
 - **Erro `401`:** confira usuário e senha ou faça login novamente para obter um token válido.
+- **`Unexpected token '<'` ou resposta HTML no login:** o backend devolveu uma página de erro em vez de JSON. Confira o terminal do Django e o banco selecionado. A configuração de desenvolvimento usa PostgreSQL; SQLite fica restrito a `app.test_settings`. Um aviso de muitas migrações pendentes junto de `no such table: accounts_usuario` pode indicar que foi selecionado um SQLite vazio, e não que o PostgreSQL perdeu os dados.
+- **Falha durante a renovação da sessão:** erros temporários de rede ou servidor preservam as credenciais e os dados exibidos para uma nova tentativa. A sessão só é encerrada automaticamente quando a autenticação é recusada. O frontend não aplica timeout às requisições; tokens de acesso continuam sendo renovados automaticamente enquanto a credencial de renovação for válida.
 - **Erro `403`:** a conta autenticada não tem permissão para a operação ou para os dados solicitados.
 - **Respostas de IA indisponíveis:** configure `GEMINI_API_KEY` no ambiente do processo que executa o Django.
 - **Nenhum sensor para simular:** confirme se há sensores ativos no banco; use o seed somente se puder substituir os dados atuais.

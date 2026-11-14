@@ -5,9 +5,10 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-function fixture(handler) {
+function fixture(handler, { rawResponses = false, initialStorage = {} } = {}) {
   let app;
   const urls = [];
+  const storage = new Map(Object.entries(initialStorage));
   const timers = new Map();
   const unmount = [];
   let timerId = 0;
@@ -15,15 +16,15 @@ function fixture(handler) {
     Vue: { ref: value => ({ value }), reactive: value => value,
       computed: getter => ({ get value() { return typeof getter === 'function' ? getter() : getter.get(); }, set value(value) { getter.set(value); } }), watch() {}, onMounted() {}, onUnmounted(callback) { unmount.push(callback); },
       nextTick: callback => callback?.(), createApp: options => ({ mount() { app = options.setup(); } }) },
-    localStorage: { getItem() { return ''; }, setItem() {}, removeItem() {} },
+    localStorage: { getItem(key) { return storage.get(key) || ''; }, setItem(key,value) { storage.set(key,value); }, removeItem(key) { storage.delete(key); } },
     document: { hidden: false, addEventListener() {}, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, getElementById() {} },
     window: {}, console, URLSearchParams, Date, setTimeout, clearTimeout,
     setInterval(callback, ms) { const id = ++timerId; timers.set(id, { callback, ms }); return id; },
     clearInterval(id) { timers.delete(id); },
-    fetch: async (url, options = {}) => { urls.push(url); const body = await handler(url, options); return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body }; },
+    fetch: async (url, options = {}) => { urls.push(url); const body = await handler(url, options); if (rawResponses) return body; return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => JSON.stringify(body), json: async () => body }; },
   };
   vm.runInNewContext(source, context);
-  return { app, urls, timers, document: context.document, unmount: () => unmount.forEach(callback => callback()) };
+  return { app, urls, timers, storage, document: context.document, unmount: () => unmount.forEach(callback => callback()) };
 }
 test('leituras preservam zero, empresa, contexto e paginação sem truncar resultados', async () => {
   const { app, urls } = fixture(() => ({ count: 150, results: Array.from({ length: 50 }, (_, id) => ({ id })) }));
@@ -710,4 +711,106 @@ test('equipamento removido é substituído e filtros abrem sem criar novos timer
   rows=[]; await app.fetchTrends();
   assert.equal(app.trendPage.equipment,''); assert.equal(app.trendPage.sensor,'');
   assert.equal(app.trendLatestReading.value,null);
+});
+
+
+function apiResponse(body, status = 200, contentType = 'application/json') {
+  return {ok:status >= 200 && status < 300,status,headers:{get:()=>contentType},
+    text:async()=>typeof body === 'string' ? body : JSON.stringify(body)};
+}
+const storedSession = {sentinel_token:'old-access',sentinel_refresh:'old-refresh'};
+
+test('login com HTML de erro do Django mostra diagnóstico e não erro de JSON',async()=>{
+  const {app}=fixture(()=>apiResponse('<!DOCTYPE html><h1>no such table: accounts_usuario</h1>',500,'text/html'),{rawResponses:true});
+  await app.doLogin();
+  assert.match(app.loginError.value,/Falha no servidor.*500/);
+  assert.doesNotMatch(app.loginError.value,/Unexpected token|DOCTYPE|accounts_usuario/);
+  assert.equal(app.token.value,'');
+  assert.equal(app.loginLoading.value,false);
+});
+
+test('HTML inesperado com status 200 é erro legível e não substitui dados',async()=>{
+  const {app}=fixture(()=>apiResponse('<!DOCTYPE html><h1>Página inicial</h1>',200,'text/html'),{rawResponses:true});
+  await assert.rejects(app.api('/api/telemetria/tendencias/'),/resposta inválida/);
+});
+
+test('falha temporária na renovação mantém sessão e gráfico e recupera na próxima consulta',async()=>{
+  let available=false;
+  const {app,storage}=fixture((url,options)=>{
+    if(url.includes('/auth/refresh/')) return available ? apiResponse({access:'new-access',refresh:'new-refresh'})
+      : apiResponse('<!DOCTYPE html><h1>Erro no banco</h1>',500,'text/html');
+    return options.headers.Authorization === 'Bearer new-access' ? apiResponse({ok:true})
+      : apiResponse({detail:'Token expirado'},401);
+  },{rawResponses:true,initialStorage:storedSession});
+  const chart=anomaly(1); app.trendPage.rows=[chart]; app.trendPage.sensor=1; app.view.value='tendencias';
+  await assert.rejects(app.api('/api/telemetria/leituras/'),/Falha no servidor/);
+  assert.equal(app.token.value,'old-access');
+  assert.equal(storage.get('sentinel_refresh'),'old-refresh');
+  assert.equal(app.trendPage.rows[0],chart);
+  assert.equal(app.view.value,'tendencias');
+  available=true;
+  const result=await app.api('/api/telemetria/leituras/');
+  assert.equal(result.ok,true);
+  assert.equal(app.token.value,'new-access');
+  assert.equal(storage.get('sentinel_refresh'),'new-refresh');
+  assert.equal(app.trendPage.rows[0],chart);
+});
+
+test('renovação com falha de rede ou erro 503 mantém credenciais para nova tentativa',async()=>{
+  for(const failure of ['network','unavailable']) {
+    const {app,storage}=fixture(url=>{
+      if(url.includes('/auth/refresh/')) {
+        if(failure==='network') throw new TypeError('Failed to fetch');
+        return apiResponse({detail:'Não foi possível acessar o banco de dados.'},503);
+      }
+      return apiResponse({detail:'Token expirado'},401);
+    },{rawResponses:true,initialStorage:storedSession});
+    await assert.rejects(app.api('/api/telemetria/leituras/'),/renovar a sessão|banco de dados/);
+    assert.equal(app.token.value,'old-access');
+    assert.equal(storage.get('sentinel_refresh'),'old-refresh');
+  }
+});
+
+test('credencial de renovação realmente inválida encerra sessão',async()=>{
+  const {app,storage}=fixture(()=>apiResponse({detail:'Token inválido ou expirado'},401),
+    {rawResponses:true,initialStorage:storedSession});
+  assert.equal(await app.api('/api/auth/me/'),null);
+  assert.equal(app.token.value,'');
+  assert.equal(storage.has('sentinel_refresh'),false);
+});
+
+test('duas consultas expiradas compartilham uma única renovação sem perder estado',async()=>{
+  let release,renewals=0;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const {app}=fixture((url,options)=>{
+    if(url.includes('/auth/refresh/')) {renewals++;return pending;}
+    return options.headers.Authorization==='Bearer new-access' ? apiResponse({ok:true}) : apiResponse({},401);
+  },{rawResponses:true,initialStorage:storedSession});
+  const a=app.api('/api/telemetria/tendencias/'),b=app.api('/api/telemetria/leituras/');
+  for(let i=0;i<8;i++) await Promise.resolve();
+  assert.equal(renewals,1);
+  release(apiResponse({access:'new-access',refresh:'new-refresh'}));
+  const results=await Promise.all([a,b]);
+  assert.ok(results.every(result=>result.ok));
+  assert.equal(renewals,1);
+});
+
+test('resposta lenta não instala timeout nem cancela a sessão',async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const {app,storage}=fixture((url,options)=>{
+    assert.equal(options.signal,undefined);
+    return pending;
+  },{rawResponses:true,initialStorage:storedSession});
+  const request=app.api('/api/telemetria/leituras/');
+  await Promise.resolve();
+  assert.equal(app.token.value,'old-access');
+  release(apiResponse({ok:true}));
+  assert.equal((await request).ok,true);
+  assert.equal(storage.get('sentinel_refresh'),'old-refresh');
+});
+
+test('erro de validação JSON preserva mensagens dos campos e status HTTP',async()=>{
+  const {app}=fixture(()=>apiResponse({nome:['Campo obrigatório.']},400),{rawResponses:true});
+  await assert.rejects(app.api('/api/equipamentos/'),error=>error.status===400 && error.fieldErrors.nome[0]==='Campo obrigatório.');
 });

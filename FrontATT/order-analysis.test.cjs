@@ -20,7 +20,7 @@ function fixture(handler) {
       requests.push({ url, options });
       const data = await handler(url, options);
       const status = data?.httpStatus || 200;
-      return { ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => data };
+      return { ok: status < 400, status, headers: { get: () => 'application/json' }, text: async () => JSON.stringify(data), json: async () => data };
     },
   };
   vm.runInNewContext(source, context);

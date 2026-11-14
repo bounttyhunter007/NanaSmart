@@ -19,7 +19,7 @@ function fixture(handler) {
     fetch: async (url, options = {}) => {
       requests.push({ url, options });
       const data = await handler(url, options);
-      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => data };
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, text: async () => JSON.stringify(data), json: async () => data };
     },
   };
   vm.runInNewContext(source, context);

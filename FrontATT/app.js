@@ -503,15 +503,47 @@ createApp({
     // ─ API ───────────────────────────────────────────
     let refreshingPromise = null;
 
+    async function readApiResponse(res) {
+      if (res.status === 204) return null;
+      const text = await res.text();
+      let body;
+      try { body = text.trim() ? JSON.parse(text) : null; }
+      catch {
+        const message = res.status >= 500
+          ? `Falha no servidor (HTTP ${res.status}). Verifique o backend e a conexão com o banco de dados.`
+          : `A API retornou uma resposta inválida (HTTP ${res.status}). Verifique se o backend está disponível.`;
+        const error = new Error(message); error.status = res.status;
+        throw error;
+      }
+      if (!res.ok) {
+        const detail = body && typeof body.detail === 'string' ? body.detail : '';
+        const error = new Error(detail || (res.status >= 500
+          ? `Falha no servidor (HTTP ${res.status}). Tente novamente quando o backend estiver disponível.`
+          : `Não foi possível concluir a operação (HTTP ${res.status}).`));
+        error.status = res.status;
+        if (body && typeof body === 'object') error.fieldErrors = body;
+        throw error;
+      }
+      return body;
+    }
+
     async function doRefreshToken() {
-      if (!refreshTk.value) throw new Error('No refresh token');
-      const res = await fetch(BASE + '/api/auth/refresh/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: refreshTk.value })
-      });
-      if (!res.ok) throw new Error('Refresh failed');
-      const data = await res.json();
+      const refresh = refreshTk.value;
+      if (!refresh) throw new Error('Sessão sem token de renovação. Entre novamente.');
+      let res;
+      try {
+        res = await fetch(BASE + '/api/auth/refresh/', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh })
+        });
+      } catch {
+        throw new Error('Não foi possível renovar a sessão agora. Verifique a conexão e tente novamente.');
+      }
+      const data = await readApiResponse(res);
+      if (!data || typeof data.access !== 'string' || !data.access) {
+        throw new Error('A renovação retornou uma resposta inválida. Tente novamente.');
+      }
+      if (refreshTk.value !== refresh) throw new Error('A sessão mudou durante a renovação.');
       token.value = data.access;
       localStorage.setItem('sentinel_token', data.access);
       if (data.refresh) {
@@ -524,48 +556,25 @@ createApp({
       const headers = { 'Content-Type': 'application/json' };
       if (token.value) headers['Authorization'] = `Bearer ${token.value}`;
       let res = await fetch(BASE + path, { headers, ...opts });
-
       if (res.status === 401 && refreshTk.value) {
+        const refresh = refreshTk.value;
         if (!refreshingPromise) {
           refreshingPromise = doRefreshToken().finally(() => { refreshingPromise = null; });
         }
         try {
           await refreshingPromise;
-          headers['Authorization'] = `Bearer ${token.value}`;
-          res = await fetch(BASE + path, { headers, ...opts });
-        } catch {
-          logout();
-          return null;
+        } catch (error) {
+          // Falha de rede/servidor não invalida credenciais nem apaga o gráfico.
+          if ([400, 401, 403].includes(error.status) && refreshTk.value === refresh) {
+            logout(); return null;
+          }
+          throw error;
         }
+        headers['Authorization'] = `Bearer ${token.value}`;
+        res = await fetch(BASE + path, { headers, ...opts });
       }
-
       if (res.status === 401) { logout(); return null; }
-      if (res.status === 204) return null;
-
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (contentType.includes('application/json')) {
-        const body = await res.json();
-        if (!res.ok) {
-          const err = new Error(`API error ${res.status}`);
-          err.fieldErrors = body;
-          err.status = res.status;
-          throw err;
-        }
-        return body;
-      }
-
-      const text = await res.text();
-      if (!res.ok) {
-        const err = new Error(`API error ${res.status}`);
-        err.status = res.status;
-        err.rawText = text;
-        throw err;
-      }
-      try {
-        return JSON.parse(text);
-      } catch {
-        return text;
-      }
+      return readApiResponse(res);
     }
 
     function parseDjangoErrors(raw) {
@@ -593,8 +602,8 @@ createApp({
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loginForm)
         });
-        const data = await res.json();
-        if (!data.access) throw new Error(data.detail || 'Credenciais inválidas');
+        const data = await readApiResponse(res);
+        if (!data?.access) throw new Error('Credenciais inválidas');
         token.value = data.access;
         localStorage.setItem('sentinel_token', data.access);
         if (data.refresh) {
@@ -2915,8 +2924,7 @@ createApp({
           headers: { 'Authorization': `Bearer ${token.value}` },
           body: formData
         });
-        if (!res.ok) throw new Error('Falha ao enviar foto');
-        const data = await res.json();
+        const data = await readApiResponse(res);
         me.value = data;
         
         // Atualiza na lista de usuários também, se estiver carregada
