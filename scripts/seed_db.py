@@ -277,7 +277,7 @@ def reprocessar_limites_historicos(sensor, inicio):
     # Reconstrói os cabeçalhos legíveis com as datas importadas, inclusive recorrências.
     for ordem in OrdemServico.objects.filter(sensor_origem=sensor, tipo_os='corretiva'):
         alertas = Alerta.objects.filter(ordem_servico=ordem).order_by('data_alerta', 'pk')
-        ordem.descricao = '[DEMO] Ocorrências importadas do histórico sintético.\n\n' + '\n\n'.join(
+        ordem.descricao = '\n\n'.join(
             registro for alerta in alertas for registro in registros_alerta(alerta))
         ordem.save(update_fields=['descricao'])
 
@@ -302,24 +302,15 @@ def verificar_banco():
           f'host={connection.settings_dict.get("HOST") or "local"}')
 
 
-def criar_usuario_demo(empresa, papel, indice, fake, rng):
-    nome = fake.name()
-    # A parte numérica é estável e o resolvedor protege nomes de admins preservados.
-    login_base = f'{papel}.demo.{indice}'
-    login = login_base
-    sufixo = 1
-    while Usuario.objects.filter(username=login).exists():
-        login = f'{login_base}.{sufixo}'
-        sufixo += 1
-    email = f'{login}@empresa{indice.split(".")[0]}.example.com'
-    validate_email(email)
-    usuario = Usuario.objects.create_user(
+def criar_usuario_demo(empresa, papel, fake, rng):
+    nome = f'{fake.first_name()} {fake.last_name()}'
+    login, email = gerar_credenciais_reais(nome, empresa.nome)
+    return Usuario.objects.create_user(
         username=login, email=email, password='123', empresa=empresa, tipo_usuario=papel,
         first_name=nome.split()[0], last_name=' '.join(nome.split()[1:]),
         cargo=rng.choice(CARGOS_GESTOR if papel == 'gestor' else CARGOS_TECNICO),
         telefone=fake.phone_number(),
     )
-    return usuario
 
 
 def criar_ordens_historicas(eq, tecnicos, inicio, fim, rng):
@@ -330,10 +321,10 @@ def criar_ordens_historicas(eq, tecnicos, inicio, fim, rng):
         abertura = fim - timedelta(days=idade)
         conclusao = abertura + timedelta(hours=rng.uniform(.5, 1.5))
         tipo = ['corretiva', 'preventiva', 'corretiva', 'preditiva'][indice]
-        texto = f'[DEMO] {SERVICOS_POR_TIPO[eq.tipo]}'
+        texto = SERVICOS_POR_TIPO[eq.tipo]
         ordem = OrdemServico.objects.create(
             equipamento=eq, responsavel=tecnicos[indice % len(tecnicos)],
-            titulo=f'[DEMO] {tipo.capitalize()} - {eq.nome}', descricao=texto,
+            titulo=f'{tipo.capitalize()} - {eq.nome}', descricao=texto,
             tipo_os=tipo, gravidade_condicao='baixa' if tipo == 'corretiva' else 'ausente',
             status='concluida', data_abertura=abertura, data_conclusao=conclusao,
         )
@@ -343,15 +334,15 @@ def criar_ordens_historicas(eq, tecnicos, inicio, fim, rng):
             'custo_mao_de_obra': Decimal(rng.randrange(25000, 180001)) / 100,
         })
     OrdemServico.objects.create(
-        equipamento=eq, responsavel=tecnicos[0], titulo=f'[DEMO] Inspeção cancelada - {eq.nome}',
-        descricao='[DEMO] Solicitação duplicada, cancelada antes da execução; sem custos.',
+        equipamento=eq, responsavel=tecnicos[0], titulo=f'Inspeção cancelada - {eq.nome}',
+        descricao='Solicitação duplicada, cancelada antes da execução; sem custos.',
         status='cancelada', data_abertura=fim - timedelta(days=dias * .4),
         data_conclusao=fim - timedelta(days=dias * .35),
     )
     if eq.status == 'ativo':
         OrdemServico.objects.create(
-            equipamento=eq, titulo=f'[DEMO] Inspeção disponível - {eq.nome}',
-            descricao=f'[DEMO] Aguardando atribuição. {SERVICOS_POR_TIPO[eq.tipo]}',
+            equipamento=eq, titulo=f'Inspeção disponível - {eq.nome}',
+            descricao=f'Aguardando atribuição. {SERVICOS_POR_TIPO[eq.tipo]}',
             status='pendente', data_abertura=fim - timedelta(hours=1),
         )
 
@@ -409,22 +400,22 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
     for numero in range(1, num_empresas + 1):
         cidade, estado = rng.choice(CIDADES_ESTADOS)
         empresa = Empresa.objects.create(
-            nome=f'[DEMO {numero:02d}] {fake.company()}', cnpj=fake.unique.cnpj(),
+            nome=fake.company(), cnpj=fake.unique.cnpj(),
             email=f'contato@empresa{numero}.example.com', telefone=fake.phone_number(),
-            cidade=cidade, estado=estado, endereco=f'{fake.street_address()} - {cidade}/{estado} (endereço fictício)',
+            cidade=cidade, estado=estado, endereco=f'{fake.street_address()} - {cidade}/{estado}',
         )
         empresas.append(empresa)
-        CriteriosCriticidade.objects.create(
-            empresa=empresa, revisao=1, **CRITERIOS_SUGERIDOS,
-            representante_manutencao='Validação fictícia — dados de demonstração',
-            data_validacao=timezone.localdate(inicio) - timedelta(days=1),
-        )
         tipos = {nome: TipoEquipamento.objects.create(
             empresa=empresa, nome=nome, criticidade_padrao=classe, descricao_criterios=justificativa,
         ) for nome, (classe, justificativa) in CRITICIDADE_TIPOS.items()}
-        gestor = criar_usuario_demo(empresa, 'gestor', str(numero), fake, rng)
+        gestor = criar_usuario_demo(empresa, 'gestor', fake, rng)
+        CriteriosCriticidade.objects.create(
+            empresa=empresa, revisao=1, **CRITERIOS_SUGERIDOS,
+            representante_manutencao=gestor.get_full_name(),
+            data_validacao=timezone.localdate(inicio) - timedelta(days=1),
+        )
         total_tecnicos = funcionarios_por_empresa - 1 if funcionarios_por_empresa is not None else 3
-        tecnicos = [criar_usuario_demo(empresa, 'tecnico', f'{numero}.{i}', fake, rng)
+        tecnicos = [criar_usuario_demo(empresa, 'tecnico', fake, rng)
                     for i in range(1, total_tecnicos + 1)]
         itens, ativos = [], []
         for indice in range(equip_por_empresa):
@@ -433,18 +424,18 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
             # A instalação precede o histórico inteiro, sem strings relativas ambíguas do Faker.
             instalacao = timezone.localdate(inicio) - timedelta(days=rng.randint(180, 720))
             eq = Equipamento.objects.create(
-                empresa=empresa, nome=f'[DEMO] {tipo} E{numero:02d}-{indice + 1:02d}', tipo=tipo,
+                empresa=empresa, nome=f'{tipo} E{numero:02d}-{indice + 1:02d}', tipo=tipo,
                 tipo_equipamento=tipos[tipo], fabricante=FABRICANTES_POR_TIPO[tipo], modelo=modelo,
-                numero_serie=f'DEMO-E{numero:03d}-{indice + 1:04d}', descricao=f'[DEMO] {descricao}',
+                numero_serie=f'SN-E{numero:03d}-{indice + 1:04d}', descricao=descricao,
                 data_instalacao=instalacao, status=status, horimetro=1000 + indice * 250,
             )
             classe, justificativa = CRITICIDADE_TIPOS[tipo]
             if indice % 3 == 2:
-                classe, justificativa = 'C', 'Unidade fictícia de reserva com redundância disponível e baixo impacto de parada.'
+                classe, justificativa = 'C', 'Unidade de reserva com redundância disponível e baixo impacto de parada.'
             aplicar_criticidade(eq, classe, justificativa, usuario=gestor, origem='individual' if classe == 'C' else 'tipo')
             EquipamentoLocalizacao.objects.create(equipamento=eq, setor=SETORES[indice % len(SETORES)])
             plano = PlanoManutencao.objects.create(
-                equipamento=eq, nome_servico='[DEMO] Inspeção periódica', descricao=SERVICOS_POR_TIPO[tipo],
+                equipamento=eq, nome_servico='Inspeção periódica', descricao=SERVICOS_POR_TIPO[tipo],
                 intervalo_horas=250, prioridade='media', ativo=True,
             )
             if status == 'ativo':
@@ -461,7 +452,7 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
                     equipamento=eq, nome=f'Sensor de {s_tipo.capitalize()}', tipo=s_tipo, unidade_medida=unidade,
                     limite_alerta=limite, limite_alerta_baixo_pct=baixo, limite_alerta_medio_pct=medio,
                     limite_alerta_critico_pct=critico, ativo=status != 'inativo',
-                    descricao=f'[DEMO] Perfil histórico: {perfil}. Dados sintéticos.',
+                    descricao=f'Monitoramento contínuo de {dict(Sensor.TIPO_SENSOR_CHOICES)[s_tipo].lower()} do equipamento.',
                 )
                 fim = now - timedelta(hours=min(24, dias_historico * 12)) if status == 'inativo' else now
                 buffer = []
@@ -480,8 +471,8 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
             if status == 'manutencao':
                 OrdemServico.objects.create(
                     equipamento=eq, responsavel=tecnicos[0], status='andamento',
-                    titulo=f'[DEMO] Manutenção em execução - {eq.nome}',
-                    descricao=f'[DEMO] Equipamento parado para serviço. {SERVICOS_POR_TIPO[tipo]}',
+                    titulo=f'Manutenção em execução - {eq.nome}',
+                    descricao=f'Equipamento parado para serviço. {SERVICOS_POR_TIPO[tipo]}',
                     data_abertura=now - timedelta(hours=2),
                 )
             itens.append({'id': eq.pk, 'nome': eq.nome, 'status': status, 'sensores': sensores_roteiro,
@@ -493,8 +484,8 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
             for status in ['pendente', 'andamento']:
                 OrdemServico.objects.create(
                     equipamento=eq, responsavel=tecnico, status=status,
-                    titulo=f'[DEMO] Inspeção {status} - {eq.nome}',
-                    descricao=f'[DEMO] Trabalho atribuído a {tecnico.get_full_name()}. {SERVICOS_POR_TIPO[eq.tipo]}',
+                    titulo=f'Inspeção {status} - {eq.nome}',
+                    descricao=f'Trabalho atribuído a {tecnico.get_full_name()}. {SERVICOS_POR_TIPO[eq.tipo]}',
                     data_abertura=now - timedelta(minutes=30 if status == 'pendente' else 60),
                 )
         roteiro.append({'id': empresa.pk, 'nome': empresa.nome, 'gestor': gestor.username,

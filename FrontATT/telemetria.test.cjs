@@ -201,7 +201,7 @@ test('filtros e paginação de Telemetria não influenciam a página de Tendênc
   const { app } = fixture(url => url.includes('/tendencias/') ? [anomaly(1), anomaly(2)] : { count: 1, results: [{ id: 99 }] });
   Object.assign(app.telemetry, { equipment: 99, sensor: 999, offset: 40, size: 50 });
   await app.fetchTrends();
-  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendPage.sensor, 1);
+  assert.equal(app.trendPage.equipment, 3); assert.equal(app.trendPage.sensor, 1);
   assert.equal(app.trendCount.value, 2); assert.equal(app.trendPage.offset, 0);
   app.trendPage.equipment = 3; app.trendPage.sensor = 1; app.applyTrendFilters();
   assert.equal(app.trendCount.value, 2);
@@ -230,7 +230,7 @@ test('atalho explícito abre página de Tendências sem alterar seleção de Tel
   assert.equal(app.trendPage.equipment, 3); assert.equal(app.trendPage.sensor, 1);
   assert.equal(app.telemetry.equipment, 10); assert.equal(app.telemetry.sensor, 20);
   app.clearTrendFilters();
-  assert.equal(app.trendCount.value, 1); assert.equal(app.trendPage.equipment, '');
+  assert.equal(app.trendCount.value, 1); assert.equal(app.trendPage.equipment, 3);
   assert.equal(app.telemetry.sensor, 20);
 });
 test('menu permite acessar tendências diretamente e a antiga aba não é aceita', async () => {
@@ -242,7 +242,7 @@ test('menu permite acessar tendências diretamente e a antiga aba não é aceita
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(app.view.value, 'tendencias');
   assert.match(urls[0], /tendencias/);
-  assert.equal(app.trendPage.equipment, ''); assert.equal(app.trendCount.value, 1);
+  assert.equal(app.trendPage.equipment, 3); assert.equal(app.trendCount.value, 1);
 });
 
 test('seleção inicial abre um único gráfico e mantém a ultrapassagem representável', async () => {
@@ -275,6 +275,7 @@ test('busca ignora acentos, filtra equipamento e mantém a escolha nas atualiza�
   second.sensor_info.equipamento_nome = 'Bomba de circulação';
   const {app} = fixture(() => [first, second]);
   await app.fetchTrends();
+  app.selectTrendEquipment(3);
   app.trendPage.search = 'vibracao'; app.applyTrendFilters();
   assert.equal(app.trendCount.value, 1);
   app.clearTrendFilters();
@@ -373,7 +374,7 @@ test('demo exige modo admin de teste e empresa antes de enviar qualquer escrita'
   app.me.value = { tipo_usuario: 'admin' }; app.testerMode.value = true;
   await app.runTrendDemo(); assert.equal(urls.length, 0); assert.match(app.trendDemo.error, /empresa/);
 });
-test('demo usa endpoint dedicado, seleciona somente [DEMO] e para timer ao concluir', async () => {
+test('teste guiado usa vínculo dedicado, seleciona seu sensor e para timer ao concluir', async () => {
   let body;
   let response = demoSnapshot();
   const { app, urls, timers } = fixture((url, options) => { body = JSON.parse(options.body); return response; });
@@ -597,4 +598,116 @@ test('login técnico não depende de endpoints administrativos de empresas ou us
   assert.equal(app.lists.empresas[0].nome, 'Empresa técnica');
   await app.fetchOrdens();
   assert.equal(urls.filter(url => url.includes('/empresas/') || url.includes('/usuarios/')).length, 0);
+});
+
+
+test('primeiro equipamento com leituras e primeiro sensor com dados abrem juntos', async () => {
+  const empty=anomaly(1), z=anomaly(7), a=anomaly(6);
+  Object.assign(empty.sensor_info,{equipamento_id:2,equipamento_nome:'Alimentador',nome:'Corrente'});
+  empty.latest_reading=null;
+  for (const row of [z,a]) {
+    Object.assign(row.sensor_info,{equipamento_id:9,equipamento_nome:'Bomba de circulação'});
+    row.latest_reading={id:row.sensor_id,valor:0,timestamp:'2026-11-13T12:00:00Z'};
+  }
+  z.sensor_info.nome='Vibração'; a.sensor_info.nome='Pressão';
+  const {app}=fixture(()=>[z,empty,a]);
+  await app.fetchTrends();
+  assert.equal(app.trendPage.equipment,9);
+  assert.equal(app.trendPage.sensor,6);
+  assert.equal(app.trendPage.chartMode,'live');
+  assert.equal(app.trendLatestReading.value.valor,0);
+  app.selectTrendSensor(7);
+  app.trendPage.chartMode='analysis';
+  await app.fetchTrends();
+  assert.equal(app.trendPage.equipment,9);
+  assert.equal(app.trendPage.sensor,7);
+  assert.equal(app.trendPage.chartMode,'analysis');
+});
+
+test('sem leituras seleciona primeiro par por nome e ID; seleção explícita tem prioridade', async () => {
+  const z=anomaly(8), a=anomaly(5), tie=anomaly(4);
+  Object.assign(z.sensor_info,{equipamento_id:9,equipamento_nome:'Zincagem'});
+  for (const row of [a,tie]) Object.assign(row.sensor_info,{equipamento_id:3,equipamento_nome:'Bomba',nome:'Temperatura'});
+  const {app}=fixture(()=>[z,a,tie]);
+  await app.fetchTrends();
+  assert.equal(app.trendPage.equipment,3); assert.equal(app.trendPage.sensor,4);
+  assert.equal(app.trendLatestReading.value,null);
+  await app.showTrends(9,8);
+  assert.equal(app.trendPage.equipment,9); assert.equal(app.trendPage.sensor,8);
+});
+
+test('trocar equipamento e limpar filtros preservam contexto válido e buscas dos seletores', async () => {
+  const a=anomaly(1), b=anomaly(2);
+  Object.assign(a.sensor_info,{nome:'Pressão',tipo_display:'Pressão',setor:'Utilidades'});
+  Object.assign(b.sensor_info,{equipamento_id:4,equipamento_nome:'Redutor',nome:'Vibração',tipo_display:'Vibração'});
+  const {app}=fixture(()=>[a,b]);
+  await app.fetchTrends();
+  app.trendPage.equipmentSearch='REDUTOR';
+  assert.equal(app.trendEquipmentOptions.value.length,1);
+  app.selectTrendEquipment(4);
+  assert.equal(app.trendPage.sensor,2);
+  app.trendPage.sensorSearch='vibracao';
+  assert.equal(app.trendSensorOptions.value.length,1);
+  app.trendPage.condition='anomalous'; app.trendPage.search='vibracao'; app.applyTrendFilters();
+  assert.equal(app.trendFilterCount.value,2);
+  app.clearTrendFilters();
+  assert.equal(app.trendPage.equipment,4); assert.equal(app.trendPage.sensor,2);
+  assert.equal(app.trendFilterCount.value,0);
+  app.trendPage.search='inexistente'; app.applyTrendFilters();
+  assert.equal(app.selectedTrend.value,null);
+  assert.equal(app.trendPage.equipment,4);
+  app.clearTrendFilters(); assert.equal(app.trendPage.sensor,2);
+});
+
+test('última leitura é independente da amostra e não volta no tempo após atualização da análise', async () => {
+  const row=anomaly(1);
+  row.latest_reading={id:1,valor:40,timestamp:'2026-11-13T12:00:00Z'};
+  row.current_value=999;
+  const {app}=fixture(()=>[row]);
+  await app.fetchTrends();
+  assert.equal(app.trendLatestReading.value.valor,40);
+  const update={sensorId:1,company:'',reading:{id:2,valor:0,timestamp:'2026-11-13T12:00:05Z'}};
+  app.receiveTrendReading(update);
+  assert.equal(app.trendLatestReading.value.valor,0);
+  await app.fetchTrends();
+  assert.equal(app.trendLatestReading.value.valor,0);
+  app.trendPage.chartMode='analysis';
+  row.latest_reading={id:3,valor:42,timestamp:'2026-11-13T12:00:10Z'};
+  await app.fetchTrends();
+  assert.equal(app.trendLatestReading.value.valor,42);
+});
+
+test('respostas de leitura de outro sensor, empresa ou formato inválido não mudam cabeçalho', async () => {
+  const a=anomaly(1),b=anomaly(2);
+  for (const row of [a,b]) row.latest_reading={id:row.sensor_id,valor:20,timestamp:'2026-11-13T12:00:00Z'};
+  const {app}=fixture(()=>[a,b]);
+  await app.fetchTrends();
+  const reading={id:30,valor:80,timestamp:'2026-11-13T12:00:05Z'};
+  app.receiveTrendReading({sensorId:2,company:'',reading});
+  app.receiveTrendReading({sensorId:1,company:99,reading});
+  app.receiveTrendReading({sensorId:1,company:'',reading:{...reading,valor:null}});
+  app.receiveTrendReading({sensorId:1,company:'',reading:{...reading,timestamp:'inválido'}});
+  assert.equal(app.trendLatestReading.value.valor,20);
+  app.receiveTrendReading({sensorId:1,company:'',reading});
+  assert.equal(app.trendLatestReading.value.valor,80);
+  app.selectTrendSensor(2);
+  app.receiveTrendReading({sensorId:1,company:'',reading:{...reading,valor:99}});
+  assert.equal(app.trendLatestReading.value.valor,20);
+});
+
+test('equipamento removido é substituído e filtros abrem sem criar novos timers', async () => {
+  let rows=[anomaly(1)];
+  const {app,timers}=fixture(()=>rows);
+  await app.fetchTrends();
+  const b=anomaly(2); Object.assign(b.sensor_info,{equipamento_id:9,equipamento_nome:'Bomba'});
+  rows=[b]; await app.fetchTrends();
+  assert.equal(app.trendPage.equipment,9); assert.equal(app.trendPage.sensor,2);
+  app.token.value='test'; app.startTrendPolling();
+  const count=timers.size;
+  app.toggleTrendFilters(); assert.equal(app.trendPage.filtersOpen,true);
+  app.closeTrendFilters(); assert.equal(app.trendPage.filtersOpen,false);
+  assert.equal(timers.size,count);
+  rows=[]; await app.fetchTrends();
+  assert.equal(app.trendPage.equipment,''); assert.equal(app.trendPage.sensor,'');
+  assert.equal(app.trendLatestReading.value,null);
 });

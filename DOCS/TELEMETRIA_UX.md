@@ -2,17 +2,52 @@
 
 ## Revisão vigente de Tendências — 13/11/2026
 
-O gráfico ocupa a largura do painel. **Trocar sensor** abre uma seleção temporária com busca sem distinção de acentos, equipamento pesquisável, condição e paginação. O sensor de maior risco é selecionado inicialmente; atualizações preservam a escolha. A seleção não altera os filtros de Telemetria.
+A página abre com um **equipamento e sensor selecionados**, preferindo o primeiro
+par com leituras em ordem alfabética (desempate por ID). Uma escolha válida é
+preservada nas atualizações. Atalhos para um sensor específico conservam seu
+contexto. Sem leituras, seleciona o primeiro par disponível; sem sensores, informa
+a ausência de dados. A seleção é independente dos filtros de Telemetria.
 
-Os modos são **Ao vivo** (cinco minutos por padrão) e **Previsão para manutenção** (amostra usada pelo servidor). A previsão explica em uma frase o tempo mínimo configurado e informa se está em confirmação, confirmada, sem tendência confirmada ou desativada. Com histórico insuficiente, mantém o gráfico preliminar e mostra duração observada e quantidade de leituras. O período disponível usa `source_duration_minutes`, evitando confundir o tempo das últimas N leituras com o histórico já coletado.
+A barra permanente tem **Equipamento** e **Sensor** pesquisáveis, **Filtros** e
+atualização. Os filtros adicionais de texto, condição e O.S. preditiva ficam
+recolhidos, com contador de filtros ativos. Limpar filtros preserva o equipamento
+e sensor quando ainda válidos. Resultado vazio não é substituído por dados de
+outro equipamento. Os seletores funcionam por teclado; Esc fecha as opções ou
+recolhe os filtros e devolve o foco ao controle correspondente.
 
-**Ampliar gráfico** aumenta a área real de desenho, com geometria responsiva para eixos, linhas e rótulos. Abrir/fechar preserva período, modo, escala e pausa sem duplicar o componente ou seus timers. Fechamento por Esc e devolução do foco complementam a navegação por teclado. Dashboard e Telemetria preservam o tamanho padrão de seus gráficos.
+O cabeçalho destaca equipamento, setor, nome/tipo do sensor, valor com unidade e
+horário da **última leitura real do sensor**. Setor ausente aparece como Não
+informado; ausência de medições aparece como Sem leituras. A medição não é
+confundida com `current_value`, que pertence à amostra operacional. O componente
+Ao vivo publica a leitura pelo evento `reading-update`, reutilizando sua consulta
+a cada cinco segundos e sem criar outro timer. Respostas antigas ou de outro
+sensor/empresa não substituem o cabeçalho. Na previsão, a consulta periódica da
+análise mantém o contexto atualizado. Os demais usos do gráfico conservam sua
+medição interna; nesta página, ela aparece apenas no cabeçalho.
 
-A identificação da **O.S. preditiva e seu status atual** fica no cabeçalho. Ela continua aparecendo após normalização do alerta. A aberta mais recente tem prioridade; sem abertas, aparece a última encerrada. Múltiplas abertas e o histórico completo são consultados sob demanda. A previsão atual permanece distinta da evidência fixa de abertura preservada na ordem.
+Os modos são **Ao vivo**, inicial, com cinco minutos, e **Previsão para manutenção**,
+com a amostra usada pelo servidor. O histórico do seed pode ter apenas um ponto
+na janela de cinco minutos; isso não representa falta de seleção nem autoriza
+fabricar novas medições. A previsão informa histórico mínimo e critérios efetivos.
+A consulta de tendências permanece a cada 30 segundos e preserva o modo escolhido.
 
-O filtro **O.S. preditiva** oferece Todos os sensores, Com O.S. aberta, Com histórico de O.S. e Sem O.S., combinando com busca, equipamento e condição. Aberta significa pendente ou em andamento; histórico inclui concluídas e canceladas. Contadores respeitam os filtros combinados e a visibilidade do perfil. Corretivas não entram nesse filtro; continuam no aviso de limite.
+**Ampliar gráfico** conserva período, modo, escala e pausa sem duplicar o componente
+ou seus timers; Esc fecha e devolve foco. O cabeçalho e os seletores se reorganizam
+no celular e mantêm os temas claro e escuro. A O.S. preditiva e seu status atual
+ficam próximos da condição; a evidência de abertura permanece distinta da previsão
+atual. Histórico de ordens e detalhes matemáticos continuam sob demanda.
 
-**Ajustar análise** conserva histórico mínimo e antecedência independentes: defaults novos de 2 h e 2 h, sem sobrescrever valores salvos. Escala e ajuste histórico ficam em Opções do gráfico; fórmula e critérios ficam recolhidos. O teste administrativo continua em Demonstração de tendências. Esta revisão substitui os fluxos históricos de Tendências abaixo. Regras completas: [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
+A resposta da análise acrescenta `sensor_info.setor` (texto ou null) e
+`latest_reading` (`id`, `valor`, `timestamp`, ou null), inclusive com análise
+inativa ou leitura fora da janela. A última leitura considera horários não futuros
+e desempata pelo maior ID. Não há migração nem alteração das permissões ou fórmulas.
+Configuração específica do sensor prevalece sobre a global mais recente e os
+padrões; o limite superior vem do cadastro do próprio sensor.
+
+O teste guiado usa cadastros com nomes operacionais. Seus vínculos continuam em
+`TrendDemo`, e os controles indicam **Modo de teste** e progresso. Nomes e prefixos
+não são usados para isolamento. Os novos cadastros do seed também usam nomes
+operacionais; a origem sintética permanece no roteiro e no resumo de geração.
 
 
 Revisão: 06/11/2026.

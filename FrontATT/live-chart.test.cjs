@@ -9,7 +9,7 @@ const sensor = { id: 1, nome: 'Temperatura', ativo: true, unidade_medida: '°C',
 
 function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }], extraProps = {}) {
   const watchers = [], mounts = [], unmounts = [], timers = new Map(), listeners = new Map();
-  const urls = [], requests = [];
+  const urls = [], requests = [], emitted = [];
   let id = 0;
   const context = {
     Vue: { ref: value => ({ value }), computed: getter => ({ get value() { return getter(); } }),
@@ -28,14 +28,14 @@ function fixture(handler, equipmentOptions = [{ id: 1, nome: 'Bomba' }], extraPr
     if (url.includes('/sensores/')) return { results: [sensor] };
     return handler(url);
   } };
-  const app = api.component.setup(props);
+  const app = api.component.setup(props, {emit:(name,payload)=>emitted.push({name,payload})});
   async function flush() {
     for (let i = 0; i < 15; i++) {
       for (const w of watchers) { const value = w.get(), key = JSON.stringify(value); if (key !== w.last) { w.last = key; w.callback(value); } }
       await Promise.resolve();
     }
   }
-  return { context, api, app, props, urls, requests, timers, document: context.document, listeners, flush,
+  return { context, api, app, props, urls, requests, emitted, timers, document: context.document, listeners, flush,
     async mount() { mounts.forEach(fn => fn()); await flush(); }, unmount() { unmounts.forEach(fn => fn()); } };
 }
 
@@ -704,4 +704,31 @@ test('large plots use the available drawing width and height without distorting 
     assert.ok(plot.points.every(point=>point.y>=42 && point.y<=height-55));
     assert.ok(plot.annotations.every(label=>label.y>=56 && label.y<=height-55));
   }
+});
+
+
+test('publica a última leitura real para o cabeçalho sem duplicar consultas ou timers',async()=>{
+  const f=fixture(()=>({results:[reading(2,5,0),reading(1,0,40)]}),null,
+    {selectedSensor:sensor,showReading:false});
+  await f.mount();
+  assert.equal(f.emitted[0].name,'reading-update');
+  assert.equal(f.emitted[0].payload.sensorId,1);
+  assert.equal(f.emitted[0].payload.reading.valor,0);
+  assert.equal(f.emitted[0].payload.reading.id,2);
+  assert.equal(f.timers.size,2);
+  assert.equal(f.urls.filter(url=>url.includes('/leituras/')).length,1);
+  assert.equal(f.api.component.props.showReading.default,true);
+});
+
+test('resposta tardia de sensor anterior não emite valor para o cabeçalho atual',async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const f=fixture(url=>url.includes('sensor=1&') ? pending
+    : {results:[{...reading(2,10,25),sensor:2}]},null,{selectedSensor:sensor,showReading:false});
+  await f.mount();
+  f.props.selectedSensor={...sensor,id:2}; await f.flush();
+  release({results:[reading(1,0,99)]}); await f.flush();
+  assert.ok(f.emitted.length);
+  assert.ok(f.emitted.every(event=>event.payload.sensorId===2));
+  assert.equal(f.app.latest.value.valor,25);
 });

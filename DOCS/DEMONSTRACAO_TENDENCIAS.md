@@ -27,7 +27,7 @@ Para ajustar um sensor real, selecionar equipamento/sensor e abrir **Ajustar an�
 1. Atualizar o backend e aplicar `python manage.py migrate`. Entrar como administrador e abrir **Tendências**.
 2. Expandir **Apresentação guiada · teste de tendência** e clicar em **Ativar modo de teste**.
 3. Se o filtro global estiver em Todas as Empresas, escolher a empresa do teste. Caso contrário, usa a empresa global selecionada.
-4. Manter **Aumento gradual** e clicar em **Iniciar demonstração**. O sistema cria e seleciona um equipamento e sensor identificados como [DEMO]. Não usa nem muda o sensor real que estava selecionado.
+4. Manter **Aumento gradual** e clicar em **Iniciar demonstração**. O sistema cria e seleciona o equipamento Motor de monitoramento e seu sensor Temperatura do motor, identificados pelo vínculo com a sessão de teste. Não usa nem muda o sensor real que estava selecionado.
 5. A página rola até o sensor selecionado ao iniciar a fase. Mostrar o gráfico azul crescendo, ainda abaixo da linha vermelha de limite superior. As primeiras leituras aparecem como **Aguardando dados**. Expor os indicadores de quantidade e tempo.
 6. Aguardar aproximadamente um minuto, com a página visível. Na sétima leitura, os critérios devem ser atendidos pelo cenário crescente padrão. Mostrar os itens aprovados, o alerta de origem `tendencia`, sua descrição e a OS `preditiva` vinculada.
 7. Explicar que o último valor é 52 °C, abaixo até da primeira faixa de aviso operacional (70 °C neste cadastro). A abertura é antecipada pela previsão confirmada de alcance do limite dentro da antecedência configurada. A O.S. registra essa previsão e suas evidências.
@@ -84,7 +84,7 @@ A criação bloqueia o proprietário e para outra execução daquele administrad
 
 As gravações usam `Telemetria.objects.create`, portanto percorrem os sinais reais de tendência e de limite. Não se cria alerta ou OS diretamente na simulação, não se chama Gemini e não se falsifica relógio. O simulador contínuo geral passa a excluir sensores vinculados a demonstrações, para não misturar ruído aleatório com o roteiro guiado. Se ele já estava em execução antes da atualização, reinicie esse processo: scripts Python já iniciados não recarregam automaticamente a função alterada.
 
-Novos campos de análise, aditivos: `checks` (rótulo e aprovação de cada critério), `threshold_per_hour`, `projected_breach_minutes`. Campos anteriores permanecem disponíveis. Alertas e OS de demonstração são registros reais ligados ao sensor [DEMO], visíveis nas telas normais. Novos testes não apagam os anteriores; contadores globais podem incluir outras demonstrações. Não há botão de limpeza destrutiva nesta entrega.
+Novos campos de análise, aditivos: `checks` (rótulo e aprovação de cada critério), `threshold_per_hour`, `projected_breach_minutes`. Campos anteriores permanecem disponíveis. Alertas e OS de demonstração são registros reais ligados ao sensor vinculado à sessão de teste, visíveis nas telas normais. Novos testes não apagam os anteriores; contadores globais podem incluir outras demonstrações. Não há botão de limpeza destrutiva nesta entrega.
 
 ## Validação
 

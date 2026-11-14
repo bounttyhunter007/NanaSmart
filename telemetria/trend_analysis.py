@@ -93,13 +93,20 @@ def _select_sample(rows, maximum, minimum_minutes):
 
 def analyze_sensor_trend(sensor_id):
     """Analisa sem gravar alertas; informa qualidade, critérios e evidências."""
-    sensor = Sensor.objects.select_related('equipamento').filter(pk=sensor_id, ativo=True).first()
+    sensor = Sensor.objects.select_related('equipamento__localizacao').filter(pk=sensor_id, ativo=True).first()
     if sensor is None:
         return None
     config = get_effective_config(sensor)
     now = timezone.now()
+    latest = Telemetria.objects.filter(sensor=sensor, timestamp__lte=now).order_by(
+        '-timestamp', '-pk').values('id', 'valor', 'timestamp').first()
+    latest_reading = (
+        {**latest, 'timestamp': latest['timestamp'].isoformat()}
+        if latest and latest['valor'] is not None and math.isfinite(latest['valor']) else None
+    )
     result = {
         'sensor_id': sensor.id, 'sensor_info': _sensor_info(sensor),
+        'latest_reading': latest_reading,
         'direction': 'stable', 'slope': 0.0, 'slope_per_hour': 0.0,
         'projected_breach_hours': None, 'projected_breach_minutes': None, 'risk_level': 'baixo',
         'current_value': None, 'limite_operacional': sensor.limite_alerta,
@@ -262,6 +269,7 @@ def _sensor_info(sensor):
         'limite_alerta_medio_pct': sensor.limite_alerta_medio_pct,
         'limite_alerta_critico_pct': sensor.limite_alerta_critico_pct,
         'equipamento_nome': sensor.equipamento.nome,
+        'setor': getattr(getattr(sensor.equipamento, 'localizacao', None), 'setor', None),
     }
 
 

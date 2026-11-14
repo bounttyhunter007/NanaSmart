@@ -4,7 +4,7 @@ Este documento descreve brevemente os scripts disponíveis em `scripts/` e como 
 
 ## 1. `seed_db.py`
 
-Substitui a base por dados sintéticos `[DEMO]`, com cadastros compatíveis,
+Substitui a base por dados sintéticos com nomes operacionais, com cadastros compatíveis,
 cronologia validada, histórico recente para KPIs e cenários previsíveis.
 O [roteiro completo](../DOCS/APRESENTACAO_DADOS.md) explica as contas e os três perfis.
 
@@ -37,8 +37,8 @@ python scripts/seed_db.py --clean-only
   Superusuários recebem o perfil `admin` utilizado nas permissões da aplicação.
 - O resumo após o commit imprime logins reais, IDs, perfis dos sensores, próximo
   disparo por horímetro e comandos para movimentar apenas o motor escolhido.
-  `gestor.demo.N` e `tecnico.demo.N.M` usam senha `123`; colisões com contas
-  preservadas recebem sufixo. `admin` novo usa `admin`; senhas existentes não mudam.
+  Gestores e técnicos usam logins `nome.sobrenome` e senha `123`; consulte o
+  resumo para cada empresa. Colisões com contas preservadas recebem sufixo numérico. `admin` novo usa `admin`; senhas existentes não mudam.
 - `--seed` repete dados e valores, mas datas são relativas à execução e IDs podem
   mudar. As configurações globais continuam com duas horas mínimas para tendência.
 - Saída: `0` sucesso, `1` falha, `2` parâmetros inválidos, `130` interrupção.
@@ -111,7 +111,7 @@ Valores já acima desse teto não são reduzidos artificialmente nesse cenário.
 Os horários continuam sendo os instantes reais de gravação. As regras preditivas
 de quantidade, duração, R² e persistência continuam valendo: o simulador não
 reduz o padrão de duas horas nem garante uma OS após alguns ciclos. Para uma
-apresentação curta, use o teste guiado [DEMO] da página Tendências ou configure
+apresentação curta, use o teste guiado da página Tendências ou configure
 explicitamente o sensor de teste. O simulador não muda essa configuração.
 
 As gravações passam por `Telemetria.save()` e pelos sinais reais: podem criar

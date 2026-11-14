@@ -38,6 +38,14 @@ class TrendDemoTests(APITestCase):
             self.assertEqual(result.status_code, 200, result.data)
         return result.data
 
+    def test_cadastros_tem_nomes_operacionais_e_vinculo_de_teste(self):
+        data = self.create()
+        demo = TrendDemo.objects.get(pk=data['id'])
+        self.assertEqual(demo.sensor.nome, 'Temperatura do motor')
+        self.assertEqual(demo.sensor.equipamento.nome, 'Motor de monitoramento')
+        self.assertTrue(demo.sensor.equipamento.numero_serie.startswith('SN-'))
+        self.assertNotIn(demo.sensor, obter_sensores_ativos())
+
     def test_demo_uses_real_clock_and_creates_predictive_order_before_warning_limit(self):
         data = self.create()
         self.assertTrue(data['analysis']['insufficient_data'])

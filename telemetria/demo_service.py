@@ -49,11 +49,11 @@ def create_demo(owner, empresa_id, cenario='aumento'):
     # Uma execução por administrador. Nova demonstração preserva o histórico anterior.
     TrendDemo.objects.filter(owner=owner, status='executando').update(status='parado')
     equipamento = Equipamento.objects.create(
-        empresa=empresa, nome='[DEMO] Motor de apresentação', tipo='motor_eletrico',
-        numero_serie=f'DEMO-{uuid4()}', criticidade='C',
-        descricao='Dados sintéticos para demonstração de tendências; não representa um ativo real.',
+        empresa=empresa, nome='Motor de monitoramento', tipo='motor_eletrico',
+        numero_serie=f'SN-{uuid4()}', criticidade='C',
+        descricao='Motor elétrico com monitoramento contínuo de temperatura.',
     )
-    sensor = Sensor.objects.create(equipamento=equipamento, nome='[DEMO] Temperatura',
+    sensor = Sensor.objects.create(equipamento=equipamento, nome='Temperatura do motor',
                                    tipo='temperatura', unidade_medida='°C', limite_alerta=100)
     TrendConfig.objects.create(sensor=sensor, periodo_horas=1, num_leituras=7,
                                minimo_leituras=7, duracao_minima_minutos=1,

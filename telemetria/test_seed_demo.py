@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import Empresa, Usuario
-from ativos.models import Equipamento, PlanoManutencao
+from ativos.models import CriteriosCriticidade, Equipamento, PlanoManutencao
 from alertas.models import Alerta
 from manutencao.dashboards.views import DashboardSummaryView, KpiService
 from manutencao.models import HistoricoManutencao, OrdemServico
@@ -44,6 +44,30 @@ class PresentationDataTests(TestCase):
     def setUpTestData(cls):
         cls.manifesto = popular(num_empresas=2, equip_por_empresa=5, dias_historico=2,
                                funcionarios_por_empresa=4, rng_seed=17)
+
+    def sensor_do_perfil(self, perfil, empresa_id=None):
+        for empresa in self.manifesto['empresas']:
+            if empresa_id is not None and empresa['id'] != empresa_id:
+                continue
+            for equipamento in empresa['equipamentos']:
+                for sensor in equipamento['sensores']:
+                    if sensor['perfil'] == perfil:
+                        return Sensor.objects.get(pk=sensor['id'])
+        raise AssertionError(f'Perfil não encontrado no manifesto: {perfil}')
+
+    def test_cadastros_operacionais_sem_marcacoes_de_demonstracao(self):
+        campos = [(Empresa, ['nome', 'endereco']), (Usuario, ['username', 'first_name', 'last_name']),
+                  (Equipamento, ['nome', 'numero_serie', 'descricao', 'justificativa_criticidade']),
+                  (Sensor, ['nome', 'descricao']), (PlanoManutencao, ['nome_servico', 'descricao']),
+                  (OrdemServico, ['titulo', 'descricao']),
+                  (CriteriosCriticidade, ['representante_manutencao'])]
+        for modelo, fields in campos:
+            for values in modelo.objects.values_list(*fields):
+                for value in values:
+                    self.assertNotRegex(value or '', r'(?i)\[demo|demo-|\.demo|fictíci|perfil histórico|dados sintéticos')
+        for empresa in Empresa.objects.all():
+            gestor = empresa.usuarios.get(tipo_usuario='gestor')
+            self.assertEqual(empresa.criterios_criticidade.first().representante_manutencao, gestor.get_full_name())
 
     def test_cadastros_datas_e_responsaveis_coerentes(self):
         self.assertFalse(OrdemServico.objects.filter(data_conclusao__lt=F('data_abertura')).exists())
@@ -98,7 +122,7 @@ class PresentationDataTests(TestCase):
                     self.assertGreaterEqual(evento['ocorrido_em'], alerta.data_alerta.isoformat())
                 self.assertIn(timezone.localtime(alerta.data_alerta).strftime('%d/%m/%Y %H:%M:%S'),
                               alerta.ordem_servico.descricao)
-            recorrente = Sensor.objects.get(equipamento__empresa=empresa, descricao__contains='Perfil histórico: recorrencia.')
+            recorrente = self.sensor_do_perfil('recorrencia', empresa.pk)
             ocorrencias = list(Alerta.objects.filter(sensor=recorrente, origem='limite').order_by('data_alerta'))
             self.assertEqual(len(ocorrencias), 2)
             self.assertEqual(ocorrencias[0].ordem_servico_id, ocorrencias[1].ordem_servico_id)
@@ -138,7 +162,7 @@ class PresentationDataTests(TestCase):
         self.assertEqual(OrdemServico.objects.filter(equipamento=eq, titulo=titulo).count(), 1)
 
     def test_reprocessar_historico_nao_redatera_ocorrencias_nem_duplica_os(self):
-        sensor = Sensor.objects.filter(descricao__contains='Perfil histórico: recorrencia.').first()
+        sensor = self.sensor_do_perfil('recorrencia')
         antes = list(Alerta.objects.filter(sensor=sensor).order_by('pk').values(
             'id', 'data_alerta', 'data_normalizacao', 'ordem_servico_id', 'historico_niveis'))
         total = OrdemServico.objects.count()

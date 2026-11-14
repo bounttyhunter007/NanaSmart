@@ -4964,3 +4964,68 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
   .trends-plot-toolbar > .btn { min-width:30px; font-size:15px; padding:5px; }
   .trends-focus .chart-large .live-status:has(.live-state:not(.paused):not(.failed)) { display:none; }
 }
+
+/* Contexto permanente da página de Tendências. */
+.trends-focus { gap:16px; }
+.trends-page-caption { margin:5px 0 0; color:var(--t3); font-size:12px; }
+.trends-refresh-note { font-size:11px; color:var(--t3); }
+.trends-context-toolbar { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto; align-items:stretch; gap:12px; margin:0; }
+.trends-context-picker { position:relative; min-width:0; }
+.trends-context-picker > summary { list-style:none; cursor:pointer; position:relative; display:flex; flex-direction:column; gap:5px; padding:12px 36px 12px 15px; border:1px solid var(--edge); background:var(--s2); border-radius:10px; min-height:66px; justify-content:center; }
+.trends-context-picker > summary::-webkit-details-marker { display:none; }
+.trends-context-picker > summary > span { color:var(--t3); font-size:11px; }
+.trends-context-picker > summary > strong { color:var(--t1); font:500 14px/1.4 var(--body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trends-context-picker > summary > i { position:absolute; right:14px; top:26px; color:var(--t3); font-style:normal; }
+.trends-context-picker[open] > summary, .trends-context-picker > summary:focus-visible { border-color:var(--ice); outline:2px solid var(--ice); outline-offset:2px; }
+.trends-picker-options { position:absolute; z-index:40; top:calc(100% + 7px); left:0; right:0; min-width:min(320px,100%); padding:12px; border:1px solid var(--edge); border-radius:10px; background:var(--s2); box-shadow:var(--shadow); }
+.trends-picker-options .filter-input { width:100%; margin-bottom:8px; }
+.trends-picker-list { max-height:300px; overflow-y:auto; }
+.trends-picker-list > button { display:flex; flex-direction:column; gap:4px; width:100%; padding:11px 10px; border:0; border-radius:7px; background:transparent; color:var(--t1); text-align:left; cursor:pointer; font:400 13px/1.4 var(--body); overflow-wrap:anywhere; }
+.trends-picker-list > button > small { color:var(--t3); font-size:11px; }
+.trends-picker-list > button:hover, .trends-picker-list > button[aria-pressed="true"] { background:var(--s3); }
+.trends-picker-list > button[aria-pressed="true"] { box-shadow:inset 2px 0 var(--ice); }
+.trends-picker-list > p { color:var(--t3); font-size:12px; padding:10px; }
+.trends-toolbar-actions { display:flex; gap:8px; align-items:center; }
+.trends-toolbar-actions > .btn { min-height:42px; }
+.trends-filter-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; margin-left:5px; border-radius:50%; background:var(--s3); color:var(--t1); font-size:11px; }
+.trends-filter-panel { display:grid; grid-template-columns:minmax(160px,1.2fr) minmax(140px,1fr) minmax(140px,1fr) auto; align-items:end; gap:12px; padding:16px; margin:-2px 0 16px; border:1px solid var(--edge); border-radius:10px; background:var(--s2); }
+.trends-filter-panel > label { display:flex; flex-direction:column; gap:7px; color:var(--t3); font-size:11px; min-width:0; }
+.trends-filter-panel .filter-select, .trends-filter-panel .filter-input { width:100%; min-width:0; }
+.trends-selection-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:3px 0 20px; border-bottom:1px solid var(--edge); }
+.trends-selection-identity { min-width:0; }
+.trends-context-label { display:block; color:var(--t3); font-size:11px; margin-bottom:7px; }
+.trends-selection-heading h2 { color:var(--t1); font:600 clamp(20px,2.2vw,29px)/1.3 var(--body); margin:0 0 14px; overflow-wrap:anywhere; }
+.trends-selection-meta { display:flex; flex-wrap:wrap; gap:12px 25px; }
+.trends-selection-meta > span { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 8px; color:var(--t1); font-size:13px; }
+.trends-selection-meta small { color:var(--t3); font-size:11px; }
+.trends-selection-meta em { color:var(--t3); font-size:11px; font-style:normal; }
+.trends-current-reading { flex-shrink:0; text-align:right; padding-left:24px; border-left:1px solid var(--edge); }
+.trends-current-reading > strong { display:block; color:var(--ice); font:600 clamp(27px,3vw,38px)/1.2 var(--body); margin:4px 0 8px; font-variant-numeric:tabular-nums; }
+.trends-current-reading > strong > small { font-size:16px; color:var(--t2); font-weight:400; }
+.trends-current-reading > time, .trends-current-reading > span:last-child { color:var(--t3); font-size:12px; }
+.trends-current-reading > strong.trends-no-reading { font-size:20px; color:var(--t2); }
+.trends-selection-status { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:14px 0; }
+.trends-selection-status .trends-overview { margin:0; }
+.trends-focus .live-chart.reading-in-header { grid-template-columns:minmax(0,1fr); }
+@media (max-width:1000px) {
+  .trends-filter-panel { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .trends-selection-heading { gap:16px; }
+  .trends-selection-meta { flex-direction:column; gap:8px; }
+  .trends-current-reading { padding-left:16px; }
+}
+@media (max-width:700px) {
+  .trends-context-toolbar { grid-template-columns:minmax(0,1fr) auto; gap:10px; }
+  .trends-context-picker:first-child { grid-column:1 / -1; }
+  .trends-context-picker > summary > strong { font-size:13px; }
+  .trends-refresh-note { display:none; }
+  .trends-selection-heading { flex-direction:column; align-items:stretch; gap:12px; padding-bottom:12px; }
+  .trends-selection-identity > .trends-context-label { display:none; }
+  .trends-selection-heading h2 { font-size:22px; }
+  .trends-current-reading { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; align-items:center; border-left:0; border-top:1px solid var(--edge); text-align:left; padding:12px 0 0; }
+  .trends-current-reading > .trends-context-label { grid-column:1 / -1; margin-bottom:3px; }
+  .trends-current-reading > strong { font-size:32px; margin:0; }
+  .trends-current-reading > time { text-align:right; font-size:11px; }
+  .trends-selection-status { align-items:flex-start; flex-direction:column; }
+  .trends-filter-panel { grid-template-columns:minmax(0,1fr); }
+  .trends-picker-options { padding:10px; }
+}

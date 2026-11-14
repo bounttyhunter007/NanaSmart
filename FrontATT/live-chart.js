@@ -253,8 +253,10 @@
     return {host, geometry};
   }
   const component = {
-    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null}, clean:{type:Boolean,default:false}, large:{type:Boolean,default:false}, expanded:{type:Boolean,default:false} },
-    setup(props) {
+    props: { api: { type: Function, required: true }, empresa: { default: '' }, equipamentos: { default: null }, selectedSensor:{default:null}, showReading:{type:Boolean,default:true}, clean:{type:Boolean,default:false}, large:{type:Boolean,default:false}, expanded:{type:Boolean,default:false} },
+    emits: ['reading-update'],
+    setup(props, context) {
+      const emit = context?.emit || (() => {});
       const { ref, computed, watch, onMounted, onUnmounted } = Vue;
       const compact = useCompact();
       const dimensions = useChartDimensions(props, compact);
@@ -307,6 +309,8 @@
         try {
           const result = await readings(props.api, sensorId.value, minutes.value);
           if (request !== generation || disposed) return;
+          emit('reading-update', {sensorId:Number(sensorId.value), company:props.empresa,
+            reading:result.rows[result.rows.length - 1] || null});
           const nextSignature = JSON.stringify([result.rows, thresholds(sensor.value)]);
           updatedAt.value = new Date().toISOString(); now.value = Date.now(); error.value = ''; truncated.value = result.truncated;
           if (nextSignature !== signature) {
@@ -387,7 +391,7 @@
         refresh, loadOptions, loadSensors, togglePause, fit, number, date, projectionLabel };
     },
     template: `
-      <section ref="plotHost" class="live-chart" :class="{'chart-clean':clean,'chart-large':large}" aria-label="Acompanhamento de medições">
+      <section ref="plotHost" class="live-chart" :class="{'chart-clean':clean,'chart-large':large,'reading-in-header':!showReading}" aria-label="Acompanhamento de medições">
         <div class="live-controls">
           <label v-if="!selectedSensor">Equipamento<select v-model="equipment" :disabled="optionsBusy"><option value="">Escolha o equipamento</option><option v-for="e in options" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
           <label v-if="!selectedSensor">Sensor<select v-model="sensorId" :disabled="!equipment || optionsBusy"><option value="">Escolha o sensor</option><option v-for="s in sensors" :key="s.id" :value="s.id">{{ s.nome }} · {{ s.unidade_medida }}{{ s.ativo ? '' : ' · inativo' }}</option></select></label>
@@ -401,7 +405,7 @@
         <div v-if="!sensorId" class="live-placeholder">{{ optionsBusy ? 'Carregando opções…' : equipment && !sensors.length ? 'Nenhum sensor disponível neste equipamento.' : 'Escolha um equipamento e um sensor para acompanhar as medições.' }}</div>
         <template v-else>
           <div class="live-status"><span :class="['live-state', {paused:paused || !sensor?.ativo, failed:!!error}]">{{ !sensor?.ativo ? 'Sensor inativo · consulta interrompida' : paused ? 'Acompanhamento pausado' : busy ? 'Consultando…' : received ? received + ' nova(s) leitura(s) recebida(s) · consulta a cada 5 s' : 'Aguardando novas medições · consulta a cada 5 s' }}</span><span>Última consulta: {{ updatedAt ? date(updatedAt) : 'aguardando' }}</span></div>
-          <div v-if="rows.length" class="live-measure"><div><span>Última medição</span><strong>{{ number(latest.valor) }} <small>{{ sensor?.unidade_medida }}</small></strong></div><p>{{ date(latest.timestamp) }}<br>há {{ age }}</p></div>
+          <div v-if="showReading && rows.length" class="live-measure"><div><span>Última medição</span><strong>{{ number(latest.valor) }} <small>{{ sensor?.unidade_medida }}</small></strong></div><p>{{ date(latest.timestamp) }}<br>há {{ age }}</p></div>
           <div v-if="rows.length" class="trend-chart-toolbar"><label class="trend-chart-toggle"><input type="checkbox" v-model="showTrend"> Mostrar tendência e projeção</label><label v-if="showTrend && projected" class="trend-chart-toggle"><input type="checkbox" v-model="showHistoryFit"> Comparar ajuste no histórico</label><div class="trend-chart-legend" aria-label="Legenda do gráfico"><span><i class="legend-reading"></i>Leituras reais</span><span v-if="displayed.trendPath"><i class="legend-trend"></i>Tendência da janela</span><span v-if="displayed.projection"><i class="legend-projection"></i>{{ projectionLabel(displayed.projection) }}</span><span v-if="displayed.limits.some(t=>t.visible)"><i class="legend-limit"></i>Limites na escala</span></div></div>
           <p v-if="showTrend && rows.length" class="trend-chart-explanation">{{ fitMessage }}</p>
           <div v-if="rows.length" class="live-plot">
