@@ -74,7 +74,7 @@ test('tendências distinguem quatro condições, filtram e paginam sem novas con
   app.trendPage.condition = 'insufficient'; app.applyTrendFilters();
   assert.equal(app.trendCount.value, 1);
   assert.equal(app.trendRows.value[0].sensor_id, 3);
-  assert.equal(urls.length, 1);
+  assert.equal(urls.filter(url => url.includes('/tendencias/')).length, 1);
   assert.equal(app.trendDirection(rows[1]), 'Estável');
   assert.equal(app.trendDirection(rows[2]), '—');
 });
@@ -322,23 +322,24 @@ test('filtro de O.S. distingue atendimento aberto, histórico encerrado e ausên
   assert.equal(app.trendCount.value,2);
   app.trendPage.orderFilter = 'none'; app.applyTrendFilters();
   assert.equal(app.selectedTrend.value.sensor_id,3);
-  assert.equal(app.trendCount.value,1); assert.equal(urls.length,1);
+  assert.equal(app.trendCount.value,1); assert.equal(urls.filter(url => url.includes('/tendencias/')).length,1);
   app.clearTrendFilters(); assert.equal(app.trendCount.value,3);
 });
 
 test('histórico carrega sob demanda e ignora resposta de outro sensor', async () => {
   let release;
-  const {app,urls} = fixture(url => url.includes('/tendencias/') ? [anomaly(1),anomaly(2)] : new Promise(resolve => {release=resolve;}));
+  const {app,urls} = fixture(url => url.includes('/tendencias/') ? [anomaly(1),anomaly(2)] : url.includes('abertas=true') ? {count:0,results:[]} : new Promise(resolve => {release=resolve;}));
   await app.fetchTrends();
-  assert.equal(urls.length,1);
-  app.trendOrders.open = true;
+  assert.equal(urls.length,2); // Somente o resumo de abertas é automático.
+  app.trendHistory.open = true;
   const pending = app.loadTrendOrders();
-  const query = new URL(urls[1]).searchParams;
-  assert.equal(query.get('sensor_origem'),'1'); assert.equal(query.get('historico_preditivo'),'true');
+  const query = new URL(urls[2]).searchParams;
+  assert.equal(query.get('sensor_origem'),'1'); assert.equal(query.get('historico_preditivo'),null);
+  assert.equal(query.get('limit'),'10');
   app.openTrendDetail(app.trendPage.rows[1]);
   release({count:1,results:[{id:80,status:'andamento'}]});await pending;
   assert.equal(app.trendOrders.rows.length,0); assert.equal(app.trendOrders.busy,false);
-  assert.equal(app.trendOrders.open,false);
+  assert.equal(app.trendHistory.open,false);
 });
 
 test('iniciar atendimento atualiza o status resumido sem aguardar os 30 segundos', async () => {
@@ -813,4 +814,119 @@ test('resposta lenta não instala timeout nem cancela a sessão',async()=>{
 test('erro de validação JSON preserva mensagens dos campos e status HTTP',async()=>{
   const {app}=fixture(()=>apiResponse({nome:['Campo obrigatório.']},400),{rawResponses:true});
   await assert.rejects(app.api('/api/equipamentos/'),error=>error.status===400 && error.fieldErrors.nome[0]==='Campo obrigatório.');
+});
+
+const settleAttendance = () => new Promise(resolve => setImmediate(resolve));
+const pageOf = (rows, extra = {}) => ({count:rows.length, results:rows, next:null, previous:null, ...extra});
+
+test('condição normalizada mantém corretiva pendente e duas ocorrências na mesma O.S.', async () => {
+  const row = {...anomaly(300), is_anomalous:false, direction:'stable', intervention_reason:'no_anomaly'};
+  const corrective = {id:2898, tipo_os:'corretiva', status:'pendente', data_abertura:'2026-11-14T02:03:52Z'};
+  const occurrences = [20918,20899].map(id => ({id,origem:'limite',status:'resolvido',ordem_servico_id:2898,ordem_servico_acessivel:true}));
+  const {app,urls,timers} = fixture(url => url.includes('/tendencias/') ? [row] : url.includes('/alertas/') ? pageOf(occurrences) : pageOf([corrective]));
+  await app.fetchTrends(); await settleAttendance();
+  assert.equal(app.trendOpenOrders.loaded,true); assert.equal(app.trendOpenOrders.rows[0].tipo_os,'corretiva');
+  assert.equal(app.trendHistory.open,false); assert.equal(urls.some(url=>url.includes('/alertas/')),false);
+  app.toggleTrendHistory({target:{open:true}}); await settleAttendance();
+  assert.equal(app.trendOccurrences.rows.length,2); assert.equal(app.trendOccurrences.rows[0].ordem_servico_id,2898);
+  const query = new URL(urls.find(url=>url.includes('/alertas/'))).searchParams;
+  assert.equal(query.get('sensor'),'300'); assert.equal(query.get('ordenacao'),'recentes'); assert.equal(query.get('limit'),'10');
+  assert.equal(query.has('data_de'),false); assert.equal(query.has('data_ate'),false); assert.equal(timers.size,0);
+});
+
+test('resumo não confirma ausência enquanto carrega, falha ou recebe resposta inválida', async () => {
+  let release, mode='pending';
+  const {app} = fixture(url => url.includes('/tendencias/') ? [anomaly(1)] : mode==='pending' ? new Promise(resolve=>{release=resolve;}) : mode==='invalid' ? '<html>' : pageOf([]));
+  await app.fetchTrends();
+  assert.equal(app.trendOpenOrders.loaded,false); assert.equal(app.trendOpenOrders.busy,true);
+  release({detail:'unavailable'}); await settleAttendance();
+  assert.equal(app.trendOpenOrders.loaded,false); assert.match(app.trendOpenOrders.error,/consultar/);
+  mode='invalid'; await app.loadTrendOpenOrders(); assert.equal(app.trendOpenOrders.loaded,false);
+  mode='empty'; await app.loadTrendOpenOrders();
+  assert.equal(app.trendOpenOrders.loaded,true); assert.equal(app.trendOpenOrders.count,0); assert.equal(app.trendOpenOrders.error,'');
+});
+
+test('falha no resumo mantém ordens anteriores e nova consulta recupera sem novos timers', async () => {
+  let fail=false;
+  const {app,timers} = fixture(url => url.includes('/tendencias/') ? [anomaly(1)] : fail ? Promise.reject(new Error('offline')) : pageOf([{id:10,status:'pendente'}],{count:5}));
+  await app.fetchTrends(); await settleAttendance(); fail=true;
+  await app.loadTrendOpenOrders();
+  assert.equal(app.trendOpenOrders.loaded,true); assert.equal(app.trendOpenOrders.rows[0].id,10); assert.equal(app.trendOpenOrders.count,5);
+  assert.match(app.trendOpenOrders.error,/consultar/); fail=false;
+  await app.loadTrendOpenOrders(); assert.equal(app.trendOpenOrders.error,''); assert.equal(timers.size,0);
+});
+
+test('resumo descarta sucessos e falhas atrasados ao trocar sensor ou empresa', async () => {
+  const pending=[];
+  const {app} = fixture(url => url.includes('/tendencias/') ? [anomaly(1),anomaly(2)] : new Promise((resolve,reject)=>pending.push({resolve,reject})));
+  await app.fetchTrends();
+  app.openTrendDetail(app.trendPage.rows[1]);
+  pending[1].resolve(pageOf([{id:20}])); await settleAttendance();
+  pending[0].resolve(pageOf([{id:10}])); await settleAttendance();
+  assert.equal(app.trendOpenOrders.rows[0].id,20);
+  const old = app.loadTrendOpenOrders();
+  app.globalEmpresa.value='other';
+  const current = app.refreshTrendAttendance();
+  pending[3].resolve(pageOf([])); await current;
+  pending[2].reject(new Error('old company')); await old;
+  assert.equal(app.trendOpenOrders.count,0); assert.equal(app.trendOpenOrders.error,'');
+});
+
+test('histórico pagina ordens de todos os tipos e mantém página na atualização periódica', async () => {
+  const {app,urls,timers} = fixture(url => {
+    if (url.includes('/tendencias/')) return [anomaly(1)];
+    if (url.includes('abertas=true')) return pageOf([]);
+    return url.includes('offset=10') ? pageOf([{id:11,tipo_os:'corretiva',status:'concluida'}],{count:11,previous:'/api/ordens-servico/?sensor_origem=1&limit=10'}) : pageOf([{id:10,tipo_os:'preditiva',status:'cancelada'}],{count:11,next:'/api/ordens-servico/?sensor_origem=1&limit=10&offset=10'});
+  });
+  app.token.value='test'; app.view.value='tendencias'; await app.fetchTrends();
+  app.trendHistory.open=true; await app.selectTrendHistoryTab('orders');
+  assert.equal(app.trendOrders.rows[0].status,'cancelada');
+  await app.loadTrendOrders(app.trendOrders.next); assert.equal(app.trendOrders.rows[0].status,'concluida');
+  const pageUrl=app.trendOrders.url;
+  await app.refreshTrendMonitoring(); await settleAttendance();
+  assert.equal(app.trendOrders.url,pageUrl); assert.equal(app.trendOrders.count,11);
+  assert.ok(urls.filter(url=>url.includes('offset=10')).length>=2);
+  assert.equal(urls.some(url=>url.includes('historico_preditivo')),false); assert.equal(timers.size,0);
+});
+
+test('página esvaziada por ação retorna à página anterior sem inventar registros', async () => {
+  const {app} = fixture(url => url.includes('offset=10') ? pageOf([],{count:10,previous:'/api/ordens-servico/?sensor_origem=1&limit=10'}) : pageOf([{id:10}],{count:10}));
+  app.trendPage.rows=[anomaly(1)]; app.trendPage.sensor=1;
+  await app.loadTrendOrders('/api/ordens-servico/?sensor_origem=1&limit=10&offset=10');
+  assert.equal(app.trendOrders.rows[0].id,10); assert.equal(app.trendOrders.busy,false); assert.equal(app.trendOrders.url.includes('offset=10'),false);
+});
+
+test('ação na O.S. atualiza acompanhamento mesmo se análise falhar e invalida consulta anterior', async () => {
+  let release, failAnalysis=false, calls=0;
+  const {app} = fixture((url,options)=>{
+    if(options.method==='PATCH') return {id:10,status:'andamento',responsavel:7};
+    if(url.includes('/tendencias/')) {if(failAnalysis) throw new Error('offline'); return [anomaly(1)];}
+    if(++calls===1) return new Promise(resolve=>{release=resolve;});
+    return pageOf([{id:10,status:'andamento'}]);
+  });
+  app.me.value={id:7}; app.view.value='tendencias'; await app.fetchTrends();
+  failAnalysis=true; await app.iniciarAtendimento({id:10,status:'pendente'}); await settleAttendance();
+  release(pageOf([{id:10,status:'pendente'}])); await settleAttendance();
+  assert.equal(app.trendOpenOrders.rows[0].status,'andamento'); assert.match(app.trendPage.error,/offline/);
+});
+
+test('sem sensor selecionado não consulta acompanhamento nem confirma ausência de dados', async () => {
+  const {app,urls}=fixture(()=>pageOf([]));
+  await app.refreshTrendAttendance(); await app.loadTrendOrders(); await app.loadTrendOccurrences();
+  assert.equal(urls.length,0); assert.equal(app.trendOpenOrders.loaded,false); assert.equal(app.trendOccurrences.loaded,false);
+});
+
+test('histórico cronológico mantém a página e ignora resposta recebida após logout', async () => {
+  let release, pending=false;
+  const {app,urls}=fixture(url=>url.includes('/tendencias/') ? [anomaly(1)] : url.includes('abertas=true') ? pageOf([])
+    : pending ? new Promise(resolve=>{release=resolve;}) : url.includes('offset=10') ? pageOf([{id:1,status:'resolvido'}],{count:11,previous:'/api/alertas/?sensor=1&ordenacao=recentes&limit=10'})
+    : pageOf([{id:11,status:'resolvido'}],{count:11,next:'/api/alertas/?sensor=1&ordenacao=recentes&limit=10&offset=10'}));
+  app.view.value='tendencias'; app.token.value='test'; await app.fetchTrends();
+  app.toggleTrendHistory({target:{open:true}}); await settleAttendance();
+  await app.loadTrendOccurrences(app.trendOccurrences.next);
+  assert.equal(app.trendOccurrences.rows[0].id,1);
+  await app.fetchTrends(); await settleAttendance();
+  assert.equal(app.trendOccurrences.rows[0].id,1); assert.ok(urls.at(-1).includes('offset=10'));
+  pending=true; const old=app.loadTrendOccurrences(); app.logout(); release(pageOf([{id:999}])); await old;
+  assert.equal(app.trendOccurrences.rows.length,0); assert.equal(app.trendOccurrences.loaded,false); assert.equal(app.trendHistory.open,false);
 });

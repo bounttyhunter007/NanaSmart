@@ -17,6 +17,13 @@ class AlertaFilter(filters.FilterSet):
     empresa = filters.NumberFilter(field_name='equipamento__empresa')
     search = filters.CharFilter(method='search_text')
     setor = filters.CharFilter(field_name='equipamento__localizacao__setor')
+    ordenacao = filters.ChoiceFilter(
+        choices=[('gravidade', 'Gravidade'), ('recentes', 'Mais recentes')],
+        method='filter_order',
+    )
+
+    def filter_order(self, queryset, name, value):
+        return queryset.order_by('-data_alerta', '-pk') if value == 'recentes' else ordenar_historico(queryset)
 
     class Meta:
         model = Alerta

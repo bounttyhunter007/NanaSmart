@@ -4,6 +4,7 @@ from .models import Alerta
 
 class AlertaSerializer(serializers.ModelSerializer):
     ordem_servico_id = serializers.SerializerMethodField()
+    ordem_servico_acessivel = serializers.BooleanField(read_only=True, default=False)
     equipamento_nome = serializers.CharField(source='equipamento.nome', read_only=True)
     sensor_nome = serializers.SerializerMethodField()
     legado = serializers.SerializerMethodField()
@@ -14,7 +15,7 @@ class AlertaSerializer(serializers.ModelSerializer):
             'id', 'equipamento', 'sensor', 'tipo_alerta', 'origem',
             'evento_chave', 'dados_analise', 'analise_ia',
             'data_ultima_analise', 'nivel', 'descricao', 'data_alerta',
-            'status', 'ordem_servico_id', 'equipamento_nome', 'sensor_nome',
+            'status', 'ordem_servico_id', 'ordem_servico_acessivel', 'equipamento_nome', 'sensor_nome',
             'dados_deteccao', 'data_normalizacao', 'legado', 'historico_niveis',
         ]
         read_only_fields = fields

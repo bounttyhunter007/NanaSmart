@@ -1,6 +1,6 @@
 # Telemetria: organização da interface e tendências
 
-## Revisão vigente de Tendências — 13/11/2026
+## Revisão vigente de Tendências — 14/11/2026
 
 A página abre com um **equipamento e sensor selecionados**, preferindo o primeiro
 par com leituras em ordem alfabética (desempate por ID). Uma escolha válida é
@@ -33,9 +33,30 @@ A consulta de tendências permanece a cada 30 segundos e preserva o modo escolhi
 
 **Ampliar gráfico** conserva período, modo, escala e pausa sem duplicar o componente
 ou seus timers; Esc fecha e devolve foco. O cabeçalho e os seletores se reorganizam
-no celular e mantêm os temas claro e escuro. A O.S. preditiva e seu status atual
-ficam próximos da condição; a evidência de abertura permanece distinta da previsão
-atual. Histórico de ordens e detalhes matemáticos continuam sob demanda.
+no celular e mantêm os temas claro e escuro. Abaixo do gráfico, **Análise atual**
+mostra a decisão operacional separada de **Atendimento do sensor**, que consulta
+até três O.S. abertas de todos os tipos, com total e acesso a **Ver todas**.
+Uma corretiva pendente permanece visível mesmo com as ocorrências normalizadas.
+Carregamento e falha não são tratados como ausência de ordens; em falha transitória,
+os últimos resultados ficam identificados como consulta anterior.
+
+**Histórico do sensor** inicia recolhido, com abas **Ocorrências** e **Ordens**,
+dez registros por página. Não usa o período do gráfico: inclui ocorrências
+normalizadas e ordens concluídas/canceladas. As ocorrências mostram origem, maior
+nível atingido, abertura, elevações, normalização conhecida e vínculo à O.S.
+Recorrências podem apontar para a mesma ordem. Vínculos restritos não oferecem
+acesso aos detalhes da ordem. Ordens preservam a visibilidade por empresa/perfil.
+
+Só o sensor selecionado é consultado. A atualização existente de 30 segundos,
+a atualização manual e as ações de O.S. renovam o acompanhamento e a aba aberta,
+sem outro temporizador. Respostas de outro sensor/empresa ou anteriores a uma ação
+são descartadas; mudar sensor recolhe e limpa o histórico.
+
+A prévia roxa explica que é exploratória e não confirma tendência nem abre ordens.
+**Critérios operacionais** abre e focaliza a seção com quantidade, duração,
+sensibilidade, persistência, R², direção, antecedência e origem da configuração.
+A confirmação da tendência gera ocorrência; a preditiva abre automaticamente
+quando a previsão entra na antecedência. A normalização não conclui a ordem.
 
 A resposta da análise acrescenta `sensor_info.setor` (texto ou null) e
 `latest_reading` (`id`, `valor`, `timestamp`, ou null), inclusive com análise

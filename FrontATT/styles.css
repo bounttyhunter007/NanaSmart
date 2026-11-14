@@ -4912,6 +4912,27 @@ html.light-mode .ai-card-body strong { color: #1a202c; }
 .trends-order-history article strong { display:block; color:var(--t2); font:500 12px/1.6 var(--body); overflow-wrap:anywhere; }
 .trends-order-history article small { display:block; font-size:11px; color:var(--t3); margin-top:5px; }
 .trends-order-history footer { display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:12px 0; border-top:1px solid var(--edge); }
+.trends-exploratory-note { color:var(--t3); margin:12px 0 22px; }
+.trends-current-analysis { margin-top:22px; }
+.trends-current-analysis > header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.trends-current-analysis h3 { font:600 13px/1.5 var(--body); color:var(--t1); }
+.trends-current-analysis .trends-limit-notice { margin-top:12px; }
+.trends-sensor-attendance > header p { margin:5px 0 0; color:var(--t3); }
+.trends-sensor-attendance > p { padding-bottom:14px; color:var(--t3); }
+.trends-sensor-history { scroll-margin-top:20px; }
+.trends-sensor-history .trends-chart-tabs { margin:12px 0; border-bottom:1px solid var(--edge); }
+.trends-sensor-history .trends-order-history { margin:12px 0 0; }
+.trends-occurrence { padding:16px 0; border-top:1px solid var(--edge); overflow-wrap:anywhere; }
+.trends-occurrence > header, .trends-occurrence > footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; }
+.trends-occurrence > header { margin-bottom:8px; }
+.trends-occurrence > header strong { font-weight:500; color:var(--t1); }
+.trends-occurrence-levels { margin:8px 0; padding-left:18px; }
+.trends-history-pagination { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; border-top:1px solid var(--edge); padding:14px 0; font-size:11px; }
+@media (max-width:640px) {
+  .trends-current-analysis > header, .trends-sensor-attendance > header { align-items:flex-start; flex-wrap:wrap; }
+  .trends-history-pagination > span { order:3; flex-basis:100%; text-align:center; }
+  .trends-occurrence > header .badge { white-space:normal; }
+}
 .trends-drawer-backdrop { position:fixed; inset:0; z-index:1600; background:rgba(0,0,0,.55); backdrop-filter:blur(3px); }
 .trends-focus .trends-sensor-drawer { position:absolute; top:0; bottom:0; right:0; width:min(440px,100%); border-radius:14px 0 0 14px; padding:20px; overflow:auto; box-shadow:var(--shadow); }
 .trends-sensor-drawer .trends-browser-body { display:block; padding:0; }

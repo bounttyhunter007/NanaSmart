@@ -4,6 +4,9 @@ from .models import Alerta
 from .serializers import AlertaSerializer
 from rest_framework.permissions import IsAuthenticated
 from .filters import AlertaFilter, ordenar_historico
+from django.db.models import Exists, OuterRef
+from django.db.models.functions import Coalesce
+from manutencao.visibility import visible_work_orders
 
 
 class AlertaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -18,6 +21,10 @@ class AlertaViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         qs = ordenar_historico(Alerta.objects.select_related(
             'equipamento', 'sensor', 'ordem_servico', 'ordem_servico_preditiva',
+        )).annotate(ordem_servico_acessivel=Exists(
+            visible_work_orders(user).filter(pk=Coalesce(
+                OuterRef('ordem_servico_id'), OuterRef('ordem_servico_preditiva__pk'),
+            )),
         ))
         if user.tipo_usuario == 'admin':
             return qs.all()

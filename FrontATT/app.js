@@ -736,7 +736,7 @@ createApp({
             pageVersion === trendPageRequest && !trendPage.busy) {
           trendPage.rows = data;
           ensureTrendSelection();
-          if (trendOrders.open) loadTrendOrders();
+          refreshTrendAttendance();
           const total = filteredTrends.value.length;
           if (trendPage.offset >= total) trendPage.offset = total ? Math.floor((total - 1) / trendPage.size) * trendPage.size : 0;
           if (trendPage.detail) trendPage.detail = data.find(t => t.sensor_id === trendPage.detail.sensor_id) || null;
@@ -1076,7 +1076,7 @@ createApp({
     }
     function syncOrderDetails(saved) {
       if (!saved?.id) return;
-      if (view.value === 'tendencias') { fetchTrends(); }
+      if (view.value === 'tendencias') { refreshTrendAttendance(true); fetchTrends(); }
       if (orderDetail.order?.id === saved.id) {
         resetOrderAnalysis();
         orderDetail.order = { ...orderDetail.order, ...saved, _assumindo: false };
@@ -1294,8 +1294,14 @@ createApp({
       disabled: orderScopedTrends.value.filter(t => trendCondition(t) === 'disabled').length,
     }));
     const selectedTrend = computed(() => trendPage.rows.find(trend => trend.sensor_id === Number(trendPage.sensor)) || null);
-    const trendOrders = reactive({open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
-    let trendOrdersRequest = 0, trendExpandTrigger = null;
+    const emptyTrendResource = () => ({rows:[], count:0, next:null, previous:null, url:null, busy:false, loaded:false, error:''});
+    const trendOpenOrders = reactive(emptyTrendResource());
+    const trendOrders = reactive(emptyTrendResource());
+    const trendOccurrences = reactive(emptyTrendResource());
+    const trendHistory = reactive({open:false, tab:'occurrences'});
+    const trendResources = {open:trendOpenOrders, orders:trendOrders, occurrences:trendOccurrences};
+    const trendResourceRequests = {open:0, orders:0, occurrences:0};
+    let trendAttendanceSensor = null, trendAttendanceCompany = null, trendExpandTrigger = null;
     const trendLiveReading = ref(null);
     function newestTrendReading(first, second) {
       if (!first) return second || null;
@@ -1357,29 +1363,91 @@ createApp({
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
-    async function loadTrendOrders(url = null) {
-      const sensorId = selectedTrend.value?.sensor_id;
-      if (!sensorId) return;
-      const request = ++trendOrdersRequest, company = globalEmpresa.value;
-      const targetUrl = url || (trendOrders.sensorId === sensorId && trendOrders.url) || '/api/ordens-servico/?' + new URLSearchParams({sensor_origem:sensorId, historico_preditivo:'true', limit:10});
-      trendOrders.busy = true; trendOrders.error = ''; trendOrders.sensorId = sensorId;
+    function resetTrendOrders() {
+      for (const [key, state] of Object.entries(trendResources)) {
+        ++trendResourceRequests[key];
+        Object.assign(state, emptyTrendResource());
+      }
+      Object.assign(trendHistory, {open:false, tab:'occurrences'});
+      trendAttendanceSensor = null; trendAttendanceCompany = null;
+    }
+    function syncTrendAttendanceContext() {
+      const sensor = selectedTrend.value?.sensor_id || null, company = String(globalEmpresa.value);
+      if (sensor === trendAttendanceSensor && company === trendAttendanceCompany) return false;
+      resetTrendOrders();
+      trendAttendanceSensor = sensor; trendAttendanceCompany = company;
+      return true;
+    }
+    async function loadTrendResource(key, url = null) {
+      syncTrendAttendanceContext();
+      const sensorId = trendAttendanceSensor, company = trendAttendanceCompany, state = trendResources[key];
+      if (!sensorId || (state.busy && !url)) return;
+      const request = ++trendResourceRequests[key];
+      const defaults = key === 'occurrences'
+        ? '/api/alertas/?' + new URLSearchParams({sensor:sensorId, ordenacao:'recentes', limit:10})
+        : '/api/ordens-servico/?' + new URLSearchParams({sensor_origem:sensorId, limit:key === 'open' ? 3 : 10,
+            ...(key === 'open' ? {abertas:'true'} : {})});
+      const targetUrl = url || state.url || defaults;
+      const current = () => request === trendResourceRequests[key] && sensorId === selectedTrend.value?.sensor_id && company === String(globalEmpresa.value);
+      state.busy = true; state.error = '';
       try {
         const data = await api(targetUrl);
-        if (request !== trendOrdersRequest || sensorId !== selectedTrend.value?.sensor_id || company !== globalEmpresa.value) return;
-        Object.assign(trendOrders, {rows:normList(data), count:data.count ?? normList(data).length, next:data.next, previous:data.previous, url:targetUrl});
+        if (!current()) return;
+        if (!data || !Array.isArray(data.results) || !Number.isFinite(data.count)) throw new Error('Resposta indisponível');
+        // Uma ação pode remover a última linha da página que estava aberta.
+        if (data.count > 0 && !data.results.length && data.previous) {
+          state.busy = false;
+          return loadTrendResource(key, data.previous);
+        }
+        Object.assign(state, {rows:data.results, count:data.count, next:data.next, previous:data.previous, url:targetUrl, loaded:true});
       } catch {
-        if (request === trendOrdersRequest) trendOrders.error = 'Não foi possível consultar as O.S. Tente novamente.';
-      } finally { if (request === trendOrdersRequest) trendOrders.busy = false; }
+        if (current()) state.error = key === 'occurrences'
+          ? 'Não foi possível consultar as ocorrências. Tente novamente.'
+          : 'Não foi possível consultar as O.S. Tente novamente.';
+      } finally { if (current()) state.busy = false; }
     }
-    function toggleTrendOrders() {
-      trendOrders.open = !trendOrders.open;
-      if (trendOrders.open) loadTrendOrders();
+    const loadTrendOpenOrders = () => loadTrendResource('open');
+    const loadTrendOrders = (url = null) => loadTrendResource('orders', url);
+    const loadTrendOccurrences = (url = null) => loadTrendResource('occurrences', url);
+    function refreshTrendAttendance(force = false) {
+      syncTrendAttendanceContext();
+      if (force) {
+        for (const [key, state] of Object.entries(trendResources)) {
+          ++trendResourceRequests[key]; state.busy = false;
+        }
+      }
+      const requests = [loadTrendOpenOrders()];
+      if (trendHistory.open) requests.push(trendHistory.tab === 'orders' ? loadTrendOrders() : loadTrendOccurrences());
+      return Promise.all(requests);
     }
-    function resetTrendOrders() {
-      ++trendOrdersRequest;
-      Object.assign(trendOrders, {open:false, rows:[], count:0, next:null, previous:null, url:null, busy:false, error:'', sensorId:null});
+    function toggleTrendHistory(event) {
+      if (event.target.isConnected === false) return;
+      const wasOpen = trendHistory.open;
+      trendHistory.open = event.target.open;
+      if (trendHistory.open && !wasOpen) selectTrendHistoryTab(trendHistory.tab);
     }
-    watch(() => selectedTrend.value?.sensor_id, resetTrendOrders);
+    function selectTrendHistoryTab(tab) {
+      trendHistory.tab = tab;
+      return tab === 'orders' ? loadTrendOrders() : loadTrendOccurrences();
+    }
+    function showAllTrendOrders() {
+      trendHistory.open = true; selectTrendHistoryTab('orders');
+      nextTick(() => {
+        const history = document.getElementById('trend-sensor-history');
+        history?.scrollIntoView({behavior:'smooth', block:'start'});
+        document.getElementById('trend-history-orders')?.focus();
+      });
+    }
+    function showTrendCriteria() {
+      const details = document.getElementById('trend-operational-criteria');
+      if (details) {
+        details.open = true; details.scrollIntoView({behavior:'smooth', block:'start'});
+        details.querySelector('summary')?.focus();
+      }
+    }
+    watch(() => [selectedTrend.value?.sensor_id, globalEmpresa.value], () => {
+      if (syncTrendAttendanceContext()) refreshTrendAttendance();
+    });
     function trendMinutes(value) {
       const minutes = Number(value);
       if (!Number.isFinite(minutes)) return '—';
@@ -1596,7 +1664,7 @@ createApp({
         acceptTrendSnapshot(data);
         trendPage.rows = data;
         ensureTrendSelection();
-        if (trendOrders.open) loadTrendOrders();
+        refreshTrendAttendance();
         clampTrendPage();
         if (trendPage.detail) trendPage.detail = data.find(trend => trend.sensor_id === trendPage.detail.sensor_id) || null;
         trendPage.updatedAt = new Date().toISOString();
@@ -1632,6 +1700,7 @@ createApp({
       }
       if (next) trendPage.equipment = next.sensor_info.equipamento_id;
       else if (!trendPage.equipment) trendPage.equipment = trendEquipments.value[0]?.id || '';
+      if (syncTrendAttendanceContext()) refreshTrendAttendance();
     }
     function selectTrendEquipment(id, event) {
       trendPage.equipment = id; trendPage.equipmentSearch = ''; trendPage.sensorSearch = '';
@@ -1653,6 +1722,7 @@ createApp({
       if (Number(trendPage.sensor) !== trend.sensor_id) { resetTrendOrders(); trendLiveReading.value = null; }
       trendPage.sensor = trend.sensor_id; trendPage.equipment = trend.sensor_info.equipamento_id;
       trendPage.sensorSearch = '';
+      if (syncTrendAttendanceContext()) refreshTrendAttendance();
     }
     function selectTrendSensor(id, event) {
       const row = filteredTrends.value.find(trend => trend.sensor_id === Number(id));
@@ -2964,8 +3034,9 @@ createApp({
       trendEquipmentOptions, trendSensorOptions, trendFilterCount, selectTrendEquipment, selectTrendSensor,
       trendLatestReading, receiveTrendReading, trendMinutes, trendInterventionLabel, trendPersistencePercent, trendR2Percent,
       scopedTrendCount,
-      closeTrendConfig, trendConfigKeydown, trendOrders, trendOrderSummary, trendForecastState, trendHistoryProgress,
-      toggleTrendFilters, closeTrendFilters, expandTrendChart, closeExpandedTrendChart, trendDialogKeydown, loadTrendOrders, toggleTrendOrders,
+      closeTrendConfig, trendConfigKeydown, trendOrders, trendOpenOrders, trendOccurrences, trendHistory, trendOrderSummary, trendForecastState, trendHistoryProgress,
+      toggleTrendFilters, closeTrendFilters, expandTrendChart, closeExpandedTrendChart, trendDialogKeydown,
+      loadTrendOrders, loadTrendOpenOrders, loadTrendOccurrences, toggleTrendHistory, selectTrendHistoryTab, showAllTrendOrders, showTrendCriteria, refreshTrendAttendance,
       trendDemo, runTrendDemo, toggleTrendTestMode,
       fetchTrends, applyTrendFilters, clearTrendFilters, changeTrendPage, openTrendDetail, showTrends,
       sensorTipoLabel, trendCondition, trendConditionLabel, trendDirection, setTelemetryTab, applyTelemetryFilters,
