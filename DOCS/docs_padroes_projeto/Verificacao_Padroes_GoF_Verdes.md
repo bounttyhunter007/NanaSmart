@@ -47,6 +47,8 @@ Um padrão de projeto é uma solução conhecida para um problema recorrente de 
 
 ### 1. Builder — construção dos prompts da IA
 
+**Builder — montar em etapas.** Serve para construir um resultado que pode ter várias partes e combinações. Cada etapa acrescenta uma parte, e ao final o construtor entrega o resultado completo. É como montar um sanduíche escolhendo seus ingredientes. No NanaSmart, o Builder monta prompts para a IA com blocos como contexto, alertas, ordens e pergunta. Isso facilita criar prompts diferentes sem repetir toda a montagem.
+
 **Onde está:**
 
 - [`PromptBuilder`](../../gemini_api/prompt_builder_pattern.py#L4) define os passos de construção, e [`PromptBuilderConcreto`](../../gemini_api/prompt_builder_pattern.py#L42) acumula e formata os blocos do prompt.
@@ -68,6 +70,8 @@ O fluxo aparece em `build_chat_prompt`, `build_os_analysis_prompt`, `build_unass
 
 ### 2. Strategy — regras de permissão intercambiáveis
 
+**Strategy — escolher uma regra.** Serve quando há maneiras diferentes de realizar uma tarefa e todas podem ser chamadas pelo mesmo contrato. Imagine escolher uma rota de carro, a pé ou de bicicleta: o destino é o mesmo, mas a regra para chegar muda. No NanaSmart, políticas de permissão usam o mesmo método para avaliar acesso, com regras diferentes para gestores, técnicos e outros casos.
+
 **Onde está:**
 
 - [`BasePermissionPolicy`](../../accounts/permission_policies.py#L4) define o contrato `can_access`.
@@ -82,6 +86,9 @@ O fluxo aparece em `build_chat_prompt`, `build_os_analysis_prompt`, `build_unass
 **Decisão:** aplicado e usado; manter.
 
 ### 3. Observer — reações a eventos de persistência
+
+**Observer — reagir a um acontecimento.** Serve para avisar componentes interessados quando um evento ocorre, permitindo que eles executem suas próprias ações. É parecido com uma inscrição em notificações: quando há uma novidade, os inscritos são avisados. No NanaSmart, sinais do Django acionam verificações quando uma leitura de telemetria, um alerta ou outro registro é salvo.
+
 
 **Onde está e o que observa:**
 
@@ -99,6 +106,8 @@ O fluxo aparece em `build_chat_prompt`, `build_os_analysis_prompt`, `build_unass
 
 ### 4. Factory Method — criação de exportadores por criadores concretos
 
+**Factory Method — deixar um criador decidir o que produzir.** Serve para separar o código que precisa de um objeto do código que sabe construir o tipo concreto. Pense em uma oficina com criadores especializados: cada um sabe produzir seu tipo de peça. No NanaSmart, criadores de exportadores produzem o objeto adequado para CSV, Excel ou PDF; a view usa a interface comum para gerar o arquivo.
+
 **Onde está:** [`CriadorExportador`](../../exportacao/utils/creators.py#L9) declara o método abstrato `criar_exportador`. `CriadorExportadorCSV`, `CriadorExportadorExcel` e `CriadorExportadorPDF` o sobrescrevem para criar cada produto concreto. [`ExportadorFactory`](../../exportacao/utils/exporter_factory.py#L4) resolve o criador pelo formato, e os exportadores implementam a interface [`Exportador`](../../exportacao/utils/base_exporter.py#L4). A view chama a fábrica em [`exportacao/views.py`](../../exportacao/views.py#L50).
 
 **Como é usado:** a requisição informa `csv`, `excel` ou `pdf`; o registro localiza o criador concreto, e o método sobrescrito `criar_exportador` instancia o produto. A view recebe um `Exportador` e chama o mesmo método `exportar`, independentemente do formato. O registro apenas escolhe o criador; a criação do produto ocorre pelo Factory Method sobrescrito.
@@ -109,6 +118,8 @@ O fluxo aparece em `build_chat_prompt`, `build_os_analysis_prompt`, `build_unass
 
 ### 5. Adapter — adaptação do contrato da aplicação para o SDK Gemini
 
+**Adapter — traduzir entre interfaces.** Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do SDK Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.
+
 **Onde está:** [`AssistenteAdapter`](../../gemini_api/adapters.py#L8) define o contrato esperado pela aplicação; [`GeminiAdapter`](../../gemini_api/adapters.py#L29) implementa esse contrato usando o SDK Google Gemini. [`get_ai_adapter`](../../gemini_api/adapters.py#L112) fornece o adapter concreto. As funções de compatibilidade em [`cliente.py`](../../gemini_api/cliente.py#L10) delegam ao contrato, e as views continuam usando esse ponto de entrada sem importar os tipos do SDK.
 
 **Como é usado:** a view chama `generate_content` com instrução, prompt e histórico da aplicação. O `GeminiAdapter` converte o histórico e a configuração para os tipos do SDK, executa a chamada e devolve texto e modelo usado. A view depende do contrato da aplicação; a tradução específica do Gemini fica no adapter.
@@ -118,6 +129,8 @@ O fluxo aparece em `build_chat_prompt`, `build_os_analysis_prompt`, `build_unass
 **Decisão:** Adapter aplicado e usado; manter. Um segundo adapter só será necessário quando houver outro provedor ou protocolo.
 
 ### 6. Facade — entrada única para montar o contexto Gemini
+
+**Facade — oferecer uma entrada mais simples.** Serve para apresentar uma operação de alto nível que coordena serviços ou partes de um sistema. Pense em uma recepção: você faz uma solicitação em um único lugar, e ela encaminha as etapas necessárias. No NanaSmart, a fachada prepara o contexto para a IA, reunindo os dados comuns e incluindo o resumo financeiro quando solicitado pela view.
 
 **Onde está:** [`GeminiContextFacade`](../../gemini_api/facades.py#L4) expõe `build_context`. Internamente, delega aos serviços [`build_base_context`](../../gemini_api/context_service.py#L151) e `get_financial_summary`. [`GeminiBaseView`](../../gemini_api/views.py#L140) usa a fachada.
 
