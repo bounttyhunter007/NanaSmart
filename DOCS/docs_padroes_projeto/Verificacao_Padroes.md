@@ -7,12 +7,14 @@ Este documento apresenta primeiro os padrões que têm uso real no projeto, na o
 | Situação dos 12 padrões analisados | Quantidade | Padrões |
 |---|---:|---|
 | Aplicados nos componentes do projeto | **7** | Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method |
-| Utilizados por mecanismos do Python/Django | **2** | Iterator e Composite no ORM |
-| Sem implementação própria, por falta de necessidade | **3** | Abstract Factory, Singleton e Decorator GoF |
+| Utilizados por mecanismos do Python/Django | **3** | Singleton, Iterator e Composite no ORM |
+| Sem implementação própria, por falta de necessidade | **2** | Abstract Factory e Decorator GoF |
 
-**Total: 12 analisados, sendo 9 em uso e 3 sem necessidade de implementação própria.**
+**Total: 12 analisados, sendo 10 em uso e 2 sem necessidade de implementação própria.**
 
 Observer e Template Method também aproveitam infraestrutura do Django/DRF, mas já estão contados entre os sete; não serão contados novamente.
+
+Singleton está incluído nos três usos fornecidos pelo Python/Django, junto de Iterator e Composite.
 
 ## Como ler
 
@@ -20,25 +22,26 @@ Comece pela explicação cotidiana, veja a indicação de quem fornece o mecanis
 
 **Criação** organiza como os objetos são construídos. **Estrutura** organiza como componentes se conectam. **Comportamento** organiza regras, etapas e reações. As linhas indicadas nos links correspondem ao código conferido e podem mudar em versões futuras.
 
-## Sumário dos padrões em uso
+## Sumário dos padrões e recursos relacionados
 
 **Criação:**
 
 - [1. Builder](#1-builder) — implementação do projeto.
 - [2. Factory Method](#2-factory-method) — implementação do projeto.
+- [3. Singleton](#3-singleton) — utilizado por recursos compartilhados do Django/Python.
 
 **Estruturais:**
 
-- [3. Adapter](#3-adapter) — implementação do projeto.
-- [4. Facade](#4-facade) — implementação do projeto.
-- [5. Composite](#5-composite) — fornecido pelo Django/ORM.
+- [4. Adapter](#4-adapter) — implementação do projeto.
+- [5. Facade](#5-facade) — implementação do projeto.
+- [6. Composite](#6-composite) — fornecido pelo Django/ORM.
 
 **Comportamentais:**
 
-- [6. Iterator](#6-iterator) — fornecido pelo Python/Django.
-- [7. Observer](#7-observer) — sinais do Django e receptores do projeto.
-- [8. Strategy](#8-strategy) — implementação do projeto.
-- [9. Template Method](#9-template-method) — implementação do projeto sobre o DRF.
+- [7. Iterator](#7-iterator) — fornecido pelo Python/Django.
+- [8. Observer](#8-observer) — sinais do Django e receptores do projeto.
+- [9. Strategy](#9-strategy) — implementação do projeto.
+- [10. Template Method](#10-template-method) — implementação do projeto sobre o DRF.
 
 ## Mapa dos usos
 
@@ -46,6 +49,7 @@ Comece pela explicação cotidiana, veja a indicação de quem fornece o mecanis
 |---|---|---|---|
 | Criação | Builder | Implementação do projeto | Montar o texto da IA em etapas. |
 | Criação | Factory Method | Implementação do projeto | Criar o gerador de CSV, Excel ou PDF. |
+| Criação | Singleton | Recursos compartilhados gerenciados pelo Django/Python | Acessar configurações, loggers e gerenciamento de conexões já disponíveis. |
 | Estruturais | Adapter | Implementação do projeto | Traduzir as chamadas para o Gemini. |
 | Estruturais | Facade | Implementação do projeto | Reunir os dados da IA por uma entrada simples. |
 | Estruturais | Composite | Fornecido pelo Django/ORM | Combinar grupos e condições nas consultas. |
@@ -205,9 +209,74 @@ Um formato sem registro resulta em `ValueError`, tratado pela view com resposta 
 
 
 
+### 3. Singleton
+
+**Singleton — recursos compartilhados pelo Django/Python.** A ideia é reutilizar um recurso central em vez de criar uma cópia a cada solicitação. No NanaSmart, esse uso aparece nos objetos e serviços compartilhados que o Django e o Python já disponibilizam, como configurações e loggers.
+
+**Como está disponível:** utilizado por meio dos recursos compartilhados do Django/Python.
+
+#### Uma comparação simples
+
+Pense em um quadro oficial de avisos: as pessoas consultam o mesmo quadro em vez de cada uma manter uma cópia. As configurações do Django funcionam como um ponto central de consulta. Os módulos da aplicação acessam o objeto disponibilizado pela biblioteca dentro do processo.
+
+#### Onde aparece no NanaSmart
+
+| Recurso | Onde procurar | Como é usado |
+|---|---|---|
+| Configurações `settings` | [app/urls.py, linha 19](../../app/urls.py#L19) e [app/settings.py](../../app/settings.py) | O arquivo de rotas consulta o objeto fornecido pelo Django para decidir a configuração de arquivos de mídia no ambiente de desenvolvimento. |
+| Loggers por nome | [manutencao/views.py, linha 23](../../manutencao/views.py#L23) e [app/exceptions.py, linha 8](../../app/exceptions.py#L8) | O código pede um logger pelo nome do módulo. O Python reutiliza o logger para pedidos com o mesmo nome dentro do processo. |
+| Gerenciamento de conexões | [gemini_api/context_service.py, linha 11](../../gemini_api/context_service.py#L11), consultas dos modelos e [configuração do banco](../../app/settings.py) | O ORM utiliza o gerenciador de conexões do Django; as views não precisam criar uma conexão PostgreSQL manual para cada consulta. |
+
+#### Exemplo 1: consultar as configurações compartilhadas
+
+Em `app/urls.py`, `from django.conf import settings` importa o ponto de acesso fornecido pelo Django. O mesmo arquivo o consulta neste trecho real:
+
+```python
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+Em linguagem simples: o arquivo pergunta às configurações se o ambiente está em modo de desenvolvimento. Se estiver, usa as configurações de mídia para acrescentar as rotas correspondentes. Ele não precisa construir um objeto novo de configurações para fazer essa pergunta.
+
+Internamente, `django.conf.settings` é um objeto `LazySettings`: um proxy compartilhado que carrega as configurações quando necessário.
+
+#### Exemplo 2: reutilizar um logger pelo nome
+
+Em `manutencao/views.py`, o projeto utiliza:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+```
+
+`__name__` identifica o módulo. Pedir novamente `logging.getLogger` com o mesmo nome reutiliza o logger registrado naquele processo. Nomes diferentes podem produzir loggers diferentes.
+
+É como procurar uma ficha pelo nome no mesmo catálogo: ao pedir a mesma ficha novamente, você reutiliza o registro já disponível.
+
+#### Exemplo 3: usar o gerenciador de conexões do Django
+
+As consultas por `Equipamento.objects`, `OrdemServico.objects` e outros modelos passam pelo ORM. No Django, `django.db.connections` disponibiliza um `ConnectionHandler`, e `django.db.connection` é um proxy para o alias padrão.
+
+```text
+Código do NanaSmart faz uma consulta pelo modelo
+    -> ORM acessa o gerenciador de conexões do Django
+    -> gerenciador obtém a conexão do alias e contexto de execução
+    -> a consulta é encaminhada ao banco
+```
+
+O gerenciador obtém e reutiliza as conexões de acordo com o alias de banco e o contexto de execução.
+
+A opção `CONN_MAX_AGE = 60`, presente em `app/settings.py`, permite reutilização conforme o ciclo de vida das conexões do Django.
+
+#### Por que é usado
+
+O projeto aproveita configurações centralizadas, loggers registrados e gerenciamento de conexões da biblioteca. Isso evita repetir no NanaSmart um gerenciamento que já é oferecido pelo Python/Django.
+
+**Decisão:** manter o uso dos recursos já fornecidos pelo Python/Django. Singleton é contabilizado nesse grupo, junto de Iterator e Composite. O resumo fica em **7 + 3 + 2**.
+
 ## Padrões estruturais
 
-### 3. Adapter
+### 4. Adapter
 
 **Adapter — traduzir entre interfaces.** Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.
 
@@ -273,7 +342,7 @@ Existe um contrato voltado à aplicação e uma implementação que o traduz par
 **Benefício observado na organização:** os detalhes de formatação da chamada ao Gemini ficam concentrados no adaptador.
 
 
-### 4. Facade
+### 5. Facade
 
 **Facade — oferecer uma entrada mais simples.** Serve para apresentar uma operação de alto nível que coordena serviços ou partes de um sistema. Pense em uma recepção: você faz uma solicitação em um único lugar, e ela encaminha as etapas necessárias. No NanaSmart, a fachada prepara o contexto para a IA, reunindo os dados comuns e incluindo o resumo financeiro quando solicitado pela view.
 
@@ -336,7 +405,7 @@ A view usa uma entrada de nível mais alto, sem coordenar diretamente a combina�
 - A fachada não substitui permissões nem validações de acesso. Ela delega a coleta aos serviços e recebe da view a opção financeira.
 - A análise individual de uma OS usa `build_order_analysis_context` em `order_analysis.py`, sem passar por essa fachada.
 
-### 5. Composite
+### 6. Composite
 
 **Composite — tratar itens e grupos pela mesma operação.** Imagine uma pasta que contém arquivos e outras pastas. É possível percorrer essa estrutura inteira usando a mesma operação. No NanaSmart, o exemplo em uso está na árvore de condições que o Django monta para consultar as ordens de serviço.
 
@@ -385,7 +454,7 @@ O uso é interno ao ORM. Ele não transforma o relacionamento empresa/equipament
 
 ## Padrões comportamentais
 
-### 6. Iterator
+### 7. Iterator
 
 **Iterator — percorrer uma coleção.** Serve para acessar os elementos de uma coleção em sequência sem expor sua representação interna. Imagine um fichário: você consulta as fichas pelo mesmo mecanismo de avanço, sem precisar reorganizar todo o arquivo.
 
@@ -447,7 +516,7 @@ Isso não significa que toda a operação use memória constante: a função man
 
 **Decisão:** manter o uso existente. Não criar um iterador manual que replique o mecanismo de Python/Django. O uso real pode ser demonstrado nos trechos acima, com essa distinção explícita.
 
-### 7. Observer
+### 8. Observer
 
 **Observer — reagir a um acontecimento.** Serve para avisar componentes interessados quando um evento ocorre, permitindo que eles executem suas próprias ações. É parecido com uma inscrição em notificações: quando há uma novidade, os inscritos são avisados. No NanaSmart, sinais do Django acionam verificações quando uma leitura de telemetria, um alerta ou outro registro é salvo.
 
@@ -515,7 +584,7 @@ Há eventos, receptores registrados e reações a esses eventos. É uma aplicaç
 - Operações como `QuerySet.update()` e `bulk_create()` não percorrem o salvamento individual normal com esses sinais. Assim, “salvar por qualquer caminho sempre avisa os observadores” seria uma afirmação ampla demais.
 - No fluxo normal de `Telemetria.save()`, o projeto usa transação e bloqueio do sensor. Isso é um mecanismo adicional de consistência, não um padrão Observer separado.
 
-### 8. Strategy
+### 9. Strategy
 
 **Strategy — escolher uma regra.** Serve quando há maneiras diferentes de realizar uma tarefa e todas podem ser chamadas pelo mesmo contrato. Imagine escolher uma rota de carro, a pé ou de bicicleta: o destino é o mesmo, mas a regra para chegar muda. No NanaSmart, políticas de permissão usam o mesmo método para avaliar acesso, com regras diferentes para gestores, técnicos e outros casos.
 
@@ -583,7 +652,7 @@ As políticas implementam um contrato comum e oferecem comportamentos diferentes
 
 
 
-### 9. Template Method
+### 10. Template Method
 
 **Template Method — compartilhar uma sequência e variar etapas.** Serve para manter o roteiro de uma operação em uma classe base e permitir que subclasses especializem algumas partes. É como uma ficha de atendimento com etapas comuns, preenchidas de forma diferente por cada setor. No NanaSmart, o atendimento comum das views Gemini segue essa organização.
 
@@ -711,5 +780,4 @@ As versões históricas ficam em [old](../old/README.md). As regras funcionais e
 | Padrão | Por que não foi acrescentado |
 |---|---|
 | Abstract Factory | A exportação escolhe um gerador por vez; não precisa criar uma família de vários tipos de produtos relacionados. Factory Method já atende ao caso atual. |
-| Singleton | O Django já gerencia configurações e conexões. Esse acesso compartilhado não garante um Singleton GoF global, e não foi encontrado requisito para uma classe própria. |
 | Decorator | O projeto usa decoradores de função, como `@receiver` e `@transaction.atomic`; isso não comprova uma cadeia de objetos Decorator GoF. Não há necessidade atual dessa composição adicional. |
