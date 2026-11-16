@@ -19,7 +19,7 @@ A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** 
 
 ## Documentação
 
-O [índice da documentação vigente](DOCS/README.md) reúne padrões, API, banco, regras e roteiros. A referência de padrões é a [verificação dos padrões GoF](DOCS/docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md). Versões anteriores estão separadas em [DOCS/old](DOCS/old/README.md). Os 12 padrões analisados agora têm aplicações no backend; o guia indica classes, chamadas e testes das implementações próprias.
+O [índice da documentação vigente](DOCS/README.md) reúne padrões, API, banco, regras e roteiros. A referência de padrões é a [verificação dos padrões GoF](DOCS/docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md). Versões anteriores estão separadas em [DOCS/old](DOCS/old/README.md). O guia separa os padrões aplicados, os recursos usados por meio do framework e os padrões avaliados sem necessidade atual de implementação própria.
 
 ## Requisitos
 
@@ -151,7 +151,7 @@ python scripts/stress_telemetry.py --help
 Para validar o projeto sem acessar o PostgreSQL de desenvolvimento, use o banco descartável configurado para testes:
 
 ```powershell
-python manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis gemini_api.test_prompt_components app.test_schema --settings=app.test_settings --noinput
+python manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput
 python manage.py check --settings=app.test_settings
 python manage.py makemigrations --check --dry-run --settings=app.test_settings
 node --check FrontATT/app.js

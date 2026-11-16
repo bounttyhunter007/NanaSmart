@@ -4,15 +4,15 @@
 
 **Referência principal:** este arquivo, originalmente dedicado aos padrões GoF destacados em verde.
 
-**Escopo atual:** os 12 padrões solicitados, conferidos no código local com base no commit `89db73e` e nas implementações desta revisão.
+**Escopo atual:** os 12 padrões solicitados, conferidos no código local com base no commit `89db73e`.
 
 Um padrão de projeto é uma solução conhecida para um problema recorrente de organização do código. Ele ajuda a decidir qual parte recebe um pedido, escolhe uma regra, prepara dados ou reage a um acontecimento. Não é uma funcionalidade que precisa ser adicionada apenas para completar uma lista.
 
 Este guia começa cada padrão com uma explicação e um exemplo cotidiano. Em seguida, mostra a situação real no NanaSmart, onde procurar, como o fluxo funciona e por que a solução foi escolhida. Os nomes das classes são os mesmos do código, e os trechos Python foram conferidos contra os arquivos da aplicação.
 
-**Resultado:** os 12 padrões agora têm aplicações no backend. Abstract Factory, Singleton, Composite, Decorator e Iterator receberam implementações próprias e pontos de uso nesta etapa. Os outros sete foram mantidos nos fluxos já existentes, incluindo Observer pelos sinais e receptores da aplicação.
+**Resultado:** sete padrões foram confirmados nos fluxos da aplicação: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator é utilizado por mecanismos de Python/Django. Não foi identificada necessidade atual de implementar Abstract Factory, Singleton próprio, Composite ou Decorator GoF próprio.
 
-O código e seus pontos de chamada são a evidência principal. Uma classe apenas definida, uma sugestão antiga ou um nome parecido com um padrão não comprovam uso real. Nesta revisão, as cinco implementações novas foram integradas e testadas antes da atualização de seu status. A adoção explícita dos 12 padrões também atende ao objetivo didático do projeto; não significa que cada um fosse indispensável ao funcionamento anterior.
+O código e seus pontos de chamada são a evidência principal. Uma classe apenas definida, uma sugestão antiga ou um nome parecido com um padrão não comprovam uso real. Quando uma implementação for necessária, ela deverá existir no fluxo e ser verificada antes de receber o status de implementada nesta documentação.
 
 ## Como ler e localizar o código
 
@@ -47,68 +47,49 @@ As categorias significam: **criação** organiza como objetos são construídos;
 
 | Categoria | Padrão | Situação atual |
 |---|---|---|
-| Criação | Abstract Factory | Implementado e usado; classe própria no backend |
+| Criação | Abstract Factory | Não aplicado; sem necessidade atual |
 | Criação | Builder | Implementado e usado |
 | Criação | Factory Method | Implementado e usado |
-| Criação | Singleton | Implementado e usado; classe própria no backend |
+| Criação | Singleton | Sem implementação própria; recursos compartilhados não comprovam Singleton |
 | Estruturais | Adapter | Implementado e usado |
 | Estruturais | Facade | Implementado e usado |
-| Estruturais | Composite | Implementado e usado; classe própria no backend |
-| Estruturais | Decorator | Implementado e usado; classe própria no backend |
-| Comportamentais | Iterator | Implementado e usado; classe própria no backend |
+| Estruturais | Composite | Não aplicado; sem necessidade atual |
+| Estruturais | Decorator | Não aplicado como GoF próprio |
+| Comportamentais | Iterator | Utilizado por recursos de Python/Django; sem classe própria |
 | Comportamentais | Observer | Aplicado pelos sinais do Django e receptores do projeto |
 | Comportamentais | Strategy | Implementado e usado |
 | Comportamentais | Template Method | Implementado e usado |
 
-A ordem desta tabela é a mesma das seções. As análises anteriores que recomendavam não acrescentar certos padrões estão preservadas no histórico; esta versão descreve as implementações próprias agora concluídas.
+A ordem desta tabela é a mesma das seções. “Não implementar agora” significa ausência de necessidade identificada, e não uma tarefa de implementação que ficou incompleta.
 
 ## Padrões de criação
 
 ### 1. Abstract Factory
 
-**Abstract Factory — criar uma família de objetos relacionados.** Imagine escolher uma linha de produtos: cada linha fornece peças diferentes que precisam combinar entre si. No NanaSmart, a família CSV cria um exportador CSV e os metadados de download CSV; Excel e PDF fazem o mesmo para seus formatos.
+**Abstract Factory — criar uma família de objetos relacionados.** Serve quando vários objetos precisam ser criados juntos e pertencer à mesma família. Por exemplo, uma fábrica de tema claro poderia criar botão, menu e janela claros, enquanto outra criaria os mesmos componentes em tema escuro. No NanaSmart, cada exportação escolhe apenas um formato; não há uma família de produtos que precise ser criada em conjunto.
 
-**Situação:** implementado no backend e usado nas exportações atuais.
+**Situação:** Não aplicado; sem necessidade atual.
 
-#### Problema resolvido e onde está
+#### Situação e onde procurar
 
-Além de produzir o conteúdo do relatório, é preciso informar o tipo do arquivo (`Content-Type`) e o nome/extensão do download (`Content-Disposition`). A fábrica abstrata reúne esses dois tipos de produtos relacionados, de modo que a mesma família forneça o gerador e seu contrato de download.
+**Não existe uma implementação própria de Abstract Factory nos fluxos examinados.** O ponto que pode causar confusão é o módulo [exportacao/utils](../../exportacao/utils/creators.py): ele cria formatos alternativos de um mesmo produto, o exportador.
 
-| Componente | Localização | Responsabilidade |
-|---|---|---|
-| `FabricaFamiliaExportacao` | [families.py](../../exportacao/utils/families.py) | Contrato com duas operações: criar o exportador e criar seus metadados. |
-| `FamiliaCSV`, `FamiliaExcel`, `FamiliaPDF` | [families.py](../../exportacao/utils/families.py) | Implementam as famílias concretas. |
-| `Exportador` e suas implementações | [base_exporter.py](../../exportacao/utils/base_exporter.py) | Primeiro tipo de produto: gera o arquivo. |
-| `MetadadosDownload`, `MetadadosCSV`, `MetadadosExcel`, `MetadadosPDF` | [download_metadata.py](../../exportacao/utils/download_metadata.py) | Segundo tipo de produto: aplica o MIME e a extensão correspondentes à resposta. |
-| `ExportadorFactory` e registros | [exporter_factory.py](../../exportacao/utils/exporter_factory.py) e [utils/__init__.py](../../exportacao/utils/__init__.py) | Localizam a família solicitada e ligam a criação ao caminho usado pelas views. |
+Os componentes reais são `CriadorExportadorCSV`, `CriadorExportadorExcel`, `CriadorExportadorPDF` e seus exportadores. Eles pertencem à demonstração de **Factory Method**, explicada na seção 3. Não há uma fábrica que produza, em conjunto, vários tipos de produtos de uma família.
 
-#### Código real e fluxo
-
-```python
-class FamiliaCSV(FabricaFamiliaExportacao):
-    def criar_exportador(self) -> Exportador:
-        return CriadorExportadorCSV(self.criar_metadados()).criar_exportador()
-
-    def criar_metadados(self) -> MetadadosDownload:
-        return MetadadosCSV()
-```
-
-`criar_exportador()` chama `criar_metadados()` e entrega esse segundo produto ao criador do primeiro. O exportador usa o objeto recebido para preparar seus cabeçalhos. Os dois produtos participam da resposta; não são classes sem chamada.
+#### Como visualizar a diferença
 
 ```text
-GET /api/exportar/equipamentos/csv/
-    -> ExportadorFactory consulta a família registrada
-    -> FamiliaCSV cria MetadadosCSV
-    -> CriadorExportadorCSV recebe esses metadados e cria ExportadorCSV
-    -> o exportador gera o conteúdo e aplica os metadados de download
-    -> a resposta contém o CSV, seu MIME e o nome .csv
+Código atual: escolher PDF -> criar um ExportadorPDF -> gerar o arquivo.
+Abstract Factory: escolher uma família -> criar vários tipos de produtos relacionados dessa família.
 ```
 
-#### Por que é Abstract Factory e como convive com Factory Method
+A segunda linha é uma explicação conceitual; não descreve classes existentes no NanaSmart. Ter uma classe abstrata e uma classe chamada Factory não basta para caracterizar Abstract Factory.
 
-A família oferece **dois tipos de produto relacionados**: exportador e metadados. O Factory Method continua sendo o método especializado que instancia o exportador concreto. O primeiro padrão coordena a família; o segundo decide a criação do gerador.
+#### Por que não implementar agora
 
-**Decisão:** implementação concluída e ligada aos três formatos. As classes antigas ainda podem ser instanciadas diretamente, usando seus metadados padrão. MIME, extensões, conteúdo e rotas foram preservados. A nova estrutura torna a família explícita; não constitui um ganho de desempenho medido.
+O projeto precisa escolher um formato por exportação. Os criadores atuais já resolvem esse problema. Acrescentar famílias artificiais exigiria classes sem uma responsabilidade real adicional.
+
+**Decisão:** não implementar agora. Reavaliar se surgir uma funcionalidade que precise construir vários tipos de objetos relacionados e alternar famílias completas desses objetos. Isso é um critério futuro, não uma funcionalidade pendente desta entrega.
 
 ### 2. Builder
 
@@ -124,8 +105,8 @@ O chat, a análise de ordens e a análise financeira precisam de textos com part
 
 | Classe ou função | Localização | Responsabilidade |
 |---|---|---|
-| `PromptBuilder` | [prompt_builder_pattern.py, linha 5](../../gemini_api/prompt_builder_pattern.py#L5) | Define as etapas disponíveis: contexto, alertas, ordens, telemetria, financeiro, instruções, pergunta, conclusão e reinicialização. |
-| `PromptBuilderConcreto` | [prompt_builder_pattern.py, linha 43](../../gemini_api/prompt_builder_pattern.py#L43) | Guarda componentes em `_blocos`, limita algumas listas e renderiza a árvore Composite para entregar o texto do produto. |
+| `PromptBuilder` | [prompt_builder_pattern.py, linha 4](../../gemini_api/prompt_builder_pattern.py#L4) | Define as etapas disponíveis: contexto, alertas, ordens, telemetria, financeiro, instruções, pergunta, conclusão e reinicialização. |
+| `PromptBuilderConcreto` | [prompt_builder_pattern.py, linha 42](../../gemini_api/prompt_builder_pattern.py#L42) | Guarda os blocos em `_blocos`, formata o texto, limita algumas listas e entrega o produto. |
 | `PromptDirector` | [prompt_director.py, linha 4](../../gemini_api/prompt_director.py#L4) | Define as receitas de chat, análise de ordens, ordens não atribuídas e finanças. |
 | `Prompt` | [prompt.py, linha 1](../../gemini_api/prompt.py#L1) | Guarda o texto final e o entrega por `obter_texto()`. |
 | `build_chat_prompt` e funções semelhantes | [prompt_builder.py, linha 119](../../gemini_api/prompt_builder.py#L119) | Preparam cabeçalhos e instruções, criam o builder e chamam o diretor. |
@@ -146,7 +127,7 @@ A mesma receita acrescenta indicadores quando disponíveis, telemetria e pergunt
 
 ```python
 def build(self) -> Prompt:
-    resultado = GrupoPrompt(tuple(self._blocos)).renderizar()
+    resultado = "\n".join(self._blocos)
     return Prompt(resultado)
 ```
 
@@ -170,7 +151,7 @@ Em linguagem simples: cria-se um montador, escolhe-se a receita de chat e obtém
 
 #### Por que a classificação é válida
 
-Há um contrato de construção, um construtor concreto, um diretor com receitas e um produto final. O construtor agora usa `TrechoPrompt` e `GrupoPrompt` (Composite) para representar os blocos, preservando o texto final. Além de existirem, eles são chamados pelas funções utilizadas nas views.
+Há um contrato de construção, um construtor concreto, um diretor com receitas e um produto final. Além de existirem, eles são chamados pelas funções utilizadas nas views.
 
 **Benefício observado na organização:** a receita de cada solicitação fica separada das regras de formatação dos blocos. Isso facilita localizar onde alterar a ordem das informações ou sua apresentação.
 
@@ -178,98 +159,140 @@ Há um contrato de construção, um construtor concreto, um diretor com receitas
 
 - O limite de cinco itens em alguns blocos vem de `_max_linhas = 5`. Ele reduz listas, mas **não garante** um tamanho máximo total de texto ou de tokens da IA.
 - `reset()` limpa os blocos antes de uma nova montagem. `build()` não faz essa limpeza automaticamente.
-- `com_financeiro()` é exercitado nos testes do Builder, mas não é chamado pelas receitas atuais de `PromptDirector`. A receita financeira atual usa cabeçalho, `com_ordens`, instruções e pergunta.
+- `com_financeiro()` está definido, mas não foi encontrada uma chamada a ele nos arquivos Python examinados. A receita financeira atual usa cabeçalho, `com_ordens`, instruções e pergunta.
 - `build_trend_analysis_prompt`, em [prompt_builder.py, linha 188](../../gemini_api/prompt_builder.py#L188), monta sua própria lista de textos e não usa essas classes Builder.
 - A análise de **uma OS específica**, em [order_analysis.py, linha 118](../../gemini_api/order_analysis.py#L118), também tem montagem própria de instruções e JSON. Não se deve afirmar que toda mensagem enviada à IA passa pelo Builder.
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 3. Factory Method
 
 **Factory Method — deixar um criador decidir o que produzir.** Serve para separar o código que precisa de um objeto do código que sabe construir o tipo concreto. Pense em uma oficina com criadores especializados: cada um sabe produzir seu tipo de peça. No NanaSmart, criadores de exportadores produzem o objeto adequado para CSV, Excel ou PDF; a view usa a interface comum para gerar o arquivo.
 
-**Situação:** já implementado e mantido em uso, agora também integrado às famílias de Abstract Factory.
+**Situação:** Implementado e usado.
+
+#### Problema resolvido
+
+Os dados de uma exportação são preparados pela view, enquanto o trabalho de gerar cada formato fica em classes próprias. A escolha e a criação do exportador são encaminhadas aos criadores.
 
 #### Onde está e quais classes participam
 
-| Componente | Localização | Papel |
+| Classe ou arquivo | Localização | Papel |
 |---|---|---|
-| `CriadorExportador` | [creators.py](../../exportacao/utils/creators.py) | Declara `criar_exportador()` e recebe opcionalmente o produto de metadados. |
-| `CriadorExportadorCSV`, `CriadorExportadorExcel`, `CriadorExportadorPDF` | [creators.py](../../exportacao/utils/creators.py) | Sobrescrevem o método para criar o gerador concreto, com seus metadados. |
-| `ExportadorCSV`, `ExportadorExcel`, `ExportadorPDF` | [csv_exporter.py](../../exportacao/utils/csv_exporter.py), [excel_exporter.py](../../exportacao/utils/excel_exporter.py), [pdf_exporter.py](../../exportacao/utils/pdf_exporter.py) | Geram CSV, XLSX e PDF pelo contrato comum `Exportador`. |
-| `ExportadorFactory` | [exporter_factory.py](../../exportacao/utils/exporter_factory.py) | Resolve o formato e devolve um `Exportador`, envolvido pelo Decorator de log. |
-| `_despachar_formato` | [exportacao/views.py](../../exportacao/views.py) | Usa o mesmo contrato para solicitar todos os formatos. |
+| `Exportador` | [base_exporter.py, linha 4](../../exportacao/utils/base_exporter.py#L4) | Contrato do produto: `exportar(nome, titulo, colunas, linhas)`. |
+| `ExportadorCSV` | [csv_exporter.py, linha 8](../../exportacao/utils/csv_exporter.py#L8) | Gera CSV com a biblioteca `csv`. |
+| `ExportadorExcel` | [excel_exporter.py, linha 11](../../exportacao/utils/excel_exporter.py#L11) | Gera uma planilha `.xlsx` com `openpyxl`. |
+| `ExportadorPDF` | [pdf_exporter.py, linha 20](../../exportacao/utils/pdf_exporter.py#L20) | Gera PDF com ReportLab. |
+| `CriadorExportador` | [creators.py, linha 9](../../exportacao/utils/creators.py#L9) | Declara o método abstrato `criar_exportador()`. |
+| `CriadorExportadorCSV`, `CriadorExportadorExcel`, `CriadorExportadorPDF` | [creators.py, linha 18](../../exportacao/utils/creators.py#L18) | Cada subclasse implementa o método e cria seu exportador. |
+| `ExportadorFactory` | [exporter_factory.py, linha 4](../../exportacao/utils/exporter_factory.py#L4) | Localiza a classe criadora pelo nome do formato e delega a criação. |
+| Registro dos formatos | [utils/__init__.py](../../exportacao/utils/__init__.py) | Associa `csv`, `excel` e `pdf` aos respectivos criadores. |
+| `_despachar_formato` | [exportacao/views.py, linha 47](../../exportacao/views.py#L47) | Pede o exportador e chama `exportar`. |
 
-#### Código real e uso
+#### Código que mostra o padrão
+
+Em `creators.py`, o criador base define a operação e a subclasse decide qual objeto construir:
 
 ```python
+class CriadorExportador(ABC):
+    """Creator do Factory Method para uma família de exportadores."""
+
+    @abstractmethod
+    def criar_exportador(self) -> Exportador:
+        """Cria o exportador escolhido pelo criador concreto."""
+        raise NotImplementedError
+
+
 class CriadorExportadorCSV(CriadorExportador):
     def criar_exportador(self) -> ExportadorCSV:
-        return ExportadorCSV(metadados=self._metadados)
+        return ExportadorCSV()
 ```
 
-O método sobrescrito é o Factory Method. A view continua usando estas linhas:
+As subclasses de Excel e PDF fazem a mesma especialização para seus produtos. Na fábrica de apoio, a delegação aparece nesta linha:
+
+```python
+return criador_cls().criar_exportador()
+```
+
+Na view, o uso é comum a qualquer formato:
 
 ```python
 exportador = ExportadorFactory.criar(formato)
 return exportador.exportar(nome, titulo, colunas, linhas)
 ```
 
-As famílias chamam os criadores concretos; o cliente não precisa conhecer a lógica de geração de cada arquivo. A assinatura `exportar(nome, titulo, colunas, linhas)` foi preservada.
+#### Exemplo do fluxo real
 
-#### Benefício, compatibilidade e limites
+Uma requisição a `GET /api/exportar/equipamentos/pdf/` segue esta sequência explicativa:
 
-O método de criação fica separado do código que prepara os dados e atende a requisição. O registro `registrar(formato, criador_cls)` continua funcionando para criadores sem família; os formatos padrão usam também o argumento `familia_cls`.
+```text
+ExportarEquipamentosView prepara as colunas e linhas
+    -> _despachar_formato recebe "pdf"
+    -> ExportadorFactory encontra CriadorExportadorPDF
+    -> criar_exportador() produz ExportadorPDF
+    -> exportar(...) devolve o arquivo para download
+```
 
-Formato inexistente continua provocando `ValueError`, tratado como HTTP 400 pela view. Incluir um formato novo ainda exige revisar opções, mensagens e documentação da interface. Não se deve confundir o registro de formatos, sozinho, com a hierarquia de criadores que caracteriza Factory Method.
+O mesmo mecanismo atende ordens de serviço, equipamentos, alertas, telemetria, histórico e dashboard. As rotas estão em [exportacao/urls.py](../../exportacao/urls.py).
 
-**Decisão:** manter. Os testes verificam a extensão pelo registro antigo, a criação pelos novos caminhos e as respostas dos endpoints existentes.
+#### Por que a classificação é válida
+
+O ponto que caracteriza **Factory Method** é o método de criação declarado no criador base e implementado pelas subclasses. O registro de formatos apenas escolhe o criador; ele não é, sozinho, a comprovação do padrão.
+
+**Benefício observado na organização:** a função que despacha a exportação não precisa importar cada gerador concreto nem executar a lógica de geração dos três formatos.
+
+#### Limites importantes
+
+Para acrescentar outro formato, seria necessário implementar o produto, seu criador e o registro. Também seria preciso revisar validações, mensagens, documentação e opções da interface que enumerem os formatos. A extensão do mecanismo central não significa que todos esses pontos já aceitem qualquer formato novo.
+
+Um formato sem registro resulta em `ValueError`, tratado pela view com resposta HTTP 400. A mensagem atual orienta usar CSV, Excel ou PDF.
+
+**Por que não é Abstract Factory:** são três alternativas para um mesmo tipo de produto, o exportador. Não há criação coordenada de vários tipos de produtos pertencentes a famílias diferentes. A palavra “família” no comentário do criador não altera essa estrutura.
+
+#### Decisão e necessidade
+
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 4. Singleton
 
-**Singleton — controlar uma única instância.** Pense em um catálogo oficial de formatos dentro de uma execução do servidor: quem o consulta ou registra um formato deve encontrar o mesmo catálogo. O controle de criação fica na própria classe.
+**Singleton — controlar uma única instância.** Serve quando uma classe precisa garantir uma única instância dentro de um processo e fornecer acesso a ela. O Django já oferece pontos centralizados para recursos usados pelo projeto, como configurações e gerenciamento de conexões. A ideia de acesso compartilhado lembra Singleton, mas cada recurso tem suas próprias regras: isso não significa que exista uma única conexão com o banco para toda a aplicação.
 
-**Situação:** implementação própria em `CatalogoExportadores`, utilizada pela exportação.
+**Situação:** Sem implementação própria; recursos compartilhados não comprovam Singleton.
 
-#### Onde está e o que fica compartilhado
+#### Situação no código
 
-| Componente | Arquivo | Responsabilidade |
+**Não foi encontrada uma classe própria que controle sua criação para garantir uma única instância.** Não há uma implementação de Singleton a apontar como funcionalidade do NanaSmart.
+
+O que existe é o uso de recursos do Django e de objetos compartilhados em registros. Compartilhar um objeto não significa impedir que outras instâncias sejam criadas.
+
+#### Onde estão os recursos relacionados
+
+| Recurso real | Onde aparece | O que ele demonstra |
 |---|---|---|
-| `CatalogoExportadores` | [catalog.py](../../exportacao/utils/catalog.py) | Garante a identidade da instância e mantém o registro de classes de criadores/famílias. |
-| `ExportadorFactory.registrar` | [exporter_factory.py](../../exportacao/utils/exporter_factory.py) | Registra o par de classes no catálogo compartilhado. |
-| `ExportadorFactory.criar` | [exporter_factory.py](../../exportacao/utils/exporter_factory.py) | Consulta o mesmo catálogo para resolver o formato. |
-| Registro inicial | [utils/__init__.py](../../exportacao/utils/__init__.py) | Registra as famílias CSV, Excel e PDF. |
+| Configurações da aplicação | [app/settings.py](../../app/settings.py) e imports de `django.conf.settings` | Um ponto de acesso às configurações fornecido pelo Django. |
+| Consultas ao banco | [get_user_equipment_queryset](../../gemini_api/context_service.py#L11) e demais consultas pelo ORM | O projeto utiliza o gerenciamento de conexões do Django, sem abrir conexões manualmente em cada view. |
+| Registro de políticas | [PermissionPolicyFactory](../../accounts/permission_policies.py#L51) | `_policies` guarda instâncias reutilizadas, mas outras instâncias das políticas ainda podem ser construídas. |
+| Construção do adaptador de IA | [get_ai_adapter](../../gemini_api/adapters.py#L112) | Retorna `GeminiAdapter()` a cada chamada, sem garantia de instância única. |
 
-#### Código real: garantia da instância
+#### Código real e interpretação
 
 ```python
-def __new__(cls):
-    with cls._criacao_lock:
-        if cls._instancia is None:
-            instancia = super().__new__(cls)
-            instancia._registro = {}
-            instancia._registro_lock = RLock()
-            cls._instancia = instancia
-        return cls._instancia
+def get_ai_adapter() -> AssistenteAdapter:
+    """Ponto de composição: views dependem do contrato, não do SDK."""
+    return GeminiAdapter()
 ```
 
-`_criacao_lock` é um `Lock` de classe. Ele protege a primeira construção. O registro e seu `RLock` são criados somente nessa primeira vez; outra chamada a `CatalogoExportadores()` não apaga os formatos existentes. `registrar()` e `resolver()` também protegem o acesso ao registro.
+Esse trecho mostra uma construção comum de objeto. Não é uma implementação de Singleton.
 
-```text
-Registro dos formatos -> CatalogoExportadores() -> mesma instância
-Pedido de exportação -> CatalogoExportadores() -> mesma instância
-Outro pedido          -> CatalogoExportadores() -> mesma instância
-```
+#### Por que não implementar agora
 
-#### Por que é usado e quais são os limites
+Não foi identificado um requisito que exija uma única instância própria por processo. Uma instância global também não seria automaticamente única entre vários processos ou servidores.
 
-O catálogo tem identidade única para evitar registros independentes dentro do mesmo processo. Ele guarda **classes de criadores/famílias**, nunca usuário, empresa, token, linhas de relatório ou QuerySets de uma requisição. Os exportadores continuam sendo criados por operação.
+O acesso centralizado ao banco **não significa uma única conexão física para toda a aplicação**. `CONN_MAX_AGE` configura reutilização de conexões pelo Django; não comprova Singleton ou um pool global.
 
-Cada processo de servidor terá seu próprio Singleton. Ele não é um catálogo distribuído entre máquinas, não gerencia conexões com o banco e não cria um cliente de IA global. O gerenciamento do Django continua com seus próprios ciclos de vida.
-
-**Decisão:** implementação concluída. Os testes conferem a identidade em construções concorrentes por oito threads e a preservação dos registros ao obter a instância novamente.
+**Decisão:** manter o gerenciamento atual. Reavaliar somente diante de um recurso que precise de identidade única por processo e de um ciclo de vida explicitamente controlado. Nenhuma classe Singleton foi adicionada nesta revisão.
 
 ## Padrões estruturais
 
@@ -348,7 +371,7 @@ Existe um contrato voltado à aplicação e uma implementação que o traduz par
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 6. Facade
 
@@ -415,188 +438,130 @@ A view usa uma entrada de nível mais alto, sem coordenar diretamente a combina�
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 7. Composite
 
-**Composite — tratar itens e grupos pela mesma operação.** Uma pasta pode conter arquivos e outras pastas; uma operação comum percorre essa árvore. No NanaSmart, um prompt contém trechos simples e grupos que podem conter outros grupos.
+**Composite — tratar itens e grupos de forma parecida.** Serve para organizar objetos em uma árvore, permitindo que uma operação trabalhe tanto com um item individual quanto com um grupo que contém outros itens ou grupos. Uma pasta com arquivos e subpastas é uma forma simples de imaginar essa estrutura. O domínio analisado do NanaSmart não exige esse tratamento recursivo.
 
-**Situação:** implementação própria utilizada pelo Builder de prompts.
+**Situação:** Não aplicado; sem necessidade atual.
 
-#### Onde está e quais classes participam
+#### Situação e onde foi conferido
 
-| Componente | Localização | Responsabilidade |
-|---|---|---|
-| `ComponentePrompt` | [prompt_components.py](../../gemini_api/prompt_components.py) | Contrato comum `renderizar()`. |
-| `TrechoPrompt` | [prompt_components.py](../../gemini_api/prompt_components.py) | Folha: devolve seu próprio texto. |
-| `GrupoPrompt` | [prompt_components.py](../../gemini_api/prompt_components.py) | Composição: chama `renderizar()` nos filhos e junta os resultados com quebra de linha. |
-| `PromptBuilderConcreto` | [prompt_builder_pattern.py](../../gemini_api/prompt_builder_pattern.py) | Cria trechos e grupos; sua operação final renderiza o grupo raiz. |
+**Não aplicado nos fluxos examinados.** Foram conferidas as relações de [equipamentos e planos](../../ativos/models.py), [sensores e leituras](../../telemetria/models.py) e [ordens de serviço](../../manutencao/models.py).
 
-#### Código real
+Uma empresa possuir equipamentos e um equipamento possuir sensores não basta para formar Composite. No padrão, itens individuais e grupos precisam compartilhar uma operação comum; os grupos podem conter outros grupos e executar essa operação de forma recursiva.
 
-```python
-@dataclass(frozen=True)
-class TrechoPrompt(ComponentePrompt):
-    texto: str
-
-    def renderizar(self) -> str:
-        return self.texto
-```
-
-```python
-@dataclass(frozen=True)
-class GrupoPrompt(ComponentePrompt):
-    componentes: tuple[ComponentePrompt, ...]
-
-    def __post_init__(self):
-        # Uma lista recebida do chamador não deve modificar a árvore depois.
-        object.__setattr__(self, 'componentes', tuple(self.componentes))
-
-    def renderizar(self) -> str:
-        return '\n'.join(componente.renderizar() for componente in self.componentes)
-```
-
-Tanto a folha quanto o grupo implementam o mesmo contrato. Um grupo aceita outros grupos, permitindo uma estrutura recursiva. Os dados das classes são congelados e os filhos são convertidos em tupla, evitando que uma lista externa modifique um grupo depois da construção.
-
-#### Como está usado no prompt
-
-O método `_adicionar_secao` cria um grupo com o título e outro grupo com as linhas. No final, `build()` renderiza a composição completa:
-
-```python
-def _adicionar_secao(self, titulo, linhas):
-    self._blocos.append(GrupoPrompt((
-        TrechoPrompt(f"\n{titulo}:"),
-        GrupoPrompt(tuple(TrechoPrompt(linha) for linha in linhas)),
-    )))
-```
+#### Como o projeto está organizado
 
 ```text
-Grupo raiz do prompt
-    -> Trecho de contexto
-    -> Grupo de alertas
-        -> Trecho do título
-        -> Grupo de linhas
-            -> Trecho do alerta 1
-            -> Trecho do alerta 2
-    -> Grupo da pergunta
+Empresa -> Equipamento -> Sensor -> Leituras
 ```
 
-#### Por que é usado e o que foi preservado
+Essa é uma sequência explicativa de relacionamentos do domínio. Ela não representa classes com um contrato comum para tratar folhas e grupos da mesma maneira. Por exemplo, não existe uma operação de componente que seja executada igualmente sobre um sensor e sobre um grupo recursivo de sensores.
 
-O Builder decide quais partes entram; o Composite representa e renderiza a estrutura dessas partes por uma operação uniforme. Esse é o caso real de árvore neste projeto, independentemente dos relacionamentos do banco.
+#### Necessidade e decisão
 
-As quebras de linha, os títulos, o limite de itens e os textos produzidos pelos quatro diretores foram preservados em testes de igualdade. Um produto já construído não muda ao reinicializar o Builder. Nem toda mensagem de IA usa esse Builder; a análise individual de OS e a montagem de tendência mantêm seus caminhos próprios.
+As consultas atuais usam os relacionamentos dos modelos e os serviços existentes. Não foi encontrado um caso que precise de uma árvore recursiva de componentes.
 
-**Decisão:** implementação concluída, sem mudar modelos ou o texto esperado dos prompts existentes.
+**Decisão:** não implementar agora. Reavaliar se aparecer uma hierarquia de grupos dentro de grupos que precise aceitar as mesmas operações dos itens individuais. Não há classe Composite própria a demonstrar no código atual.
 
 ### 8. Decorator
 
-**Decorator — acrescentar uma responsabilidade envolvendo um objeto.** Imagine um serviço de impressão ao qual se acrescenta uma etapa de registro, mantendo a mesma forma de solicitar a impressão. Um objeto envolve outro de mesmo contrato e delega o trabalho principal.
+**Decorator — acrescentar comportamento envolvendo um objeto.** Serve para adicionar responsabilidades a um objeto por meio de outro objeto que mantém a mesma interface. Por exemplo, um serviço de envio poderia ser envolvido por um componente que registra cada envio e por outro que acrescenta criptografia. O uso de `@` em Python, por si só, não comprova esse padrão GoF. No NanaSmart, não foi encontrada uma necessidade atual dessa composição de objetos.
 
-**Situação:** implementação GoF própria na geração de exportações.
+**Situação:** Não aplicado como GoF próprio.
 
-#### Onde está e quais classes participam
+#### Situação e onde foi conferido
 
-| Componente | Localização | Responsabilidade |
-|---|---|---|
-| `Exportador` | [base_exporter.py](../../exportacao/utils/base_exporter.py) | Contrato comum `exportar(...)`. |
-| `ExportadorDecorator` | [decorators.py](../../exportacao/utils/decorators.py) | Implementa o contrato e guarda um exportador para delegar a chamada. |
-| `ExportadorComLog` | [decorators.py](../../exportacao/utils/decorators.py) | Acrescenta o registro de uma geração concluída. |
-| `ExportadorFactory.criar` | [exporter_factory.py](../../exportacao/utils/exporter_factory.py) | Envolve o exportador criado com `ExportadorComLog`, inclusive no registro legado. |
+**Não foi comprovada uma implementação GoF própria de Decorator.** Existem decoradores Python, como `@receiver` em [telemetria/signals.py](../../telemetria/signals.py#L9), `@action` em [manutencao/views.py](../../manutencao/views.py) e `@transaction.atomic` nos serviços.
 
-#### Código real e fluxo
+Esses recursos registram funções ou acrescentam comportamento a chamadas. O símbolo `@`, sozinho, não demonstra a estrutura GoF de objetos que envolvem outros objetos de mesmo contrato para combinar responsabilidades.
+
+#### Exemplo real que pode causar confusão
 
 ```python
-class ExportadorComLog(ExportadorDecorator):
-    def exportar(self, nome, titulo, colunas, linhas):
-        response = super().exportar(nome, titulo, colunas, linhas)
-        # Não registra valores das células, usuários, tokens ou dados da empresa.
-        logger.info(
-            'Exportação concluída: gerador=%s bytes=%d',
-            type(self._exportador).__name__, len(response.content),
-        )
-        return response
+@receiver(post_save, sender=Telemetria)
+def checar_limites_telemetria(sender, instance, created, raw=False, **kwargs):
+    if raw or not created or not instance.sensor.ativo:
+        return
+    sync_sensor_trend(instance.sensor_id)
+    sync_limit_reading(instance)
 ```
 
-```text
-View chama exportar(...)
-    -> ExportadorComLog recebe a chamada
-    -> exportador interno gera o arquivo e os cabeçalhos
-    -> decorator registra o nome da classe e a quantidade de bytes
-    -> devolve o mesmo objeto de resposta
-```
+O trecho registra um receptor de eventos. Neste projeto, ele serve à explicação de **Observer**, na seção 10. Não há aqui uma cadeia própria de objetos decoradores com a mesma interface.
 
-#### Por que é usado e quais são os limites
+#### Necessidade e decisão
 
-A responsabilidade de log fica em uma composição de objetos, sem repetir o registro em cada gerador. É possível envolver outro decorator porque todos mantêm o contrato `Exportador`. Isso é diferente de reconhecer o símbolo `@` de Python como prova de Decorator GoF.
+Não foi encontrado um requisito atual de combinar dinamicamente responsabilidades por envolvimento de objetos. Criar wrappers apenas para utilizar o nome do padrão acrescentaria camadas sem resolver um problema identificado.
 
-O log não inclui células, nomes de usuários, empresas, tokens ou valores do relatório. A mensagem é de nível INFO e sua emissão depende da configuração de logging. Ela registra que o arquivo foi gerado no backend, não que o navegador concluiu o download.
-
-O decorator devolve a mesma resposta e não modifica seu conteúdo ou cabeçalhos. Se a geração falhar, a exceção original continua sendo propagada e não há registro de conclusão.
-
-**Decisão:** implementação concluída e utilizada nos endpoints de exportação. Os testes cobrem composição de decorators, preservação da resposta, falha do gerador e ausência de valores das células no log.
+**Decisão:** não implementar agora. Reavaliar se uma funcionalidade passar a precisar dessas combinações, com contrato comum e benefícios concretos. Os decoradores Python existentes continuam com suas responsabilidades atuais.
 
 ## Padrões comportamentais
 
 ### 9. Iterator
 
-**Iterator — percorrer uma coleção sem expor sua representação interna.** É como avançar pelas fichas de um arquivo uma por vez. O cliente solicita o próximo item por uma operação comum, sem precisar carregar e reorganizar toda a coleção.
+**Iterator — percorrer uma coleção.** Serve para acessar os elementos de uma coleção em sequência sem expor sua representação interna. Imagine um fichário: você consulta as fichas pelo mesmo mecanismo de avanço, sem precisar reorganizar todo o arquivo.
 
-**Situação:** classe própria `IteradorLeituras`, integrada à seleção de amostras da análise de tendências.
+**Situação:** Utilizado por recursos de Python/Django; sem classe própria.
+
+#### Problema resolvido e situação
+
+Iterator permite percorrer os elementos de uma coleção sem precisar conhecer sua representação interna. É como consultar as fichas de um arquivo uma por vez, seguindo uma forma comum de avançar.
+
+**O mecanismo já é utilizado, por recursos nativos de Python e do ORM Django.** Não foi encontrada uma classe iteradora própria com `__iter__` e `__next__`; essa estrutura é fornecida pela linguagem/framework.
 
 #### Onde está e quem participa
 
-| Componente | Localização | Responsabilidade |
+| Componente | Arquivo | Responsabilidade |
 |---|---|---|
-| `IteradorLeituras` | [iterators.py](../../telemetria/iterators.py) | Implementa `__iter__` e `__next__` e mantém o estado do percurso sobre a consulta. |
-| `_select_sample` | [trend_analysis.py](../../telemetria/trend_analysis.py) | Consome o iterador próprio, seleciona a amostra e acumula as estatísticas existentes. |
-| `QuerySet.iterator` | Fornecido pelo Django | Continua sendo usado internamente como fonte incremental de resultados, com `chunk_size=500` por padrão. |
+| `_select_sample` | [trend_analysis.py, linha 33](../../telemetria/trend_analysis.py#L33) | Percorre as leituras retornadas pelo QuerySet para selecionar a amostra e acumular estatísticas. |
+| `Command.handle` | [analisar_tendencias.py](../../telemetria/management/commands/analisar_tendencias.py) | Percorre os IDs dos sensores ativos e sincroniza cada tendência. |
+| `reprocessar_limites_historicos` | [seed_db.py](../../scripts/seed_db.py) | Percorre leituras em ordem temporal para importar ocorrências sintéticas pelos serviços reais. |
+| `gerar_historico_sensor` e `gerar_historico_apresentacao` | [seed_db.py](../../scripts/seed_db.py) | Usam `yield` para entregar pares de horário/valor como geradores Python. |
+| `QuerySet.iterator` | Fornecido pelo Django | Oferece o percurso dos resultados sem usar o cache normal de resultados do QuerySet. Não é uma classe criada pelo projeto. |
 
-#### Código real
+#### Código que mostra o uso
 
-```python
-class IteradorLeituras(Iterator):
-    def __init__(self, queryset, *, chunk_size=500):
-        self._leituras = iter(queryset.iterator(chunk_size=chunk_size))
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        # Ordem, filtros e valores pertencem à consulta e ao serviço de análise.
-        return next(self._leituras)
-```
-
-Na função de análise, o consumo agora começa por:
+Em `_select_sample`, o percurso começa assim:
 
 ```python
-for row in IteradorLeituras(rows):
+for row in rows.iterator(chunk_size=500):
     stamp, value = row['timestamp'], row['valor']
     if value is None or not math.isfinite(value) or stamp == previous_stamp:
         continue
 ```
 
-`iter(objeto)` devolve o próprio percurso. `next(objeto)` avança para a próxima leitura e, ao terminar, propaga `StopIteration`. Uma nova instância representa outro percurso; uma instância esgotada não é reiniciada automaticamente.
+`row` é a leitura corrente. A função verifica seu horário e valor, atualiza as estatísticas, mantém os pontos necessários e pode interromper o percurso com `break` ao satisfazer os critérios da seleção.
+
+No comando de análise periódica, a operação percorre os sensores:
+
+```python
+for sensor_id in Sensor.objects.filter(ativo=True).values_list('id', flat=True).iterator():
+    try:
+        trend = sync_sensor_trend(sensor_id)
+        processados += 1
+```
+
+O bloco completo trata também dados insuficientes e falhas individuais. O comando utiliza o iterador fornecido pelo QuerySet; a regra de tendência continua no serviço.
 
 #### Como visualizar o fluxo
 
 ```text
-QuerySet seleciona as leituras na ordem definida
-    -> IteradorLeituras mantém o percurso
-    -> for pede cada item por __next__
-    -> _select_sample aplica as verificações e estatísticas existentes
-    -> devolve a mesma estrutura de amostra e resultados
+QuerySet seleciona as leituras
+    -> iterator() oferece o percurso dos resultados
+    -> for recebe cada leitura
+    -> _select_sample verifica valores e acumula estatísticas
+    -> a função devolve a amostra selecionada e os resultados acumulados
 ```
 
-#### Benefício, compatibilidade e limites
+#### Por que é usado e quais são os limites
 
-O protocolo de percurso agora tem uma classe explícita do backend, que pode ser demonstrada e testada diretamente. Ela reutiliza a busca do ORM sem substituí-la por uma lista de todas as leituras. A construção não consome as leituras antecipadamente.
+O percurso evita depender do cache normal de resultados do QuerySet e permite processar cada item sem manipular sua representação interna. `chunk_size=500` é um parâmetro de busca, não a quantidade final de pontos da amostra.
 
-O iterador não muda filtros, ordenação, datas, valores, regressão, critérios de anomalia ou contagem de amostras válidas. Erros da fonte não são ocultados. A análise mantém suas próprias estruturas em memória: o padrão não representa uma promessa de memória constante ou de ganho de desempenho.
+Isso não significa que toda a operação use memória constante: a função mantém suas próprias estruturas, e o comportamento de busca também depende do backend/driver. Uma lista, um `for` isolado ou paginação HTTP não comprovam uma classe Iterator própria.
 
-Os outros usos de `.iterator()` e `yield`, por exemplo no comando periódico e no seed, continuam existindo; não é necessário substituir todo percurso Python por essa classe de leituras.
-
-**Decisão:** implementação concluída e ligada a `_select_sample`. Testes específicos cobrem ordem, esgotamento, ausência de consumo antecipado e propagação de falhas; os testes da análise exercitam o caminho completo com o banco de testes.
+**Decisão:** manter o uso existente. Não criar um iterador manual que replique o mecanismo de Python/Django. O uso real pode ser demonstrado nos trechos acima, com essa distinção explícita.
 
 ### 10. Observer
 
@@ -668,7 +633,7 @@ Há eventos, receptores registrados e reações a esses eventos. É uma aplicaç
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 11. Strategy
 
@@ -747,7 +712,7 @@ As políticas implementam um contrato comum e oferecem comportamentos diferentes
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ### 12. Template Method
 
@@ -818,7 +783,7 @@ Template Method organiza **a sequência de atendimento da view**. Builder organi
 
 #### Decisão e necessidade
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. O fluxo continua em uso. A integração das novas estruturas preservou suas regras de negócio.
+**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
 
 ## Como os padrões trabalham juntos
 
@@ -829,36 +794,28 @@ flowchart TD
     A[Pessoa envia uma pergunta] --> B[Template Method organiza o atendimento da view]
     B --> C[Facade reúne o contexto permitido]
     C --> D[Builder monta o texto por etapas]
-    D --> G[Composite renderiza os trechos e grupos]
-    G --> E[Adapter traduz a chamada para o Gemini]
+    D --> E[Adapter traduz a chamada para o Gemini]
     E --> F[Resposta volta para a pessoa]
 ```
 
-Na exportação, Singleton mantém o catálogo; Abstract Factory cria o gerador e os metadados da família; Factory Method instancia o gerador concreto; Decorator acrescenta o registro de geração. Na telemetria, Observer aciona as reações aos eventos e o Iterator próprio percorre as leituras da análise. Strategy organiza as políticas de permissão. Cada papel pode ser acompanhado nos arquivos indicados.
+Na exportação, Factory Method cria o exportador e o contrato comum permite gerar o arquivo. Na telemetria, Observer aciona as reações aos eventos; Iterator ajuda no percurso das leituras; as políticas de Strategy participam das permissões dos recursos. Nenhum desses papéis substitui o outro.
 
-## Implementação e verificações de 16/11/2026
+## Revisão do código e verificações de 16/11/2026
 
-Esta etapa acrescentou Abstract Factory, Singleton, Composite, Decorator e Iterator próprios. As rotas HTTP, campos da API e modelos do banco não foram alterados. Os testes verificam também os mecanismos anteriores que continuam em uso.
+O backend foi restaurado ao estado do commit `89db73e`, retirando as cinco camadas próprias acrescentadas depois da análise: famílias de exportação, catálogo Singleton, árvore Composite, Decorator de log e Iterator de leituras. A análise original não as considerava necessárias. Permanecem os sete padrões já aplicados e o percurso de leituras oferecido pelo Django/Python. A consolidação e o arquivamento da documentação foram preservados.
 
-| Testes novos | O que comprovam |
-|---|---|
-| [exportacao/test_patterns.py](../../exportacao/test_patterns.py) | Identidade do Singleton entre threads; famílias e metadados compatíveis; registro legado; decorators; códigos HTTP e exportação com isolamento por empresa. |
-| [gemini_api/test_prompt_components.py](../../gemini_api/test_prompt_components.py) | Folhas e grupos aninhados; isolamento da lista de filhos; igualdade do texto dos quatro diretores; truncamento; reset e preservação do produto anterior. |
-| [telemetria/test_iterators.py](../../telemetria/test_iterators.py) | Percurso ordenado, `StopIteration`, ausência de consumo antecipado e propagação de falhas. |
-| [telemetria/test_trend_analysis.py](../../telemetria/test_trend_analysis.py) | Integração do iterador à análise real, preservando amostra, resultados e ciclo de alertas/OS nos cenários existentes. |
-
-No Python 3.10.8 do `.venv`, com SQLite em memória e sem acessar o PostgreSQL de desenvolvimento, foi executado:
+Foi executado o conjunto abaixo no Python 3.10.8 do `.venv` existente, com SQLite em memória, sem utilizar o PostgreSQL de desenvolvimento:
 
 ```powershell
 $env:NANASMART_TEST_POSTGRES_PORT = ''
-.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis gemini_api.test_prompt_components app.test_schema --settings=app.test_settings --noinput --verbosity=1
+.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput --verbosity=1
 ```
 
-**Resultado:** 310 testes executados, 305 aprovados e cinco pulados por dependerem de bloqueios de linha indisponíveis no SQLite. São 18 testes novos em relação à revisão documental anterior. `manage.py check` não encontrou problemas e `makemigrations --check --dry-run` não encontrou alterações de modelos.
+**Resultado:** 292 testes executados, 287 aprovados e cinco pulados por dependerem de bloqueios de linha indisponíveis no SQLite. A verificação do Django nessa execução não encontrou problemas. Os testes cobrem contas, permissões, isolamento por empresa, prioridade ABC, alertas/OS, tendências, exportação, IA simulada e contratos do schema, conforme os módulos selecionados.
 
-Os resultados de 292 testes da etapa anterior e de 75 testes de 15/11 pertencem a execuções anteriores. As verificações atuais, a validação da documentação e o arquivamento estão resumidos no [índice da documentação](../README.md#verificação-da-revisão-de-16112026).
+As conferências dos componentes, os checks e os testes de frontend estão registrados no [índice da documentação](../README.md#verificação-da-revisão-de-16112026). Os 75 testes registrados em 15/11/2026 pertencem à revisão anterior, arquivada; não são apresentados como resultado novo.
 
-Os testes não comprovam disponibilidade real do Gemini, ganhos de desempenho em produção ou concorrência no PostgreSQL. O log de exportação não comprova recebimento do arquivo pelo navegador. Não foram aplicadas migrações nem executado o seed nesta etapa.
+Testes não substituem a inspeção da estrutura para classificar um padrão. Esta execução também não comprova disponibilidade real do Gemini, ganho de desempenho em produção, comportamento concorrente do PostgreSQL ou aprovação visual completa dos relatórios.
 
 ## Glossário para acompanhar o código
 
@@ -889,9 +846,9 @@ Os testes não comprovam disponibilidade real do Gemini, ganhos de desempenho em
 
 ## Roteiro para apresentação
 
-Para cada padrão, explique primeiro o conceito. Depois mostre a situação no NanaSmart, abra um arquivo indicado, acompanhe o ponto que chama a operação e explique o resultado. Nos cinco padrões acrescentados nesta etapa, mostre também a chamada que os conecta ao fluxo real; não basta abrir a definição de uma classe.
+Para cada padrão, explique primeiro o conceito. Depois mostre a situação no NanaSmart, abra um arquivo indicado, acompanhe o ponto que chama a operação e explique o resultado. Nos padrões ausentes, diga por que não existe necessidade atual; não apresente uma possibilidade futura como implementação pronta.
 
-Uma síntese possível é: “A exportação usa Abstract Factory, Factory Method, Singleton e Decorator. Os prompts usam Builder e Composite. A integração com IA usa Adapter, Facade e Template Method. A análise de leituras tem um Iterator próprio, os eventos aplicam Observer e as permissões aplicam Strategy. Os 12 padrões podem ser acompanhados em código usado pelo backend.”
+Uma síntese possível é: “O NanaSmart monta prompts com Builder, cria exportadores com Factory Method, integra o Gemini com Adapter e reúne contexto com Facade. Os sinais aplicam Observer, as políticas aplicam Strategy e as views Gemini compartilham atendimento por Template Method. Iterator é utilizado por recursos da linguagem e do Django. Os outros quatro padrões foram avaliados e não precisam de implementação própria hoje.”
 
 ## Histórico e fontes complementares
 

@@ -27,7 +27,7 @@ Administradores têm escopo global; gestores trabalham com a própria empresa. T
 | Planos por horímetro | `horimetro_ultima_os` e `prioridade` são somente leitura na API. A prioridade legada do plano não define a prioridade de novas OS. | [Priorização ABC](PRIORIZACAO_ABC.md) |
 | Tendências | A consulta de tendência calcula o resultado; ingestão de leituras e comando periódico fazem a sincronização operacional. A IA é opcional. | [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) |
 | Análise individual de OS | `POST /api/ordens-servico/{id}/analise-ia/` usa a OS autorizada, sem salvar a resposta na OS. Indisponibilidade usa 503 e falha do provedor/resposta vazia usa 502. | [Análise de OS por IA](ANALISE_OS_IA.md) |
-| Exportação | Formatos registrados: `csv`, `excel`, `pdf`. Famílias criam gerador e metadados, o catálogo é compartilhado por processo e um decorator registra a geração. MIME, extensão, autorização e recorte por empresa foram preservados. | [Factory Method](docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md#3-factory-method) |
+| Exportação | Formatos registrados: `csv`, `excel`, `pdf`. A autorização e o recorte por empresa continuam sendo aplicados. | [Factory Method](docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md#3-factory-method) |
 
 O campo `nivel` de alerta usa `baixo`, `medio`, `critico`. Ele não é a prioridade ABC da OS. `Sensor.tipo` e `Telemetria.timestamp` são os nomes persistidos atuais; nomes antigos como `tipo_sensor` e `data_hora` não devem ser assumidos como campos do contrato.
 

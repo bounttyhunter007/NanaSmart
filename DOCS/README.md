@@ -51,13 +51,14 @@ Consulte [old/README.md](old/README.md) para origem, motivo do arquivamento e in
 
 ## Verificação da revisão de 16/11/2026
 
-- Backend: **310 testes executados; 305 aprovados e cinco pulados** no SQLite em memória. Os pulados exigem bloqueios de linha do PostgreSQL.
-- Comando: `.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis gemini_api.test_prompt_components app.test_schema --settings=app.test_settings --noinput --verbosity=1`, com `NANASMART_TEST_POSTGRES_PORT` vazio.
-- Implementação: **os 12 padrões têm uso no backend**. Abstract Factory, Singleton, Composite, Decorator e Iterator receberam classes próprias e integração nesta etapa; os outros sete continuam em uso.
-- Regressão: 18 testes novos cobrem as implementações, o formato dos arquivos, o texto exato dos prompts, permissões e isolamento por empresa. Os testes existentes de tendências exercitam o novo iterador.
-- Frontend: 147 testes aprovados na execução anterior desta revisão; não houve mudança no JavaScript nem nos contratos HTTP nesta etapa.
-- Checks: `manage.py check` sem problemas e `makemigrations --check --dry-run` sem alterações de modelos. Nenhuma migração foi gerada ou aplicada.
-- Documentação: 12 padrões na ordem solicitada, 22 trechos Python correspondentes ao código e 219 links locais válidos nos 18 documentos/índices ativos conferidos após a implementação.
-- Arquivamento: 28 arquivos movidos para `old`, com seus SHA-256 preservados. Os retratos históricos não são apresentados como especificação atual.
+- Estado do backend: restaurado ao commit `89db73e`, anterior às cinco implementações extras. Não há diferenças de código da aplicação em relação àquela referência.
+- Padrões mantidos: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator continua sendo utilizado por mecanismos de Django/Python.
+- Decisão conforme a análise: não acrescentar Abstract Factory, Singleton próprio, Composite, Decorator GoF próprio ou um Iterator manual apenas para completar a lista.
+- Backend após a reversão: 292 testes executados, 287 aprovados e cinco pulados no SQLite em memória. Os pulados exigem bloqueios de linha do PostgreSQL.
+- Comando: `.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput --verbosity=1`, com `NANASMART_TEST_POSTGRES_PORT` vazio.
+- Frontend: 147 testes aprovados na revisão anterior; JavaScript e contratos HTTP não foram modificados pela reversão.
+- Checks: `manage.py check` sem problemas e `makemigrations --check --dry-run` sem alterações de modelos.
+- Documentação: mantém os 12 padrões analisados na ordem solicitada, com os status de aplicação e necessidade distintos. Os exemplos e links foram conferidos após a reversão.
+- Arquivamento: 28 arquivos preservados em `old`, com seus SHA-256 conferidos. A organização documental foi mantida.
 
-O banco de desenvolvimento não foi utilizado nessa suíte. Não foram executados o seed ou chamadas reais ao provedor de IA para validar estas implementações. Os resultados de 292 testes pertencem à etapa documental anterior, e os de 75 testes à revisão de 15/11. A implementação atual é descrita no documento oficial de padrões.
+O banco de desenvolvimento não foi utilizado nessa suíte. Não foram aplicadas migrações, executado o seed ou feitas chamadas reais ao provedor de IA para validar a reversão. Os 310 testes da implementação ampliada pertencem à versão retirada; os resultados atuais correspondem ao backend restaurado.
