@@ -114,13 +114,6 @@ Há um contrato de construção, um construtor concreto, um diretor com receitas
 
 **Benefício observado na organização:** a receita de cada solicitação fica separada das regras de formatação dos blocos. Isso facilita localizar onde alterar a ordem das informações ou sua apresentação.
 
-#### Limites importantes
-
-- O limite de cinco itens em alguns blocos vem de `_max_linhas = 5`. Ele reduz listas, mas **não garante** um tamanho máximo total de texto ou de tokens da IA.
-- `reset()` limpa os blocos antes de uma nova montagem. `build()` não faz essa limpeza automaticamente.
-- `com_financeiro()` está definido, mas não foi encontrada uma chamada a ele nos arquivos Python examinados. A receita financeira atual usa cabeçalho, `com_ordens`, instruções e pergunta.
-- `build_trend_analysis_prompt`, em [prompt_builder.py, linha 188](../../gemini_api/prompt_builder.py#L188), monta sua própria lista de textos e não usa essas classes Builder.
-- A análise de **uma OS específica**, em [order_analysis.py, linha 118](../../gemini_api/order_analysis.py#L118), também tem montagem própria de instruções e JSON. Não se deve afirmar que toda mensagem enviada à IA passa pelo Builder.
 
 ### 2. Factory Method
 
@@ -210,7 +203,7 @@ Um formato sem registro resulta em `ValueError`, tratado pela view com resposta 
 
 ### 3. Adapter
 
-**Adapter — traduzir entre interfaces.** Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do SDK Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.
+**Adapter — traduzir entre interfaces.** Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.
 
 **Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
@@ -273,13 +266,6 @@ Existe um contrato voltado à aplicação e uma implementação que o traduz par
 
 **Benefício observado na organização:** os detalhes de formatação da chamada ao Gemini ficam concentrados no adaptador.
 
-#### Limites importantes
-
-- Há apenas um provedor concreto implementado: Gemini. Trocar de provedor exigiria implementar outro adaptador e revisar diferenças de contrato e configuração.
-- `get_ai_adapter()` retorna uma nova instância de `GeminiAdapter()` a cada chamada.
-- `is_available()` verifica se `get_client()` consegue fornecer um cliente com a configuração local. Isso não comprova que uma requisição externa será bem-sucedida ou que haverá cota disponível.
-- O código tenta modelos alternativos para determinadas mensagens de erro. Isso descreve a implementação local; não comprova disponibilidade atual desses modelos no provedor.
-- `get_gemini_client()` permanece como função de compatibilidade em `cliente.py` e expõe o cliente do SDK. Não foi encontrada uma chamada a essa função nos demais arquivos Python pesquisados.
 
 ### 4. Facade
 
@@ -589,14 +575,7 @@ As políticas implementam um contrato comum e oferecem comportamentos diferentes
 
 **Benefício observado na organização:** uma regra compartilhada pode ser localizada e revisada na política correspondente.
 
-#### Limites importantes
 
-- `PermissionPolicyFactory` é uma **fábrica simples com registro de objetos**. Não possui a hierarquia de criadores que caracteriza o Factory Method da exportação.
-- `create()` devolve objetos já guardados em `_policies`; ele não cria uma nova política a cada chamada. Outras instâncias das políticas ainda podem ser construídas normalmente.
-- Apesar do nome `AuthenticatedNoDeleteForTecnicoPolicy`, um técnico também recebe negativa para `POST`, `PUT` e `PATCH` nessa política. Após liberar leitura, o retorno final exige gestor/admin ou superusuário, com bloqueio explícito de `DELETE` para perfil técnico.
-- `TecnicoPolicy` e `IsTecnico` existem, mas não foi encontrada uma referência a `IsTecnico` fora de sua própria definição nos arquivos Python pesquisados. O uso ativo de Strategy está comprovado pelas outras permissões citadas.
-- Nem toda permissão do projeto usa essas políticas. Por exemplo, `IsCompanyManager` e a permissão de ordens de serviço possuem suas próprias verificações.
-- Permitir uma ação e filtrar os dados da empresa são responsabilidades diferentes. As consultas e as verificações de objeto também participam do controle de acesso.
 
 ### 9. Template Method
 
