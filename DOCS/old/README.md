@@ -2,7 +2,7 @@
 
 Arquivado em **16/11/2026**. Estes arquivos foram preservados como retratos anteriores, sem exclusão permanente. Não representam a especificação atual nem uma lista de tarefas a implementar.
 
-A referência atual de padrões é [Verificacao_Padroes_GoF_Verdes.md](../docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md). Os demais documentos vigentes estão no [índice principal](../README.md).
+A referência atual de padrões é [Verificacao_Padroes.md](../docs_padroes_projeto/Verificacao_Padroes.md). Os demais documentos vigentes estão no [índice principal](../README.md).
 
 Os arquivos arquivados foram movidos sem alterar seus bytes. Links relativos internos desses retratos podem conservar caminhos antigos, inclusive referências que já não existiam antes da limpeza. Use o índice atual para navegar nas regras vigentes; esta tabela preserva a origem e o motivo de cada movimento. PDF, PNG e arquivos editáveis com finalidades diferentes não foram tratados como duplicatas idênticas.
 

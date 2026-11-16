@@ -360,4 +360,4 @@ Tabela: `gemini_api_promptconfig`.
 
 Este inventário descreve o estado dos modelos no código, não comprova que uma base existente já recebeu todas as migrações. Consulte `python manage.py showmigrations --plan` e o [procedimento de compatibilidade](HISTORICO_ALERTAS.md#atualização-do-banco-e-compatibilidade).
 
-A revisão documental não modificou modelos nem gerou/aplicou migrações. Modelos sem tabela própria, como views, builders, criadores de exportador, políticas e adapters, estão explicados no [guia oficial de padrões](docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md).
+A revisão documental não modificou modelos nem gerou/aplicou migrações. Modelos sem tabela própria, como views, builders, criadores de exportador, políticas e adapters, estão explicados no [guia oficial de padrões](docs_padroes_projeto/Verificacao_Padroes.md).

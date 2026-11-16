@@ -19,7 +19,7 @@ A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** 
 
 ## Documentação
 
-O [índice da documentação vigente](DOCS/README.md) reúne padrões, API, banco, regras e roteiros. A referência de padrões é a [verificação dos padrões GoF](DOCS/docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md). Versões anteriores estão separadas em [DOCS/old](DOCS/old/README.md). O guia separa os padrões aplicados, os recursos usados por meio do framework e os padrões avaliados sem necessidade atual de implementação própria.
+O [índice da documentação vigente](DOCS/README.md) reúne padrões, API, banco, regras e roteiros. A referência de padrões é a [verificação dos padrões GoF](DOCS/docs_padroes_projeto/Verificacao_Padroes.md). Versões anteriores estão separadas em [DOCS/old](DOCS/old/README.md). O guia separa os padrões aplicados, os recursos usados por meio do framework e os padrões avaliados sem necessidade atual de implementação própria.
 
 ## Requisitos
 

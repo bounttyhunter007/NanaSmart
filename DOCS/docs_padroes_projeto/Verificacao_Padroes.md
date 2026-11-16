@@ -1,130 +1,60 @@
-# Padrões de projeto do NanaSmart: verificação e guia didático
+# Padrões de projeto em uso no NanaSmart
 
 **Revisado em:** 16 de novembro de 2026.
 
-**Referência principal:** este arquivo, originalmente dedicado aos padrões GoF destacados em verde.
+Este documento apresenta primeiro os padrões que têm uso real no projeto, na ordem combinada: **criação, estruturais e comportamentais**. As seções explicam o conceito, mostram onde procurar no código e acompanham exemplos do funcionamento.
 
-**Escopo atual:** os 12 padrões solicitados, conferidos no código local com base no commit `89db73e`.
+São sete padrões aplicados nos componentes do NanaSmart e dois mecanismos utilizados por meio de Python/Django: **Iterator e Composite no ORM**. Algumas das aplicações do projeto também se apoiam no framework, como Observer pelos sinais do Django e Template Method sobre as views do DRF. Essa origem aparece no início de cada seção.
 
-Um padrão de projeto é uma solução conhecida para um problema recorrente de organização do código. Ele ajuda a decidir qual parte recebe um pedido, escolhe uma regra, prepara dados ou reage a um acontecimento. Não é uma funcionalidade que precisa ser adicionada apenas para completar uma lista.
+Os outros padrões avaliados aparecem apenas em uma tabela curta no final. Recursos compartilhados ou decoradores de função não são contados automaticamente como implementações GoF.
 
-Este guia começa cada padrão com uma explicação e um exemplo cotidiano. Em seguida, mostra a situação real no NanaSmart, onde procurar, como o fluxo funciona e por que a solução foi escolhida. Os nomes das classes são os mesmos do código, e os trechos Python foram conferidos contra os arquivos da aplicação.
+## Como ler
 
-**Resultado:** todos os 12 padrões foram analisados. Sete foram confirmados nos fluxos da aplicação: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator é utilizado por mecanismos de Python/Django. O ORM também oferece composição em árvore de condições SQL, utilizada indiretamente pelos filtros do projeto, como explicado em Composite. Não há implementação necessária pendente; não foi identificada necessidade de criar Abstract Factory, Singleton, Composite de domínio ou Decorator GoF próprios.
+Comece pela explicação cotidiana, veja a indicação de quem fornece o mecanismo e depois abra os arquivos vinculados. Os nomes de classes e funções correspondem ao código real. Os trechos Python são recortes do projeto; diagramas e sequências em texto ajudam a visualizar as chamadas.
 
-O código e seus pontos de chamada são a evidência principal. Uma classe apenas definida, uma sugestão antiga ou um nome parecido com um padrão não comprovam uso real. Quando uma implementação for necessária, ela deverá existir no fluxo e ser verificada antes de receber o status de implementada nesta documentação.
+**Criação** organiza como os objetos são construídos. **Estrutura** organiza como componentes se conectam. **Comportamento** organiza regras, etapas e reações. As linhas indicadas nos links correspondem ao código conferido e podem mudar em versões futuras.
 
-## Como ler e localizar o código
-
-Abra primeiro os links de arquivos indicados em cada seção. Nas tabelas, veja quem pede a operação e quem a executa. Os diagramas e sequências em texto ilustram o fluxo; blocos identificados como código real são recortes do projeto. Os números de linha correspondem à revisão indicada e podem mudar em versões futuras.
-
-As categorias significam: **criação** organiza como objetos são construídos; **estrutura** organiza como componentes são conectados; **comportamento** organiza regras, etapas e reações. O levantamento trata do backend Python/Django e dos pontos auxiliares mencionados, sem pretender inventariar todos os padrões internos das bibliotecas.
-
-## Sumário dos padrões
+## Sumário dos padrões em uso
 
 **Criação:**
 
-- [1. Abstract Factory](#1-abstract-factory) — criar famílias de objetos relacionados.
-- [2. Builder](#2-builder) — montar prompts por etapas.
-- [3. Factory Method](#3-factory-method) — criar o exportador adequado.
-- [4. Singleton](#4-singleton) — controlar uma única instância.
+- [1. Builder](#1-builder) — implementação do projeto.
+- [2. Factory Method](#2-factory-method) — implementação do projeto.
 
 **Estruturais:**
 
-- [5. Adapter](#5-adapter) — traduzir a comunicação com o Gemini.
-- [6. Facade](#6-facade) — reunir o contexto por uma entrada simples.
-- [7. Composite](#7-composite) — tratar itens e grupos de uma árvore.
-- [8. Decorator](#8-decorator) — combinar responsabilidades por envolvimento.
+- [3. Adapter](#3-adapter) — implementação do projeto.
+- [4. Facade](#4-facade) — implementação do projeto.
+- [5. Composite](#5-composite) — fornecido pelo Django/ORM.
 
 **Comportamentais:**
 
-- [9. Iterator](#9-iterator) — percorrer uma coleção sem expor sua representação.
-- [10. Observer](#10-observer) — reagir aos eventos de salvamento.
-- [11. Strategy](#11-strategy) — selecionar uma regra de acesso.
-- [12. Template Method](#12-template-method) — compartilhar a sequência de atendimento.
+- [6. Iterator](#6-iterator) — fornecido pelo Python/Django.
+- [7. Observer](#7-observer) — sinais do Django e receptores do projeto.
+- [8. Strategy](#8-strategy) — implementação do projeto.
+- [9. Template Method](#9-template-method) — implementação do projeto sobre o DRF.
 
-## Diagnóstico dos 12 padrões
+## Mapa dos usos
 
-| Categoria | Padrão | Situação atual |
-|---|---|---|
-| Criação | Abstract Factory | Não aplicado; sem necessidade atual |
-| Criação | Builder | Implementado e usado |
-| Criação | Factory Method | Implementado e usado |
-| Criação | Singleton | Sem implementação própria; recursos compartilhados não comprovam Singleton |
-| Estruturais | Adapter | Implementado e usado |
-| Estruturais | Facade | Implementado e usado |
-| Estruturais | Composite | Sem implementação própria de domínio; composição de condições fornecida pelo ORM |
-| Estruturais | Decorator | Não aplicado como GoF próprio |
-| Comportamentais | Iterator | Utilizado por recursos de Python/Django; sem classe própria |
-| Comportamentais | Observer | Aplicado pelos sinais do Django e receptores do projeto |
-| Comportamentais | Strategy | Implementado e usado |
-| Comportamentais | Template Method | Implementado e usado |
-
-A ordem desta tabela é a mesma das seções. “Não implementar agora” significa ausência de necessidade identificada, e não uma tarefa de implementação que ficou incompleta.
-
-### O que foi analisado e o que ainda precisa ser implementado?
-
-Os **12 foram avaliados**, e não apenas os sete aplicados. A decisão é manter as soluções que resolvem problemas reais e aproveitar os mecanismos existentes do framework. **Nenhum padrão considerado necessário ficou apenas como proposta no documento.**
-
-| Resultado da avaliação | Decisão para o backend |
-|---|---|
-| Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method | Manter os usos existentes, demonstrados nas seções correspondentes. Observer já utiliza os sinais do Django; não exige outro sistema de eventos próprio. |
-| Iterator | Manter `QuerySet.iterator()` e os geradores Python já usados, sem criar um iterador que apenas repita esse percurso. |
-| Composite no ORM | Documentar a árvore de condições usada pelos filtros, sem criar uma árvore de entidades ou de prompts que o domínio atual não exige. |
-| Singleton | Documentar os recursos centralizados do Django, sem apresentar seus proxies/gerenciadores como uma garantia universal de instância única. |
-| Abstract Factory e Decorator GoF próprios | Não acrescentar classes sem um requisito concreto. Uma classe abstrata, uma fábrica simples ou um decorador Python não comprovam, sozinhos, esses padrões GoF. |
-
-As versões históricas apresentam propostas e classificações conflitantes. Elas não constituem uma lista de tarefas aprovadas; o código atual e as decisões desta revisão são a referência.
-
-### O que o Django/Python já fornece
-
-Exemplos conferidos no código instalado de **Django 5.2.12** e **Django REST Framework 3.16.1**, versões usadas no projeto. Os nomes abaixo pertencem às bibliotecas; os links mostram os pontos de uso no NanaSmart.
-
-| Recurso da biblioteca | Uso no projeto | Como interpretar |
-|---|---|---|
-| `django.db.models.query.QuerySet.iterator` e geradores Python | [Seleção de amostras](../../telemetria/trend_analysis.py#L33), [comando de análise](../../telemetria/management/commands/analisar_tendencias.py) e [seed](../../scripts/seed_db.py) | Percurso por Iterator fornecido pela linguagem/ORM; não é uma classe própria do NanaSmart. |
-| `django.dispatch.dispatcher.Signal.connect` e `Signal.send` | [Receptor de telemetria](../../telemetria/signals.py#L9) e demais `signals.py` | O Django fornece a infraestrutura de Observer; o projeto define os eventos observados e as reações. |
-| `rest_framework.views.APIView.dispatch` | [GeminiBaseView e subclasses](../../gemini_api/views.py#L198) | O framework já organiza inicialização, escolha do método HTTP e finalização. O projeto aplica também Template Method no atendimento comum de `GeminiBaseView.post`. |
-| `django.db.models.sql.where.WhereNode` e expressões `Lookup` | [Filtro de visibilidade de ordens](../../manutencao/visibility.py#L7) | Grupos e condições formam uma árvore com contrato de compilação SQL; é o exemplo de Composite interno detalhado na seção 7. |
-| `django.conf.LazySettings` e gerenciamento de conexões do ORM | [Configurações](../../app/settings.py) e consultas dos modelos | Acesso compartilhado/centralizado, relacionado ao conceito de Singleton. Não significa uma única conexão física nem uma classe Singleton GoF própria. |
-| Decoradores de função como `@receiver` e `@transaction.atomic` | [Sinais](../../telemetria/signals.py#L9) e [serviços](../../manutencao/services.py) | São recursos reais utilizados. Sua presença não comprova uma composição própria de objetos Decorator GoF. |
-
-Essa conferência de infraestrutura não acrescentou classes, dependências, rotas ou mudanças nas regras de negócio.
+| Categoria | Padrão | Quem fornece / implementa | Para que é usado |
+|---|---|---|---|
+| Criação | Builder | Implementação do projeto | Montar o texto da IA em etapas. |
+| Criação | Factory Method | Implementação do projeto | Criar o gerador de CSV, Excel ou PDF. |
+| Estruturais | Adapter | Implementação do projeto | Traduzir as chamadas para o Gemini. |
+| Estruturais | Facade | Implementação do projeto | Reunir os dados da IA por uma entrada simples. |
+| Estruturais | Composite | Fornecido pelo Django/ORM | Combinar grupos e condições nas consultas. |
+| Comportamentais | Iterator | Fornecido pelo Python/Django | Percorrer leituras sem montar uma lista completa. |
+| Comportamentais | Observer | Sinais do Django e receptores do projeto | Reagir ao salvamento de leituras e alertas. |
+| Comportamentais | Strategy | Implementação do projeto | Escolher uma regra de permissão. |
+| Comportamentais | Template Method | Implementação do projeto sobre o DRF | Reaproveitar a sequência de atendimento das views. |
 
 ## Padrões de criação
 
-### 1. Abstract Factory
-
-**Abstract Factory — criar uma família de objetos relacionados.** Serve quando vários objetos precisam ser criados juntos e pertencer à mesma família. Por exemplo, uma fábrica de tema claro poderia criar botão, menu e janela claros, enquanto outra criaria os mesmos componentes em tema escuro. No NanaSmart, cada exportação escolhe apenas um formato; não há uma família de produtos que precise ser criada em conjunto.
-
-**Situação:** Não aplicado; sem necessidade atual.
-
-#### Situação e onde procurar
-
-**Não existe uma implementação própria de Abstract Factory nos fluxos examinados.** O ponto que pode causar confusão é o módulo [exportacao/utils](../../exportacao/utils/creators.py): ele cria formatos alternativos de um mesmo produto, o exportador.
-
-Os componentes reais são `CriadorExportadorCSV`, `CriadorExportadorExcel`, `CriadorExportadorPDF` e seus exportadores. Eles pertencem à demonstração de **Factory Method**, explicada na seção 3. Não há uma fábrica que produza, em conjunto, vários tipos de produtos de uma família.
-
-#### Como visualizar a diferença
-
-```text
-Código atual: escolher PDF -> criar um ExportadorPDF -> gerar o arquivo.
-Abstract Factory: escolher uma família -> criar vários tipos de produtos relacionados dessa família.
-```
-
-A segunda linha é uma explicação conceitual; não descreve classes existentes no NanaSmart. Ter uma classe abstrata e uma classe chamada Factory não basta para caracterizar Abstract Factory.
-
-#### Por que não implementar agora
-
-O projeto precisa escolher um formato por exportação. Os criadores atuais já resolvem esse problema. Acrescentar famílias artificiais exigiria classes sem uma responsabilidade real adicional.
-
-**Decisão:** não implementar agora. Reavaliar se surgir uma funcionalidade que precise construir vários tipos de objetos relacionados e alternar famílias completas desses objetos. Isso é um critério futuro, não uma funcionalidade pendente desta entrega.
-
-### 2. Builder
+### 1. Builder
 
 **Builder — montar em etapas.** Serve para construir um resultado que pode ter várias partes e combinações. Cada etapa acrescenta uma parte, e ao final o construtor entrega o resultado completo. É como montar um sanduíche escolhendo seus ingredientes. No NanaSmart, o Builder monta prompts para a IA com blocos como contexto, alertas, ordens e pergunta. Isso facilita criar prompts diferentes sem repetir toda a montagem.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -192,15 +122,11 @@ Há um contrato de construção, um construtor concreto, um diretor com receitas
 - `build_trend_analysis_prompt`, em [prompt_builder.py, linha 188](../../gemini_api/prompt_builder.py#L188), monta sua própria lista de textos e não usa essas classes Builder.
 - A análise de **uma OS específica**, em [order_analysis.py, linha 118](../../gemini_api/order_analysis.py#L118), também tem montagem própria de instruções e JSON. Não se deve afirmar que toda mensagem enviada à IA passa pelo Builder.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
-### 3. Factory Method
+### 2. Factory Method
 
 **Factory Method — deixar um criador decidir o que produzir.** Serve para separar o código que precisa de um objeto do código que sabe construir o tipo concreto. Pense em uma oficina com criadores especializados: cada um sabe produzir seu tipo de peça. No NanaSmart, criadores de exportadores produzem o objeto adequado para CSV, Excel ou PDF; a view usa a interface comum para gerar o arquivo.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -278,58 +204,15 @@ Para acrescentar outro formato, seria necessário implementar o produto, seu cri
 
 Um formato sem registro resulta em `ValueError`, tratado pela view com resposta HTTP 400. A mensagem atual orienta usar CSV, Excel ou PDF.
 
-**Por que não é Abstract Factory:** são três alternativas para um mesmo tipo de produto, o exportador. Não há criação coordenada de vários tipos de produtos pertencentes a famílias diferentes. A palavra “família” no comentário do criador não altera essa estrutura.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
-### 4. Singleton
-
-**Singleton — controlar uma única instância.** Serve quando uma classe precisa garantir uma única instância dentro de um processo e fornecer acesso a ela. O Django já oferece pontos centralizados para recursos usados pelo projeto, como configurações e gerenciamento de conexões. A ideia de acesso compartilhado lembra Singleton, mas cada recurso tem suas próprias regras: isso não significa que exista uma única conexão com o banco para toda a aplicação.
-
-**Situação:** Sem implementação própria; recursos compartilhados não comprovam Singleton.
-
-#### Situação no código
-
-**Não foi encontrada uma classe própria que controle sua criação para garantir uma única instância.** Não há uma implementação de Singleton a apontar como funcionalidade do NanaSmart.
-
-O que existe é o uso de recursos do Django e de objetos compartilhados em registros. Compartilhar um objeto não significa impedir que outras instâncias sejam criadas.
-
-#### Onde estão os recursos relacionados
-
-| Recurso real | Onde aparece | O que ele demonstra |
-|---|---|---|
-| Configurações da aplicação | [app/settings.py](../../app/settings.py) e imports de `django.conf.settings` | Um ponto de acesso às configurações fornecido pelo Django. |
-| Consultas ao banco | [get_user_equipment_queryset](../../gemini_api/context_service.py#L11) e demais consultas pelo ORM | O projeto utiliza o gerenciamento de conexões do Django, sem abrir conexões manualmente em cada view. |
-| Registro de políticas | [PermissionPolicyFactory](../../accounts/permission_policies.py#L51) | `_policies` guarda instâncias reutilizadas, mas outras instâncias das políticas ainda podem ser construídas. |
-| Construção do adaptador de IA | [get_ai_adapter](../../gemini_api/adapters.py#L112) | Retorna `GeminiAdapter()` a cada chamada, sem garantia de instância única. |
-
-#### Código real e interpretação
-
-```python
-def get_ai_adapter() -> AssistenteAdapter:
-    """Ponto de composição: views dependem do contrato, não do SDK."""
-    return GeminiAdapter()
-```
-
-Esse trecho mostra uma construção comum de objeto. Não é uma implementação de Singleton.
-
-#### Por que não implementar agora
-
-Não foi identificado um requisito que exija uma única instância própria por processo. Uma instância global também não seria automaticamente única entre vários processos ou servidores.
-
-O acesso centralizado ao banco **não significa uma única conexão física para toda a aplicação**. `CONN_MAX_AGE` configura reutilização de conexões pelo Django; não comprova Singleton ou um pool global.
-
-**Decisão:** manter o gerenciamento atual. Reavaliar somente diante de um recurso que precise de identidade única por processo e de um ciclo de vida explicitamente controlado. Nenhuma classe Singleton foi adicionada nesta revisão.
 
 ## Padrões estruturais
 
-### 5. Adapter
+### 3. Adapter
 
 **Adapter — traduzir entre interfaces.** Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do SDK Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -393,20 +276,16 @@ Existe um contrato voltado à aplicação e uma implementação que o traduz par
 #### Limites importantes
 
 - Há apenas um provedor concreto implementado: Gemini. Trocar de provedor exigiria implementar outro adaptador e revisar diferenças de contrato e configuração.
-- `get_ai_adapter()` retorna `GeminiAdapter()` a cada chamada. Não é um Singleton.
+- `get_ai_adapter()` retorna uma nova instância de `GeminiAdapter()` a cada chamada.
 - `is_available()` verifica se `get_client()` consegue fornecer um cliente com a configuração local. Isso não comprova que uma requisição externa será bem-sucedida ou que haverá cota disponível.
 - O código tenta modelos alternativos para determinadas mensagens de erro. Isso descreve a implementação local; não comprova disponibilidade atual desses modelos no provedor.
 - `get_gemini_client()` permanece como função de compatibilidade em `cliente.py` e expõe o cliente do SDK. Não foi encontrada uma chamada a essa função nos demais arquivos Python pesquisados.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
-### 6. Facade
+### 4. Facade
 
 **Facade — oferecer uma entrada mais simples.** Serve para apresentar uma operação de alto nível que coordena serviços ou partes de um sistema. Pense em uma recepção: você faz uma solicitação em um único lugar, e ela encaminha as etapas necessárias. No NanaSmart, a fachada prepara o contexto para a IA, reunindo os dados comuns e incluindo o resumo financeiro quando solicitado pela view.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -465,100 +344,64 @@ A view usa uma entrada de nível mais alto, sem coordenar diretamente a combina�
 - A fachada não substitui permissões nem validações de acesso. Ela delega a coleta aos serviços e recebe da view a opção financeira.
 - A análise individual de uma OS usa `build_order_analysis_context` em `order_analysis.py`, sem passar por essa fachada.
 
-#### Decisão e necessidade
+### 5. Composite
 
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
+**Composite — tratar itens e grupos pela mesma operação.** Imagine uma pasta que contém arquivos e outras pastas. É possível percorrer essa estrutura inteira usando a mesma operação. No NanaSmart, o exemplo em uso está na árvore de condições que o Django monta para consultar as ordens de serviço.
 
-### 7. Composite
+**Como está disponível:** fornecido pelo Django/ORM. Não há classe Composite própria de domínio no NanaSmart.
 
-**Composite — tratar itens e grupos de forma parecida.** Serve para organizar objetos em uma árvore, permitindo que uma operação trabalhe tanto com um item individual quanto com um grupo que contém outros itens ou grupos. Uma pasta com arquivos e subpastas é uma forma simples de imaginar essa estrutura. O domínio analisado do NanaSmart não exige uma implementação própria; o ORM já utiliza composição de condições para construir consultas.
+#### Onde está e quais classes participam
 
-**Situação:** sem Composite próprio de domínio; composição em árvore utilizada indiretamente pelo ORM.
+| Componente | Onde está | Responsabilidade |
+|---|---|---|
+| `visible_work_orders` | [manutencao/visibility.py, linha 7](../../manutencao/visibility.py#L7) | Monta o filtro de empresa e de responsável permitido ao usuário. |
+| `Q` | `django.db.models.Q`, importado no arquivo acima | Permite combinar condições com `AND` e `OR`. |
+| `WhereNode` | `django.db.models.sql.where`, fornecido pelo Django | Representa um grupo de condições, podendo conter outros grupos. |
+| `Lookup`, incluindo `RelatedExact` e `RelatedIsNull` | Implementações fornecidas pelo ORM | Representam condições individuais, como igualdade e ausência de responsável. |
 
-#### Situação e onde foi conferido
+Os nomes internos foram conferidos no Django 5.2.12 instalado no projeto. Essas classes pertencem à biblioteca; não precisam ser copiadas para o backend.
 
-**Não existe uma implementação própria de Composite nas entidades do projeto.** Foram conferidas as relações de [equipamentos e planos](../../ativos/models.py), [sensores e leituras](../../telemetria/models.py) e [ordens de serviço](../../manutencao/models.py). Isso é diferente da árvore interna de condições das consultas do Django, detalhada abaixo.
+#### Exemplo real e fácil de acompanhar
 
-Uma empresa possuir equipamentos e um equipamento possuir sensores não basta para formar Composite. No padrão, itens individuais e grupos precisam compartilhar uma operação comum; os grupos podem conter outros grupos e executar essa operação de forma recursiva.
-
-#### Como o projeto está organizado
-
-```text
-Empresa -> Equipamento -> Sensor -> Leituras
-```
-
-Essa é uma sequência explicativa de relacionamentos do domínio. Ela não representa classes com um contrato comum para tratar folhas e grupos da mesma maneira. Por exemplo, não existe uma operação de componente que seja executada igualmente sobre um sensor e sobre um grupo recursivo de sensores.
-
-#### Exemplo real já fornecido pelo Django
-
-Em `visible_work_orders`, o filtro das ordens do técnico combina duas condições:
+O técnico pode consultar ordens atribuídas a ele **ou** sem responsável, sempre dentro de sua empresa. Em `visible_work_orders`, a segunda parte desse filtro é:
 
 ```python
 qs = qs.filter(Q(responsavel=user) | Q(responsavel__isnull=True))
 ```
 
-Isso significa “responsável é este usuário **OU** a ordem está sem responsável”. Com o filtro da empresa, a consulta produz a seguinte estrutura interna, conferida sem executar SQL ou abrir conexão com o banco:
+Com o filtro da empresa, o ORM produz esta árvore interna:
 
 ```text
-WhereNode: grupo AND
-    -> RelatedExact: equipamento pertence à empresa
-    -> WhereNode: grupo OR
-        -> RelatedExact: responsável é o técnico
-        -> RelatedIsNull: ordem sem responsável
+Grupo AND: as duas condições precisam ser satisfeitas
+    -> Equipamento pertence à empresa do usuário
+    -> Grupo OR: basta uma destas condições
+        -> Responsável é o técnico
+        -> Ordem está sem responsável
 ```
 
-`WhereNode` representa os grupos. As expressões `Lookup`, como `RelatedExact` e `RelatedIsNull`, representam as condições. Grupos e condições oferecem `as_sql(...)`; o compilador percorre os filhos para produzir o SQL. Essa estrutura do ORM exemplifica Composite pelo contrato comum de compilação e pela composição recursiva.
+O grupo maior contém uma condição simples e outro grupo. `WhereNode` e as condições `Lookup` oferecem `as_sql(...)`; o compilador percorre os filhos para montar a expressão SQL. Essa composição recursiva pelo mesmo contrato é o exemplo de Composite fornecido pelo ORM.
 
-As classes citadas pertencem ao Django, não foram criadas no NanaSmart. O código do projeto utiliza esse mecanismo ao construir os filtros com `Q`. Isso não transforma automaticamente a relação empresa/equipamento/sensor em uma árvore Composite de domínio.
+#### Como é usado e por que é útil
 
-#### Necessidade e decisão
+O filtro começa em `visible_work_orders` e é aplicado ao conjunto de ordens que o usuário pode consultar. O Django cuida da montagem da expressão SQL; o projeto declara as condições e sua combinação.
 
-**Manter os filtros e aproveitar o mecanismo existente do ORM.** Não criar classes Composite próprias para representar entidades ou prompts apenas para contar mais um padrão. Reavaliar uma implementação de domínio somente se surgir uma hierarquia recursiva que precise das mesmas operações para grupos e itens.
+Isso permite expressar “empresa correta **E** (responsável correto **OU** sem responsável)” de maneira agrupada, mantendo a regra de visibilidade. A árvore foi conferida sem executar SQL ou abrir uma conexão com o banco.
 
-### 8. Decorator
+#### Limites da interpretação
 
-**Decorator — acrescentar comportamento envolvendo um objeto.** Serve para adicionar responsabilidades a um objeto por meio de outro objeto que mantém a mesma interface. Por exemplo, um serviço de envio poderia ser envolvido por um componente que registra cada envio e por outro que acrescenta criptografia. O uso de `@` em Python, por si só, não comprova esse padrão GoF. No NanaSmart, não foi encontrada uma necessidade atual dessa composição de objetos.
-
-**Situação:** Não aplicado como GoF próprio.
-
-#### Situação e onde foi conferido
-
-**Não foi comprovada uma implementação GoF própria de Decorator.** Existem decoradores Python, como `@receiver` em [telemetria/signals.py](../../telemetria/signals.py#L9), `@action` em [manutencao/views.py](../../manutencao/views.py) e `@transaction.atomic` nos serviços.
-
-Esses recursos registram funções ou acrescentam comportamento a chamadas. O símbolo `@`, sozinho, não demonstra a estrutura GoF de objetos que envolvem outros objetos de mesmo contrato para combinar responsabilidades.
-
-#### Exemplo real que pode causar confusão
-
-```python
-@receiver(post_save, sender=Telemetria)
-def checar_limites_telemetria(sender, instance, created, raw=False, **kwargs):
-    if raw or not created or not instance.sensor.ativo:
-        return
-    sync_sensor_trend(instance.sensor_id)
-    sync_limit_reading(instance)
-```
-
-O trecho registra um receptor de eventos. Neste projeto, ele serve à explicação de **Observer**, na seção 10. Não há aqui uma cadeia própria de objetos decoradores com a mesma interface.
-
-#### Necessidade e decisão
-
-Não foi encontrado um requisito atual de combinar dinamicamente responsabilidades por envolvimento de objetos. Criar wrappers apenas para utilizar o nome do padrão acrescentaria camadas sem resolver um problema identificado.
-
-**Decisão:** não implementar agora. Reavaliar se uma funcionalidade passar a precisar dessas combinações, com contrato comum e benefícios concretos. Os decoradores Python existentes continuam com suas responsabilidades atuais.
+O uso é interno ao ORM. Ele não transforma o relacionamento empresa/equipamento/sensor em um Composite de entidades e não significa que exista uma árvore própria de prompts. Nenhuma dessas estruturas adicionais é necessária para aproveitar o mecanismo de consultas já disponível.
 
 ## Padrões comportamentais
 
-### 9. Iterator
+### 6. Iterator
 
 **Iterator — percorrer uma coleção.** Serve para acessar os elementos de uma coleção em sequência sem expor sua representação interna. Imagine um fichário: você consulta as fichas pelo mesmo mecanismo de avanço, sem precisar reorganizar todo o arquivo.
 
-**Situação:** Utilizado por recursos de Python/Django; sem classe própria.
+**Como está disponível:** fornecido pelo Python/Django e utilizado pelo projeto; não há classe iteradora própria.
 
 #### Problema resolvido e situação
 
-Iterator permite percorrer os elementos de uma coleção sem precisar conhecer sua representação interna. É como consultar as fichas de um arquivo uma por vez, seguindo uma forma comum de avançar.
-
-**O mecanismo já é utilizado, por recursos nativos de Python e do ORM Django.** Não foi encontrada uma classe iteradora própria com `__iter__` e `__next__`; essa estrutura é fornecida pela linguagem/framework.
+A análise de tendências precisa percorrer leituras para selecionar uma amostra e acumular estatísticas. O projeto já utiliza o percurso oferecido pelo ORM e os geradores da linguagem, sem precisar implementar `__iter__` e `__next__` em uma classe própria.
 
 #### Onde está e quem participa
 
@@ -612,11 +455,11 @@ Isso não significa que toda a operação use memória constante: a função man
 
 **Decisão:** manter o uso existente. Não criar um iterador manual que replique o mecanismo de Python/Django. O uso real pode ser demonstrado nos trechos acima, com essa distinção explícita.
 
-### 10. Observer
+### 7. Observer
 
 **Observer — reagir a um acontecimento.** Serve para avisar componentes interessados quando um evento ocorre, permitindo que eles executem suas próprias ações. É parecido com uma inscrição em notificações: quando há uma novidade, os inscritos são avisados. No NanaSmart, sinais do Django acionam verificações quando uma leitura de telemetria, um alerta ou outro registro é salvo.
 
-**Situação:** Aplicado pelos sinais do Django e receptores do projeto.
+**Como está disponível:** infraestrutura de sinais fornecida pelo Django, com funções receptoras e reações definidas no NanaSmart.
 
 #### Problema resolvido
 
@@ -680,15 +523,11 @@ Há eventos, receptores registrados e reações a esses eventos. É uma aplicaç
 - Operações como `QuerySet.update()` e `bulk_create()` não percorrem o salvamento individual normal com esses sinais. Assim, “salvar por qualquer caminho sempre avisa os observadores” seria uma afirmação ampla demais.
 - No fluxo normal de `Telemetria.save()`, o projeto usa transação e bloqueio do sensor. Isso é um mecanismo adicional de consistência, não um padrão Observer separado.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
-### 11. Strategy
+### 8. Strategy
 
 **Strategy — escolher uma regra.** Serve quando há maneiras diferentes de realizar uma tarefa e todas podem ser chamadas pelo mesmo contrato. Imagine escolher uma rota de carro, a pé ou de bicicleta: o destino é o mesmo, mas a regra para chegar muda. No NanaSmart, políticas de permissão usam o mesmo método para avaliar acesso, com regras diferentes para gestores, técnicos e outros casos.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -753,21 +592,17 @@ As políticas implementam um contrato comum e oferecem comportamentos diferentes
 #### Limites importantes
 
 - `PermissionPolicyFactory` é uma **fábrica simples com registro de objetos**. Não possui a hierarquia de criadores que caracteriza o Factory Method da exportação.
-- `create()` devolve objetos já guardados em `_policies`; ele não cria uma nova política a cada chamada. Isso também não comprova Singleton, pois nada impede construir outra instância dessas classes.
+- `create()` devolve objetos já guardados em `_policies`; ele não cria uma nova política a cada chamada. Outras instâncias das políticas ainda podem ser construídas normalmente.
 - Apesar do nome `AuthenticatedNoDeleteForTecnicoPolicy`, um técnico também recebe negativa para `POST`, `PUT` e `PATCH` nessa política. Após liberar leitura, o retorno final exige gestor/admin ou superusuário, com bloqueio explícito de `DELETE` para perfil técnico.
 - `TecnicoPolicy` e `IsTecnico` existem, mas não foi encontrada uma referência a `IsTecnico` fora de sua própria definição nos arquivos Python pesquisados. O uso ativo de Strategy está comprovado pelas outras permissões citadas.
 - Nem toda permissão do projeto usa essas políticas. Por exemplo, `IsCompanyManager` e a permissão de ordens de serviço possuem suas próprias verificações.
 - Permitir uma ação e filtrar os dados da empresa são responsabilidades diferentes. As consultas e as verificações de objeto também participam do controle de acesso.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
-### 12. Template Method
+### 9. Template Method
 
 **Template Method — compartilhar uma sequência e variar etapas.** Serve para manter o roteiro de uma operação em uma classe base e permitir que subclasses especializem algumas partes. É como uma ficha de atendimento com etapas comuns, preenchidas de forma diferente por cada setor. No NanaSmart, o atendimento comum das views Gemini segue essa organização.
 
-**Situação:** Implementado e usado.
+**Como está disponível:** implementado no código do projeto e utilizado pelos endpoints indicados abaixo.
 
 #### Problema resolvido
 
@@ -785,6 +620,12 @@ Os endpoints de chat, ordens, finanças e tendências compartilham boa parte do 
 | `GeminiUnassignedOrdersView` | [views.py, linha 292](../../gemini_api/views.py#L292) | Especializa `get_prompt` para ordens sem atribuição. |
 | `GeminiFinanceView` | [views.py, linha 307](../../gemini_api/views.py#L307) | Especializa acesso e prompt, além de solicitar contexto financeiro. |
 | `GeminiTrendAnalysisView` | [views.py, linha 330](../../gemini_api/views.py#L330) | Especializa o prompt e envolve o atendimento comum com validações e tratamento próprios. |
+
+#### O que o Django REST Framework já fornece
+
+A classe `APIView`, da qual `GeminiBaseView` herda, já possui o método `dispatch`. Ele organiza a inicialização da requisição, a escolha do método HTTP, o tratamento de exceções e a finalização da resposta. Esse roteiro com etapas especializáveis é fornecido pelo DRF 3.16.1 usado no projeto.
+
+No NanaSmart, há também um roteiro próprio em `GeminiBaseView.post`: preparar contexto, montar o prompt, chamar a IA e devolver a resposta. As subclasses especializam partes desse atendimento. O exemplo abaixo mostra essa aplicação no código do projeto.
 
 #### Código que mostra o padrão
 
@@ -830,10 +671,6 @@ Existe uma sequência de operações na classe base, com pontos chamados por `se
 
 Template Method organiza **a sequência de atendimento da view**. Builder organiza **a construção do texto**. Facade organiza **a obtenção do contexto**, e Adapter organiza **a tradução da chamada externa**.
 
-#### Decisão e necessidade
-
-**Manter a implementação existente.** A estrutura e seus pontos de chamada já estão no código. Não foi identificada necessidade de acrescentar outro padrão a esse fluxo. Esta revisão não alterou suas regras de negócio.
-
 ## Como os padrões trabalham juntos
 
 No chat, cada componente tem uma responsabilidade:
@@ -848,23 +685,6 @@ flowchart TD
 ```
 
 Na exportação, Factory Method cria o exportador e o contrato comum permite gerar o arquivo. Na telemetria, Observer aciona as reações aos eventos; Iterator ajuda no percurso das leituras; as políticas de Strategy participam das permissões dos recursos. Nenhum desses papéis substitui o outro.
-
-## Revisão do código e verificações de 16/11/2026
-
-O backend foi restaurado ao estado do commit `89db73e`, retirando as cinco camadas próprias acrescentadas depois da análise: famílias de exportação, catálogo Singleton, árvore Composite, Decorator de log e Iterator de leituras. A análise original não as considerava necessárias. Permanecem os sete padrões já aplicados e o percurso de leituras oferecido pelo Django/Python. A consolidação e o arquivamento da documentação foram preservados.
-
-Foi executado o conjunto abaixo no Python 3.10.8 do `.venv` existente, com SQLite em memória, sem utilizar o PostgreSQL de desenvolvimento:
-
-```powershell
-$env:NANASMART_TEST_POSTGRES_PORT = ''
-.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput --verbosity=1
-```
-
-**Resultado:** 292 testes executados, 287 aprovados e cinco pulados por dependerem de bloqueios de linha indisponíveis no SQLite. A verificação do Django nessa execução não encontrou problemas. Os testes cobrem contas, permissões, isolamento por empresa, prioridade ABC, alertas/OS, tendências, exportação, IA simulada e contratos do schema, conforme os módulos selecionados.
-
-As conferências dos componentes, os checks e os testes de frontend estão registrados no [índice da documentação](../README.md#verificação-da-revisão-de-16112026). Os 75 testes registrados em 15/11/2026 pertencem à revisão anterior, arquivada; não são apresentados como resultado novo.
-
-Testes não substituem a inspeção da estrutura para classificar um padrão. Esta execução também não comprova disponibilidade real do Gemini, ganho de desempenho em produção, comportamento concorrente do PostgreSQL ou aprovação visual completa dos relatórios.
 
 ## Glossário para acompanhar o código
 
@@ -893,14 +713,18 @@ Testes não substituem a inspeção da estrutura para classificar um padrão. Es
 | Horímetro | Medida das horas de funcionamento de um equipamento. |
 | JSON | Formato de dados estruturados que programas conseguem trocar. |
 
-## Roteiro para apresentação
+## Conferência do código e referências
 
-Para cada padrão, explique primeiro o conceito. Depois mostre a situação no NanaSmart, abra um arquivo indicado, acompanhe o ponto que chama a operação e explique o resultado. Nos padrões ausentes, diga por que não existe necessidade atual; não apresente uma possibilidade futura como implementação pronta.
+A organização deste documento não alterou o backend. As explicações foram confrontadas com classes, pontos de chamada e trechos do projeto. Os exemplos de infraestrutura foram conferidos no Django 5.2.12 e no Django REST Framework 3.16.1 instalados.
 
-Uma síntese possível é: “O NanaSmart monta prompts com Builder, cria exportadores com Factory Method, integra o Gemini com Adapter e reúne contexto com Facade. Os sinais aplicam Observer, as políticas aplicam Strategy e as views Gemini compartilham atendimento por Template Method. Iterator é utilizado por recursos da linguagem e do Django. Os outros quatro padrões foram avaliados e não precisam de implementação própria hoje.”
+A verificação funcional anterior executou 292 testes de backend: 287 aprovados e cinco pulados por dependerem de bloqueios de linha do PostgreSQL, indisponíveis no SQLite. Esses resultados pertencem à execução de 16/11/2026; esta reorganização documental não é apresentada como uma nova execução da suíte. Comandos e limites estão no [índice da documentação](../README.md#verificação-da-revisão-de-16112026).
 
-## Histórico e fontes complementares
+As versões históricas ficam em [old](../old/README.md). As regras funcionais e os demais guias atuais estão no [índice principal](../README.md).
 
-As versões sobrepostas e os diagramas antigos foram reunidos em [old](../old/README.md). Eles registram versões anteriores e não substituem esta análise. As regras de negócio vigentes estão no [índice da documentação](../README.md), com referências específicas para alertas, tendências, prioridade ABC, IA e API.
+## Padrões avaliados sem aplicação GoF própria
 
-Ao modificar uma funcionalidade, confira novamente a estrutura, os pontos de chamada e os testes afetados antes de atualizar o status de um padrão.
+| Padrão | Por que não foi acrescentado |
+|---|---|
+| Abstract Factory | A exportação escolhe um gerador por vez; não precisa criar uma família de vários tipos de produtos relacionados. Factory Method já atende ao caso atual. |
+| Singleton | O Django já gerencia configurações e conexões. Esse acesso compartilhado não garante um Singleton GoF global, e não foi encontrado requisito para uma classe própria. |
+| Decorator | O projeto usa decoradores de função, como `@receiver` e `@transaction.atomic`; isso não comprova uma cadeia de objetos Decorator GoF. Não há necessidade atual dessa composição adicional. |

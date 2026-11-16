@@ -6,7 +6,7 @@
 
 | Assunto | Documento atual |
 |---|---|
-| Os 12 padrões, código real, decisões e exemplos didáticos | [Verificação dos padrões GoF](docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md) |
+| Padrões em uso, mecanismos de Python/Django e resumo dos demais avaliados | [Verificação dos padrões GoF](docs_padroes_projeto/Verificacao_Padroes.md) |
 | Pacotes, componentes e implantação; arquivos editáveis e entrega no template | [Diagramas UML 2.5](Diagramas_UML_2_5/LEIA-ME.md) |
 | Modelos, campos e relacionamentos do backend | [Banco de dados](DOCUMENTACAO_BANCO.md) |
 
@@ -59,7 +59,7 @@ Consulte [old/README.md](old/README.md) para origem, motivo do arquivamento e in
 - Comando: `.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput --verbosity=1`, com `NANASMART_TEST_POSTGRES_PORT` vazio.
 - Frontend: 147 testes aprovados na revisão anterior; JavaScript e contratos HTTP não foram modificados pela reversão.
 - Checks: `manage.py check` sem problemas e `makemigrations --check --dry-run` sem alterações de modelos.
-- Documentação: mantém os 12 padrões analisados na ordem solicitada, com os status de aplicação e necessidade distintos. Os exemplos e links foram conferidos após a reversão.
+- Documentação: detalha os sete padrões aplicados e os usos de Iterator e Composite pelo framework, em ordem de criação, estrutura e comportamento. Os três padrões restantes ficam apenas na tabela final. Os exemplos e links foram conferidos na reorganização documental.
 - Arquivamento: 28 arquivos preservados em `old`, com seus SHA-256 conferidos. A organização documental foi mantida.
 
 O banco de desenvolvimento não foi utilizado nessa suíte. Não foram aplicadas migrações, executado o seed ou feitas chamadas reais ao provedor de IA para validar a reversão. Os 310 testes da implementação ampliada pertencem à versão retirada; os resultados atuais correspondem ao backend restaurado.
