@@ -53,6 +53,7 @@ Consulte [old/README.md](old/README.md) para origem, motivo do arquivamento e in
 
 - Estado do backend: restaurado ao commit `89db73e`, anterior às cinco implementações extras. Não há diferenças de código da aplicação em relação àquela referência.
 - Padrões mantidos: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator continua sendo utilizado por mecanismos de Django/Python.
+- Os 12 padrões foram analisados; nenhum considerado necessário está pendente. O guia também explica os mecanismos fornecidos pelo Django/DRF, incluindo a árvore de condições do ORM como exemplo de Composite interno, sem acrescentar classes próprias ao backend.
 - Decisão conforme a análise: não acrescentar Abstract Factory, Singleton próprio, Composite, Decorator GoF próprio ou um Iterator manual apenas para completar a lista.
 - Backend após a reversão: 292 testes executados, 287 aprovados e cinco pulados no SQLite em memória. Os pulados exigem bloqueios de linha do PostgreSQL.
 - Comando: `.\.venv\Scripts\python.exe manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis app.test_schema --settings=app.test_settings --noinput --verbosity=1`, com `NANASMART_TEST_POSTGRES_PORT` vazio.

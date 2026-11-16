@@ -10,7 +10,7 @@ Um padrão de projeto é uma solução conhecida para um problema recorrente de 
 
 Este guia começa cada padrão com uma explicação e um exemplo cotidiano. Em seguida, mostra a situação real no NanaSmart, onde procurar, como o fluxo funciona e por que a solução foi escolhida. Os nomes das classes são os mesmos do código, e os trechos Python foram conferidos contra os arquivos da aplicação.
 
-**Resultado:** sete padrões foram confirmados nos fluxos da aplicação: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator é utilizado por mecanismos de Python/Django. Não foi identificada necessidade atual de implementar Abstract Factory, Singleton próprio, Composite ou Decorator GoF próprio.
+**Resultado:** todos os 12 padrões foram analisados. Sete foram confirmados nos fluxos da aplicação: Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method. Iterator é utilizado por mecanismos de Python/Django. O ORM também oferece composição em árvore de condições SQL, utilizada indiretamente pelos filtros do projeto, como explicado em Composite. Não há implementação necessária pendente; não foi identificada necessidade de criar Abstract Factory, Singleton, Composite de domínio ou Decorator GoF próprios.
 
 O código e seus pontos de chamada são a evidência principal. Uma classe apenas definida, uma sugestão antiga ou um nome parecido com um padrão não comprovam uso real. Quando uma implementação for necessária, ela deverá existir no fluxo e ser verificada antes de receber o status de implementada nesta documentação.
 
@@ -53,7 +53,7 @@ As categorias significam: **criação** organiza como objetos são construídos;
 | Criação | Singleton | Sem implementação própria; recursos compartilhados não comprovam Singleton |
 | Estruturais | Adapter | Implementado e usado |
 | Estruturais | Facade | Implementado e usado |
-| Estruturais | Composite | Não aplicado; sem necessidade atual |
+| Estruturais | Composite | Sem implementação própria de domínio; composição de condições fornecida pelo ORM |
 | Estruturais | Decorator | Não aplicado como GoF próprio |
 | Comportamentais | Iterator | Utilizado por recursos de Python/Django; sem classe própria |
 | Comportamentais | Observer | Aplicado pelos sinais do Django e receptores do projeto |
@@ -61,6 +61,35 @@ As categorias significam: **criação** organiza como objetos são construídos;
 | Comportamentais | Template Method | Implementado e usado |
 
 A ordem desta tabela é a mesma das seções. “Não implementar agora” significa ausência de necessidade identificada, e não uma tarefa de implementação que ficou incompleta.
+
+### O que foi analisado e o que ainda precisa ser implementado?
+
+Os **12 foram avaliados**, e não apenas os sete aplicados. A decisão é manter as soluções que resolvem problemas reais e aproveitar os mecanismos existentes do framework. **Nenhum padrão considerado necessário ficou apenas como proposta no documento.**
+
+| Resultado da avaliação | Decisão para o backend |
+|---|---|
+| Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method | Manter os usos existentes, demonstrados nas seções correspondentes. Observer já utiliza os sinais do Django; não exige outro sistema de eventos próprio. |
+| Iterator | Manter `QuerySet.iterator()` e os geradores Python já usados, sem criar um iterador que apenas repita esse percurso. |
+| Composite no ORM | Documentar a árvore de condições usada pelos filtros, sem criar uma árvore de entidades ou de prompts que o domínio atual não exige. |
+| Singleton | Documentar os recursos centralizados do Django, sem apresentar seus proxies/gerenciadores como uma garantia universal de instância única. |
+| Abstract Factory e Decorator GoF próprios | Não acrescentar classes sem um requisito concreto. Uma classe abstrata, uma fábrica simples ou um decorador Python não comprovam, sozinhos, esses padrões GoF. |
+
+As versões históricas apresentam propostas e classificações conflitantes. Elas não constituem uma lista de tarefas aprovadas; o código atual e as decisões desta revisão são a referência.
+
+### O que o Django/Python já fornece
+
+Exemplos conferidos no código instalado de **Django 5.2.12** e **Django REST Framework 3.16.1**, versões usadas no projeto. Os nomes abaixo pertencem às bibliotecas; os links mostram os pontos de uso no NanaSmart.
+
+| Recurso da biblioteca | Uso no projeto | Como interpretar |
+|---|---|---|
+| `django.db.models.query.QuerySet.iterator` e geradores Python | [Seleção de amostras](../../telemetria/trend_analysis.py#L33), [comando de análise](../../telemetria/management/commands/analisar_tendencias.py) e [seed](../../scripts/seed_db.py) | Percurso por Iterator fornecido pela linguagem/ORM; não é uma classe própria do NanaSmart. |
+| `django.dispatch.dispatcher.Signal.connect` e `Signal.send` | [Receptor de telemetria](../../telemetria/signals.py#L9) e demais `signals.py` | O Django fornece a infraestrutura de Observer; o projeto define os eventos observados e as reações. |
+| `rest_framework.views.APIView.dispatch` | [GeminiBaseView e subclasses](../../gemini_api/views.py#L198) | O framework já organiza inicialização, escolha do método HTTP e finalização. O projeto aplica também Template Method no atendimento comum de `GeminiBaseView.post`. |
+| `django.db.models.sql.where.WhereNode` e expressões `Lookup` | [Filtro de visibilidade de ordens](../../manutencao/visibility.py#L7) | Grupos e condições formam uma árvore com contrato de compilação SQL; é o exemplo de Composite interno detalhado na seção 7. |
+| `django.conf.LazySettings` e gerenciamento de conexões do ORM | [Configurações](../../app/settings.py) e consultas dos modelos | Acesso compartilhado/centralizado, relacionado ao conceito de Singleton. Não significa uma única conexão física nem uma classe Singleton GoF própria. |
+| Decoradores de função como `@receiver` e `@transaction.atomic` | [Sinais](../../telemetria/signals.py#L9) e [serviços](../../manutencao/services.py) | São recursos reais utilizados. Sua presença não comprova uma composição própria de objetos Decorator GoF. |
+
+Essa conferência de infraestrutura não acrescentou classes, dependências, rotas ou mudanças nas regras de negócio.
 
 ## Padrões de criação
 
@@ -442,13 +471,13 @@ A view usa uma entrada de nível mais alto, sem coordenar diretamente a combina�
 
 ### 7. Composite
 
-**Composite — tratar itens e grupos de forma parecida.** Serve para organizar objetos em uma árvore, permitindo que uma operação trabalhe tanto com um item individual quanto com um grupo que contém outros itens ou grupos. Uma pasta com arquivos e subpastas é uma forma simples de imaginar essa estrutura. O domínio analisado do NanaSmart não exige esse tratamento recursivo.
+**Composite — tratar itens e grupos de forma parecida.** Serve para organizar objetos em uma árvore, permitindo que uma operação trabalhe tanto com um item individual quanto com um grupo que contém outros itens ou grupos. Uma pasta com arquivos e subpastas é uma forma simples de imaginar essa estrutura. O domínio analisado do NanaSmart não exige uma implementação própria; o ORM já utiliza composição de condições para construir consultas.
 
-**Situação:** Não aplicado; sem necessidade atual.
+**Situação:** sem Composite próprio de domínio; composição em árvore utilizada indiretamente pelo ORM.
 
 #### Situação e onde foi conferido
 
-**Não aplicado nos fluxos examinados.** Foram conferidas as relações de [equipamentos e planos](../../ativos/models.py), [sensores e leituras](../../telemetria/models.py) e [ordens de serviço](../../manutencao/models.py).
+**Não existe uma implementação própria de Composite nas entidades do projeto.** Foram conferidas as relações de [equipamentos e planos](../../ativos/models.py), [sensores e leituras](../../telemetria/models.py) e [ordens de serviço](../../manutencao/models.py). Isso é diferente da árvore interna de condições das consultas do Django, detalhada abaixo.
 
 Uma empresa possuir equipamentos e um equipamento possuir sensores não basta para formar Composite. No padrão, itens individuais e grupos precisam compartilhar uma operação comum; os grupos podem conter outros grupos e executar essa operação de forma recursiva.
 
@@ -460,11 +489,31 @@ Empresa -> Equipamento -> Sensor -> Leituras
 
 Essa é uma sequência explicativa de relacionamentos do domínio. Ela não representa classes com um contrato comum para tratar folhas e grupos da mesma maneira. Por exemplo, não existe uma operação de componente que seja executada igualmente sobre um sensor e sobre um grupo recursivo de sensores.
 
+#### Exemplo real já fornecido pelo Django
+
+Em `visible_work_orders`, o filtro das ordens do técnico combina duas condições:
+
+```python
+qs = qs.filter(Q(responsavel=user) | Q(responsavel__isnull=True))
+```
+
+Isso significa “responsável é este usuário **OU** a ordem está sem responsável”. Com o filtro da empresa, a consulta produz a seguinte estrutura interna, conferida sem executar SQL ou abrir conexão com o banco:
+
+```text
+WhereNode: grupo AND
+    -> RelatedExact: equipamento pertence à empresa
+    -> WhereNode: grupo OR
+        -> RelatedExact: responsável é o técnico
+        -> RelatedIsNull: ordem sem responsável
+```
+
+`WhereNode` representa os grupos. As expressões `Lookup`, como `RelatedExact` e `RelatedIsNull`, representam as condições. Grupos e condições oferecem `as_sql(...)`; o compilador percorre os filhos para produzir o SQL. Essa estrutura do ORM exemplifica Composite pelo contrato comum de compilação e pela composição recursiva.
+
+As classes citadas pertencem ao Django, não foram criadas no NanaSmart. O código do projeto utiliza esse mecanismo ao construir os filtros com `Q`. Isso não transforma automaticamente a relação empresa/equipamento/sensor em uma árvore Composite de domínio.
+
 #### Necessidade e decisão
 
-As consultas atuais usam os relacionamentos dos modelos e os serviços existentes. Não foi encontrado um caso que precise de uma árvore recursiva de componentes.
-
-**Decisão:** não implementar agora. Reavaliar se aparecer uma hierarquia de grupos dentro de grupos que precise aceitar as mesmas operações dos itens individuais. Não há classe Composite própria a demonstrar no código atual.
+**Manter os filtros e aproveitar o mecanismo existente do ORM.** Não criar classes Composite próprias para representar entidades ou prompts apenas para contar mais um padrão. Reavaliar uma implementação de domínio somente se surgir uma hierarquia recursiva que precise das mesmas operações para grupos e itens.
 
 ### 8. Decorator
 
