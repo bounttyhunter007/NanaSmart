@@ -61,8 +61,31 @@ node --test FrontATT/telemetria.test.cjs
 node --check FrontATT/app.js
 ```
 
-Os testes cobrem evidências, recuperação, recorrência, ordens, filtros/exportação, paginação, migração legada, permissões, escopo entre empresas, dashboard de 24 horas e navegação da interface. Concorrência com bloqueios de linha exige o PostgreSQL exclusivo de testes descrito no diagnóstico anterior.
+Os testes cobrem evidências, recuperação, recorrência, ordens, filtros/exportação, paginação, migração legada, permissões, escopo entre empresas, dashboard de 24 horas e navegação da interface. Concorrência com bloqueios de linha exige o PostgreSQL exclusivo de testes descrito na seção de compatibilidade abaixo.
 
 Resultados desta implementação: **146 testes de backend aprovados no PostgreSQL**, sem testes pulados, e **34 testes de interface aprovados**. O template Vue 3.4.21 foi compilado e renderizado em validação de código nos cenários de limite, tendência e legado sem sensor. Os gráficos usam os intervalos reais entre amostras e as faixas preservadas na abertura. Exportações reais CSV, Excel e PDF foram testadas, incluindo motivos longos e caracteres literais; o PDF permite dividir uma linha longa entre páginas sem truncar o motivo.
 
 A migração `alertas.0003_historico_evidencias` foi aplicada ao banco local. O PostgreSQL temporário usado pelos testes foi encerrado. A conferência visual no Chrome não foi realizada porque a ferramenta não recebeu autorização de acesso ao navegador; a validação de código não equivale a uma aprovação visual do layout.
+
+
+## Atualização do banco e compatibilidade
+
+Orientação consolidada em 16/11/2026 a partir do diagnóstico histórico. A regra funcional atual é a descrita neste documento e em [Priorização ABC](PRIORIZACAO_ABC.md) e [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md).
+
+### Banco novo e vazio
+
+Com PostgreSQL e dependências configurados, execute `python manage.py migrate --plan`, depois `python manage.py migrate` e `python manage.py check`. Aplique o conjunto atual de migrações; a orientação não se limita às migrações citadas nos relatos históricos de validação acima.
+
+### Banco existente
+
+1. Preserve uma cópia da base e consulte `python manage.py showmigrations --plan`.
+2. Se houver migrações antigas fora do Git, compare nomes, dependências e operações com as migrações versionadas. Não substitua automaticamente um histórico divergente.
+3. Compare o esquema existente com as migrações iniciais: colunas, tipos, índices, restrições e relações. Tabelas presentes não comprovam equivalência do esquema.
+4. Somente se o esquema corresponder à migração inicial, avalie `python manage.py migrate --fake-initial --plan` e o uso de `--fake-initial`. Essa opção não faz uma validação completa do esquema. Migrações posteriores devem ser executadas normalmente para acrescentar suas colunas, relações e dados.
+5. Confira vínculos legados e os cenários funcionais. Não invente associações ou horários que os dados não permitam comprovar.
+
+Não use `--fake` indiscriminadamente, não apague tabelas e não execute o seed como forma de migração. Este procedimento é documentação; a revisão de 16/11/2026 não aplicou migrações nem modificou o banco de desenvolvimento.
+
+### Testes de concorrência
+
+`app.test_settings` usa SQLite em memória por padrão. Somente em um PostgreSQL dedicado a testes, `NANASMART_TEST_POSTGRES_PORT` seleciona o servidor em `127.0.0.1`; o Django cria a base separada `test_nanasmart_alertas`. Não aponte essa configuração para a base de desenvolvimento. O diagnóstico antigo e seus resultados por data estão em [old/FLUXO_ALERTAS_ORDENS_SERVICO.md](old/FLUXO_ALERTAS_ORDENS_SERVICO.md).

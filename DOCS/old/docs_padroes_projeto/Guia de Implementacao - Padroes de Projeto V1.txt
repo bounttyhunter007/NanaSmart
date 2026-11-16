@@ -1,0 +1,755 @@
+GUIA DE IMPLEMENTACAO - PADROES DE PROJETO NANASMART
+=====================================================
+Data: 2026-08-31
+Status: SOMENTE ANALISE - NENHUM CODIGO FOI ALTERADO
+
+Este documento detalha EXATAMENTE o que precisa ser criado, modificado ou
+atualizado no codigo para implementar os padroes Builder e Factory Method
+no projeto NanaSmart.
+
+Para cada mudanca, sao listados:
+  - O arquivo afetado (caminho completo)
+  - O que mudar (classes, funcoes, imports)
+  - Como mudar (antes vs depois)
+  - Ordem de execucao recomendada
+
+
+===============================================================================
+INDICE
+===============================================================================
+  PARTE 1: FACTORY METHOD (exportacao)
+    1.1 Criar: exportacao/utils/base_exporter.py      [NOVO ARQUIVO]
+    1.2 Modificar: exportacao/utils/csv_exporter.py    [REFATORAR]
+    1.3 Modificar: exportacao/utils/excel_exporter.py  [REFATORAR]
+    1.4 Modificar: exportacao/utils/pdf_exporter.py    [REFATORAR]
+    1.5 Criar: exportacao/utils/exporter_factory.py    [NOVO ARQUIVO]
+    1.6 Modificar: exportacao/utils/__init__.py         [ATUALIZAR EXPORTS]
+    1.7 Modificar: exportacao/views.py                  [REFATORAR]
+    1.8 Criar testes: exportacao/tests.py               [NOVO ARQUIVO]
+
+  PARTE 2: BUILDER (gemini_api)
+    2.1 Criar: gemini_api/prompt.py                    [NOVO ARQUIVO]
+    2.2 Criar: gemini_api/prompt_builder_pattern.py    [NOVO ARQUIVO]
+    2.3 Criar: gemini_api/prompt_director.py           [NOVO ARQUIVO]
+    2.4 Modificar: gemini_api/prompt_builder.py        [REFATORAR]
+    2.5 Modificar: gemini_api/views.py                 [ATUALIZAR IMPORTS]
+    2.6 Atualizar testes: gemini_api/tests.py          [ADICIONAR TESTES]
+
+
+===============================================================================
+PARTE 1: FACTORY METHOD - EXPORTACAO POR FORMATO
+===============================================================================
+
+Objetivo: Substituir a cadeia if/elif de _despachar_formato() por um
+sistema de classes exportadoras com interface comum e uma fabrica registradora.
+
+ARQUIVOS ENVOLVIDOS (na ordem de implementacao):
+
+------------------------------------------------------------------------
+1.1 CRIAR: exportacao/utils/base_exporter.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+Propocito: Definir a classe abstrata (ABC) que todos os exportadores devem
+seguir. Isso garante que CSV, Excel e PDF tenham a MESMA INTERFACE.
+
+O que deve conter:
+  - Classe: Exportador (abc.ABC)
+  - Metodo abstrato: exportar(self, nome_arquivo, titulo, colunas, linhas)
+    -> retorna django.http.HttpResponse
+  - O metodo deve ser abstrato (@abc.abstractmethod)
+
+Interface unificada (os 3 exportadores passam a receber os MESMOS parametros):
+  exportar(
+      nome_arquivo: str,    # ex: 'ordens_servico'
+      titulo: str,          # ex: 'Ordens de Servico' (usado pelo Excel/PDF)
+      colunas: list[str],   # ex: ['ID', 'Titulo', 'Status']
+      linhas: list[list]    # ex: [[1, 'Troca de veda', 'Pendente'], ...]
+  ) -> HttpResponse
+
+Porque essa interface e importante:
+  - Atualmente exportar_csv NAO recebe 'titulo' (porque CSV nao tem aba).
+  - Atualmente exportar_excel recebe 'titulo_planilha' (nome diferente).
+  - Atualmente exportar_pdf recebe 'titulo_relatorio' (nome diferente).
+  - Com a interface unificada, o parametro 'titulo' e recebido por todos.
+    O ExportadorCSV simplesmente ignora o titulo (pois CSV nao tem aba).
+    O ExportadorExcel usa como nome da aba.
+    O ExportadorPDF usa como titulo do relatorio.
+
+
+------------------------------------------------------------------------
+1.2 MODIFICAR: exportacao/utils/csv_exporter.py  [REFATORAR]
+------------------------------------------------------------------------
+
+Estado atual:
+  - Contem a funcao exportar_csv(nome_arquivo, colunas, linhas)
+  - Funcao solta, sem classe
+
+O que mudar:
+  - MANTER a funcao exportar_csv() existente por compatibilidade (opcional)
+    OU remove-la e usar apenas a classe.
+  - CRIAR a classe ExportadorCSV que herda de Exportador (base_exporter.py)
+  - Implementar o metodo exportar(self, nome_arquivo, titulo, colunas, linhas)
+    que internamente executa a mesma logica da funcao exportar_csv() atual.
+  - O parametro 'titulo' e recebido mas NAO e usado (CSV nao tem titulo).
+
+Classe a criar:
+  class ExportadorCSV(Exportador):
+      def exportar(self, nome_arquivo, titulo, colunas, linhas):
+          # Mesma logica das linhas 20-32 do csv_exporter.py atual
+          # response = HttpResponse(content_type='text/csv; charset=utf-8')
+          # response['Content-Disposition'] = ...
+          # BOM + writer + writerow
+          # return response
+
+Imports necessarios:
+  from .base_exporter import Exportador
+
+
+------------------------------------------------------------------------
+1.3 MODIFICAR: exportacao/utils/excel_exporter.py  [REFATORAR]
+------------------------------------------------------------------------
+
+Estado atual:
+  - Contem a funcao exportar_excel(nome_arquivo, colunas, linhas, titulo_planilha='Dados')
+  - Funcao solta, sem classe
+
+O que mudar:
+  - CRIAR a classe ExportadorExcel que herda de Exportador
+  - Implementar o metodo exportar(self, nome_arquivo, titulo, colunas, linhas)
+    que internamente executa a mesma logica da funcao exportar_excel() atual.
+  - O parametro 'titulo' substitui 'titulo_planilha' (mesmo significado).
+
+Classe a criar:
+  class ExportadorExcel(Exportador):
+      def exportar(self, nome_arquivo, titulo, colunas, linhas):
+          # Mesma logica das linhas 24-83 do excel_exporter.py atual
+          # wb = Workbook(), ws.title = titulo, estilos, etc.
+          # return response
+
+Imports necessarios:
+  from .base_exporter import Exportador
+
+
+------------------------------------------------------------------------
+1.4 MODIFICAR: exportacao/utils/pdf_exporter.py  [REFATORAR]
+------------------------------------------------------------------------
+
+Estado atual:
+  - Contem a funcao exportar_pdf(nome_arquivo, titulo_relatorio, colunas, linhas, orientacao='landscape')
+  - Funcao solta, sem classe
+
+O que mudar:
+  - CRIAR a classe ExportadorPDF que herda de Exportador
+  - Implementar o metodo exportar(self, nome_arquivo, titulo, colunas, linhas)
+    que internamente executa a mesma logica da funcao exportar_pdf() atual.
+  - O parametro 'titulo' substitui 'titulo_relatorio' (mesmo significado).
+  - A orientacao pode ser um atributo do construtor ou default 'landscape'.
+
+Classe a criar:
+  class ExportadorPDF(Exportador):
+      def __init__(self, orientacao='landscape'):
+          self._orientacao = orientacao
+
+      def exportar(self, nome_arquivo, titulo, colunas, linhas):
+          # Mesma logica das linhas 33-143 do pdf_exporter.py atual
+          # usa self._orientacao em vez do parametro
+          # return response
+
+Imports necessarios:
+  from .base_exporter import Exportador
+
+
+------------------------------------------------------------------------
+1.5 CRIAR: exportacao/utils/exporter_factory.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+Propocito: Fabrica que recebe o formato ('csv', 'excel', 'pdf') e retorna
+a instancia do exportador correto. Usa dicionario registrador.
+
+O que deve conter:
+  - Dicionario _EXPORTADORES mapeando string -> classe
+  - Classe: ExportadorFactory
+  - Metodo estatico: criar(formato: str) -> Exportador
+  - Se formato invalido, levanta ValueError
+
+Conteudo esperado:
+
+  from .csv_exporter import ExportadorCSV
+  from .excel_exporter import ExportadorExcel
+  from .pdf_exporter import ExportadorPDF
+
+  class ExportadorFactory:
+      _EXPORTADORES = {
+          'csv': ExportadorCSV,
+          'excel': ExportadorExcel,
+          'pdf': ExportadorPDF,
+      }
+
+      @staticmethod
+      def criar(formato):
+          cls = ExportadorFactory._EXPORTADORES.get(formato)
+          if cls is None:
+              raise ValueError(f'Formato desconhecido: {formato}')
+          return cls()
+
+      @classmethod
+      def registrar(cls, formato, exportador_cls):
+          cls._EXPORTADORES[formato] = exportador_cls
+
+Beneficio do metodo registrar():
+  - Para adicionar JSON no futuro, basta criar ExportadorJSON e chamar:
+    ExportadorFactory.registrar('json', ExportadorJSON)
+  - Nenhum if/elif precisa ser modificado.
+
+
+------------------------------------------------------------------------
+1.6 MODIFICAR: exportacao/utils/__init__.py  [ATUALIZAR EXPORTS]
+------------------------------------------------------------------------
+
+Estado atual (linha 1):
+  # exportacao.utils
+
+O que mudar:
+  Exportar os novos modulos para facilitar imports:
+
+  from .base_exporter import Exportador
+  from .csv_exporter import ExportadorCSV
+  from .excel_exporter import ExportadorExcel
+  from .pdf_exporter import ExportadorPDF
+  from .exporter_factory import ExportadorFactory
+
+
+------------------------------------------------------------------------
+1.7 MODIFICAR: exportacao/views.py  [REFATORAR]
+------------------------------------------------------------------------
+
+Estado atual (linhas relevantes):
+  Linha 12: from .utils.csv_exporter import exportar_csv
+  Linha 13: from .utils.excel_exporter import exportar_excel
+  Linha 14: from .utils.pdf_exporter import exportar_pdf
+  Linhas 46-58: funcao _despachar_formato() com if/elif
+
+O que mudar:
+
+  1. REMOVER imports antigos (linhas 12-14):
+     ANTES:
+       from .utils.csv_exporter import exportar_csv
+       from .utils.excel_exporter import exportar_excel
+       from .utils.pdf_exporter import exportar_pdf
+
+     DEPOIS:
+       from .utils.exporter_factory import ExportadorFactory
+
+  2. SUBSTITUIR _despachar_formato() (linhas 46-58):
+     ANTES:
+       def _despachar_formato(formato, nome, titulo, colunas, linhas):
+           if formato == 'csv':
+               return exportar_csv(nome, colunas, linhas)
+           elif formato == 'excel':
+               return exportar_excel(nome, colunas, linhas, titulo_planilha=titulo)
+           elif formato == 'pdf':
+               return exportar_pdf(nome, titulo, colunas, linhas)
+           else:
+               return Response(
+                   {'error': f'Formato "{formato}" invalido. Use: csv, excel ou pdf.'},
+                   status=400
+               )
+
+     DEPOIS:
+       def _despachar_formato(formato, nome, titulo, colunas, linhas):
+           try:
+               exportador = ExportadorFactory.criar(formato)
+               return exportador.exportar(nome, titulo, colunas, linhas)
+           except ValueError:
+               return Response(
+                   {'error': f'Formato "{formato}" invalido. Use: csv, excel ou pdf.'},
+                   status=400
+               )
+
+  3. As 6 classes de view (ExportarOrdensServicoView, ExportarEquipamentosView,
+     ExportarAlertasView, ExportarTelemetriaView, ExportarHistoricoView,
+     ExportarDashboardView) NAO precisam mudar. Elas continuam chamando
+     _despachar_formato() normalmente. A refatoracao e interna a essa funcao.
+
+
+------------------------------------------------------------------------
+1.8 CRIAR: exportacao/tests.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+Testes necessarios para validar o Factory Method:
+
+  1. test_factory_cria_exportador_csv
+     - ExportadorFactory.criar('csv') retorna instancia de ExportadorCSV
+
+  2. test_factory_cria_exportador_excel
+     - ExportadorFactory.criar('excel') retorna instancia de ExportadorExcel
+
+  3. test_factory_cria_exportador_pdf
+     - ExportadorFactory.criar('pdf') retorna instancia de ExportadorPDF
+
+  4. test_factory_formato_invalido_levanta_erro
+     - ExportadorFactory.criar('xml') levanta ValueError
+
+  5. test_exportador_csv_retorna_http_response_com_content_type_csv
+     - ExportadorCSV().exportar(...) retorna HttpResponse com text/csv
+
+  6. test_exportador_excel_retorna_http_response_com_content_type_xlsx
+     - ExportadorExcel().exportar(...) retorna HttpResponse com xlsx
+
+  7. test_exportador_pdf_retorna_http_response_com_content_type_pdf
+     - ExportadorPDF().exportar(...) retorna HttpResponse com application/pdf
+
+  8. test_registrar_novo_formato
+     - ExportadorFactory.registrar('json', MockExportadorJSON)
+     - ExportadorFactory.criar('json') retorna instancia correta
+
+  9. test_despachar_formato_usa_factory
+     - Testar que _despachar_formato('csv', ...) retorna resposta valida
+     - Testar que _despachar_formato('invalido', ...) retorna erro 400
+
+
+===============================================================================
+PARTE 2: BUILDER - CONSTRUCAO DE PROMPTS DA IA
+===============================================================================
+
+Objetivo: Substituir as 4 funcoes build_*_prompt() em prompt_builder.py por
+um sistema Builder com Director, mantendo build_system_instruction() inalterada.
+
+ARQUIVOS ENVOLVIDOS (na ordem de implementacao):
+
+------------------------------------------------------------------------
+2.1 CRIAR: gemini_api/prompt.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+Propocito: Definir a classe Prompt, que e o PRODUTO final do Builder.
+Encapsula a string do prompt em um objeto com semantica clara.
+
+O que deve conter:
+  class Prompt:
+      def __init__(self, texto):
+          self._texto = texto
+
+      def obter_texto(self):
+          return self._texto
+
+      def __str__(self):
+          return self._texto
+
+      def __repr__(self):
+          preview = self._texto[:80] + '...' if len(self._texto) > 80 else self._texto
+          return f'Prompt({preview!r})'
+
+Porque criar essa classe:
+  - Atualmente os prompts sao strings soltas. Encapsular em Prompt permite
+    adicionar validacoes futuras (ex: tamanho maximo, sanitizacao).
+  - O Builder retorna um Prompt, nao uma string crua.
+  - As views que chamam generate_content() passariam prompt.obter_texto()
+    em vez de uma string direta.
+
+
+------------------------------------------------------------------------
+2.2 CRIAR: gemini_api/prompt_builder_pattern.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+NOTA: O nome do arquivo e 'prompt_builder_pattern.py' para nao conflitar
+com o 'prompt_builder.py' existente. Apos a migracao completa, o antigo
+pode ser renomeado ou removido.
+
+Propocito: Definir a interface PromptBuilder (ABC) e sua implementacao
+concreta PromptBuilderConcreto.
+
+O que deve conter:
+
+  1. Classe abstrata: PromptBuilder (abc.ABC)
+     Metodos abstratos (todos retornam Self para encadeamento):
+       - com_contexto(self, context: dict) -> Self
+       - com_alertas(self, alertas: list) -> Self
+       - com_ordens(self, ordens: list) -> Self
+       - com_telemetria(self, dados: list) -> Self
+       - com_financeiro(self, dados: dict) -> Self
+       - com_instrucoes(self, texto: str | list[str]) -> Self
+       - com_pergunta(self, texto: str) -> Self
+       - com_kpis(self, dados: list) -> Self
+       - build(self) -> Prompt
+       - reset(self) -> None
+
+  2. Classe concreta: PromptBuilderConcreto(PromptBuilder)
+     Atributos internos:
+       - self._blocos: list[str]  (acumula as partes do prompt)
+       - self._max_linhas: int = 15  (limite para truncamento)
+
+     Metodo privado:
+       - _truncar(self, linhas, max_linhas=None) -> list[str]
+         Mesma logica da funcao _truncate_lines() atual do prompt_builder.py
+
+     Implementacao dos metodos:
+
+     com_contexto(self, context):
+       Adiciona o bloco "CONTEXTUALIZACAO RAPIDA:" com os campos do context.
+       Campos usados: company_name, total_equipment, active_equipment,
+       maintenance_equipment, inactive_equipment, open_orders, unassigned_orders.
+       Retorna self.
+
+     com_alertas(self, alertas):
+       Se alertas nao vazio, adiciona bloco "ALERTAS RELEVANTES:" com
+       linhas truncadas (max 5).
+       Retorna self.
+
+     com_ordens(self, ordens, titulo="ORDENS EM ABERTO"):
+       Se ordens nao vazio, adiciona bloco com titulo fornecido e
+       linhas truncadas (max 5). O titulo configuravel permite reusar
+       para "ORDENS ATRIBUIDAS", "ORDENS SEM ATRIBUICAO", etc.
+       Retorna self.
+
+     com_telemetria(self, dados):
+       Se dados nao vazio, adiciona bloco "TELEMETRIA RECENTE:" com
+       linhas truncadas (max 5).
+       Retorna self.
+
+     com_financeiro(self, dados):
+       Adiciona bloco "CONTEXTUALIZACAO FINANCEIRA:" com total_cost,
+       average_cost_per_os, completed_orders e top_equipment_costs.
+       Retorna self.
+
+     com_instrucoes(self, texto):
+       Adiciona bloco "INSTRUCAO:" seguido do texto ou lista de textos.
+       Retorna self.
+
+     com_pergunta(self, texto):
+       Adiciona bloco "PERGUNTA DO USUARIO:" seguido do texto.
+       Retorna self.
+
+     com_kpis(self, dados):
+       Se dados nao vazio, adiciona bloco "KPIs DE EQUIPAMENTOS:" com
+       linhas truncadas (max 5).
+       Retorna self.
+
+     build(self):
+       Junta self._blocos com "\n" e retorna Prompt(texto_final).
+       Chama self.reset() apos construir.
+
+     reset(self):
+       Limpa self._blocos = [].
+
+Imports necessarios:
+  import abc
+  from .prompt import Prompt
+
+
+------------------------------------------------------------------------
+2.3 CRIAR: gemini_api/prompt_director.py  [NOVO ARQUIVO]
+------------------------------------------------------------------------
+
+Propocito: Definir o Director que coordena a RECEITA de montagem de cada
+tipo de prompt. Cada metodo corresponde a uma funcao build_*_prompt() atual.
+
+O que deve conter:
+  class PromptDirector:
+
+      def montar_chat(self, builder, context, message):
+          """Corresponde a build_chat_prompt() atual."""
+          return (builder
+              .com_contexto(context)
+              .com_alertas(context['alert_summary'])
+              .com_ordens(context['open_order_summary'])
+              .com_kpis(context['equipment_kpis'])
+              .com_telemetria(context['telemetry'])
+              .com_pergunta(message)
+              .build())
+
+      def montar_analise_os(self, builder, user, context, message):
+          """Corresponde a build_os_analysis_prompt() atual."""
+          builder.com_ordens(
+              context.get('assigned_order_summary', []),
+              titulo='ORDENS ATRIBUIDAS'
+          )
+          builder.com_ordens(
+              context.get('unassigned_order_summary', []),
+              titulo='ORDENS SEM ATRIBUICAO'
+          )
+          builder.com_instrucoes([
+              'Analise as ordens de servico descritas acima e sugira os proximos passos praticos.',
+              'Para tecnicos, indique como priorizar, o que verificar no equipamento e quando escalar.',
+              'Para gestores/admin, indique quais ordens devem receber atencao imediata e por que.',
+          ])
+          return builder.com_pergunta(message).build()
+
+      def montar_ordens_sem_atribuicao(self, builder, context, message):
+          """Corresponde a build_unassigned_orders_prompt() atual."""
+          builder.com_ordens(
+              context.get('unassigned_order_summary', []),
+              titulo='ORDENS SEM ATRIBUICAO (EXEMPLOS)'
+          )
+          builder.com_instrucoes([
+              'Avalie estas ordens e sugira criterios claros para atribuicao e priorizacao.',
+              'Se houver ordens criticas ou de alto risco, indique-as e explique por que.',
+          ])
+          return builder.com_pergunta(message).build()
+
+      def montar_financeiro(self, builder, context, message):
+          """Corresponde a build_finance_prompt() atual."""
+          builder.com_financeiro(context['financial_summary'])
+          builder.com_instrucoes([
+              'Baseado nesses numeros, indique melhorias de gestao de manutencao, reducao de custos e prioridades de investimento.',
+              'Explique quais metricas devem ser monitoradas e quais acoes trazer para reduzir retrabalho e tempo de parada.',
+          ])
+          return builder.com_pergunta(message).build()
+
+Imports necessarios:
+  from .prompt_builder_pattern import PromptBuilder
+
+
+------------------------------------------------------------------------
+2.4 MODIFICAR: gemini_api/prompt_builder.py  [REFATORAR]
+------------------------------------------------------------------------
+
+Estado atual:
+  - Contem funcao utilitaria: _truncate_lines()         (linhas 4-7)
+  - Contem funcao:            build_system_instruction() (linhas 10-40)
+  - Contem funcao:            build_chat_prompt()        (linhas 43-70)
+  - Contem funcao:            build_os_analysis_prompt() (linhas 73-92)
+  - Contem funcao:            build_unassigned_orders_prompt() (linhas 95-109)
+  - Contem funcao:            build_finance_prompt()     (linhas 112-130)
+
+O que mudar:
+
+  1. MANTER: build_system_instruction() (linhas 10-40)
+     Essa funcao NAO faz parte do Builder. Ela monta a instrucao do sistema
+     (papel da IA), nao o prompt do usuario. Mante-la intacta.
+
+  2. REMOVER ou MARCAR COMO DEPRECATED:
+     - _truncate_lines()  (movida para dentro do PromptBuilderConcreto)
+     - build_chat_prompt()
+     - build_os_analysis_prompt()
+     - build_unassigned_orders_prompt()
+     - build_finance_prompt()
+
+     Opcao 1 (recomendada): manter como wrappers temporarios que usam o
+     Builder internamente, para nao quebrar nada durante a migracao:
+
+       def build_chat_prompt(user, context, message):
+           from .prompt_builder_pattern import PromptBuilderConcreto
+           from .prompt_director import PromptDirector
+           builder = PromptBuilderConcreto()
+           director = PromptDirector()
+           prompt = director.montar_chat(builder, context, message)
+           return prompt.obter_texto()
+
+     Opcao 2 (apos migracao completa): remover as funcoes e usar o Builder
+     diretamente nas views.
+
+  3. ADICIONAR re-exports para facilitar imports:
+     from .prompt_builder_pattern import PromptBuilder, PromptBuilderConcreto
+     from .prompt_director import PromptDirector
+     from .prompt import Prompt
+
+
+------------------------------------------------------------------------
+2.5 MODIFICAR: gemini_api/views.py  [ATUALIZAR IMPORTS]
+------------------------------------------------------------------------
+
+Estado atual (linhas 8-14):
+  from .prompt_builder import (
+      build_system_instruction,
+      build_chat_prompt,
+      build_os_analysis_prompt,
+      build_unassigned_orders_prompt,
+      build_finance_prompt,
+  )
+
+O que mudar (2 opcoes):
+
+  OPCAO A (migracao gradual - se mantiver wrappers no prompt_builder.py):
+    Nada muda nas views. Os wrappers delegam para o Builder internamente.
+    As views continuam importando e usando as funcoes existentes.
+
+  OPCAO B (migracao completa - usar Builder diretamente):
+    1. Substituir imports:
+       ANTES:
+         from .prompt_builder import (
+             build_system_instruction,
+             build_chat_prompt,
+             build_os_analysis_prompt,
+             build_unassigned_orders_prompt,
+             build_finance_prompt,
+         )
+       DEPOIS:
+         from .prompt_builder import build_system_instruction
+         from .prompt_builder_pattern import PromptBuilderConcreto
+         from .prompt_director import PromptDirector
+
+    2. Modificar GeminiBaseView (linhas 21-79):
+       - Adicionar atributos de classe:
+         _builder_class = PromptBuilderConcreto
+         _director = PromptDirector()
+
+       - Modificar get_prompt() (linhas 40-44):
+         ANTES:
+           def get_prompt(self, user, context, message):
+               if self.prompt_builder is None:
+                   return message
+               prompt_fn = type(self).prompt_builder
+               return prompt_fn(user, context, message)
+         DEPOIS:
+           def get_prompt(self, user, context, message):
+               builder = self._builder_class()
+               prompt = self._build_with_director(builder, user, context, message)
+               return prompt.obter_texto()
+
+       - Adicionar metodo abstrato/hook:
+           def _build_with_director(self, builder, user, context, message):
+               # Default: retorna Prompt com mensagem direta
+               from .prompt import Prompt
+               return Prompt(message)
+
+    3. Modificar subclasses:
+       GeminiChatView:
+         def _build_with_director(self, builder, user, context, message):
+             return self._director.montar_chat(builder, context, message)
+
+       GeminiOsAnalysisView:
+         def _build_with_director(self, builder, user, context, message):
+             return self._director.montar_analise_os(builder, user, context, message)
+
+       GeminiUnassignedOrdersView:
+         def _build_with_director(self, builder, user, context, message):
+             return self._director.montar_ordens_sem_atribuicao(builder, context, message)
+
+       GeminiFinanceView:
+         def _build_with_director(self, builder, user, context, message):
+             return self._director.montar_financeiro(builder, context, message)
+
+    RECOMENDACAO: comecar com Opcao A (wrappers). Migrar para Opcao B
+    depois de validar que os prompts gerados sao identicos.
+
+
+------------------------------------------------------------------------
+2.6 ATUALIZAR: gemini_api/tests.py  [ADICIONAR TESTES]
+------------------------------------------------------------------------
+
+Testes novos necessarios para validar o Builder:
+
+  1. test_prompt_builder_constroi_texto_com_contexto
+     - Cria PromptBuilderConcreto()
+     - Chama .com_contexto(context_dict).build()
+     - Verifica que o texto contem "CONTEXTUALIZACAO RAPIDA"
+     - Verifica que contem company_name, total_equipment
+
+  2. test_prompt_builder_com_alertas_inclui_secao
+     - Chama .com_alertas(lista_alertas).build()
+     - Verifica que o texto contem "ALERTAS RELEVANTES"
+
+  3. test_prompt_builder_com_alertas_vazio_nao_inclui_secao
+     - Chama .com_alertas([]).build()
+     - Verifica que o texto NAO contem "ALERTAS RELEVANTES"
+
+  4. test_prompt_builder_trunca_linhas_excedentes
+     - Passa lista com 20 alertas
+     - Verifica que no maximo 5 aparecem no texto final
+     - Verifica que aparece "... (N itens adicionais omitidos)"
+
+  5. test_prompt_builder_encadeia_todos_os_blocos
+     - Chama todos os metodos em cadeia
+     - Verifica que o texto final contem todos os blocos na ordem
+
+  6. test_prompt_builder_reset_limpa_estado
+     - Constroi um prompt
+     - Chama reset() (ou verifica que build() fez reset)
+     - Constroi outro prompt com blocos diferentes
+     - Verifica que o segundo prompt NAO contem blocos do primeiro
+
+  7. test_prompt_director_montar_chat_gera_prompt_valido
+     - Cria PromptDirector e PromptBuilderConcreto
+     - Chama director.montar_chat(builder, context, message)
+     - Verifica que retorna Prompt com texto contendo contexto e pergunta
+
+  8. test_prompt_director_montar_financeiro_gera_prompt_valido
+     - Chama director.montar_financeiro(builder, context, message)
+     - Verifica que retorna Prompt com texto contendo dados financeiros
+
+  9. test_prompt_compatibilidade_com_funcoes_originais
+     - Gera prompt usando build_chat_prompt() original
+     - Gera prompt usando director.montar_chat() com mesmo contexto
+     - Compara os blocos essenciais (nao precisa ser identico caractere a
+       caractere, mas deve conter as mesmas secoes e dados)
+
+
+===============================================================================
+RESUMO DE TODOS OS ARQUIVOS AFETADOS
+===============================================================================
+
+NOVOS ARQUIVOS (5):
+  1. exportacao/utils/base_exporter.py       <- classe abstrata Exportador
+  2. exportacao/utils/exporter_factory.py    <- fabrica ExportadorFactory
+  3. gemini_api/prompt.py                    <- classe Prompt (produto)
+  4. gemini_api/prompt_builder_pattern.py    <- ABC + PromptBuilderConcreto
+  5. gemini_api/prompt_director.py           <- PromptDirector
+
+ARQUIVOS MODIFICADOS (6):
+  1. exportacao/utils/csv_exporter.py        <- adicionar classe ExportadorCSV
+  2. exportacao/utils/excel_exporter.py      <- adicionar classe ExportadorExcel
+  3. exportacao/utils/pdf_exporter.py        <- adicionar classe ExportadorPDF
+  4. exportacao/utils/__init__.py            <- atualizar exports
+  5. exportacao/views.py                     <- trocar if/elif por Factory
+  6. gemini_api/prompt_builder.py            <- migrar para Builder ou wrappers
+
+ARQUIVOS POTENCIALMENTE MODIFICADOS (depende da opcao de migracao):
+  1. gemini_api/views.py                     <- usar Builder diretamente (Opcao B)
+
+TESTES NOVOS OU ATUALIZADOS (2):
+  1. exportacao/tests.py                     <- testes do Factory Method
+  2. gemini_api/tests.py                     <- testes do Builder
+
+
+===============================================================================
+ORDEM DE EXECUCAO RECOMENDADA
+===============================================================================
+
+FASE 1 - Factory Method (menor risco, mudanca isolada):
+  Passo 1: Criar exportacao/utils/base_exporter.py
+  Passo 2: Adicionar classes nos csv/excel/pdf_exporter.py
+  Passo 3: Criar exportacao/utils/exporter_factory.py
+  Passo 4: Atualizar exportacao/utils/__init__.py
+  Passo 5: Refatorar _despachar_formato() em exportacao/views.py
+  Passo 6: Criar e rodar testes em exportacao/tests.py
+  Passo 7: Testar manualmente exportando CSV, Excel e PDF
+
+FASE 2 - Builder (impacto maior, requer validacao):
+  Passo 8:  Criar gemini_api/prompt.py
+  Passo 9:  Criar gemini_api/prompt_builder_pattern.py
+  Passo 10: Criar gemini_api/prompt_director.py
+  Passo 11: Adicionar wrappers em gemini_api/prompt_builder.py (Opcao A)
+  Passo 12: Criar e rodar testes novos em gemini_api/tests.py
+  Passo 13: Comparar prompts gerados (antigo vs novo) para validar equivalencia
+  Passo 14: (Opcional) Migrar views para usar Builder diretamente (Opcao B)
+
+FASE 3 - Documentacao:
+  Passo 15: Atualizar EXPLICACAO_PROJETO_COMPLETA.md com os padroes adotados
+  Passo 16: Atualizar readme.md mencionando a arquitetura de padroes
+
+
+===============================================================================
+NOTAS IMPORTANTES
+===============================================================================
+
+1. NAO MEXER em:
+   - gemini_api/context_service.py (nao e afetado pelos padroes)
+   - gemini_api/cliente.py (Singleton NAO recomendado)
+   - gemini_api/serializers.py (nao e afetado)
+   - gemini_api/urls.py (nao e afetado)
+   - Nenhum model (models.py de qualquer app)
+   - Nenhum migration
+
+2. build_system_instruction() em prompt_builder.py deve ser MANTIDA como esta.
+   Ela nao faz parte do Builder. Ela define o papel/persona da IA, nao o
+   conteudo do prompt do usuario.
+
+3. Os exportadores atuais (funcoes) podem coexistir com as classes durante
+   a migracao. Remova as funcoes apenas depois de confirmar que nenhum
+   outro modulo as importa diretamente.
+
+4. O Abstract Factory NAO deve ser implementado agora. Fica documentado
+   no arquivo de analise V1 como evolucao futura.
+
+5. O Singleton NAO deve ser implementado. A justificativa esta no arquivo
+   de analise V1.

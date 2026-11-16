@@ -1,0 +1,577 @@
+PADROES DE PROJETO NO PROJETO NANASMART
+========================================
+
+Objetivo
+--------
+Este documento analisa onde os padroes Singleton, Builder, Factory Method e
+Abstract Factory poderiam ser usados neste projeto Django, por que seriam
+uteis e quais deles fazem sentido adotar.
+
+Importante: este arquivo e apenas uma proposta arquitetural. Nenhum codigo
+existente foi alterado.
+
+Resumo da recomendacao
+----------------------
+
+1. Builder: RECOMENDADO para a montagem dos prompts enviados a IA.
+   -> Aplica-se diretamente em: gemini_api/prompt_builder.py
+   -> Problema atual: funcoes build_chat_prompt(), build_os_analysis_prompt(),
+      build_unassigned_orders_prompt() e build_finance_prompt() repetem a
+      mesma logica de concatenacao de blocos com listas de strings.
+   -> Ganho principal: eliminar duplicacao de logica, facilitar novos tipos
+      de prompt e tornar a montagem testavel por partes.
+
+2. Factory Method: RECOMENDADO para escolher o exportador pelo formato.
+   -> Aplica-se diretamente em: exportacao/views.py (funcao _despachar_formato)
+      e nos exportadores em exportacao/utils/ (csv_exporter.py, excel_exporter.py,
+      pdf_exporter.py).
+   -> Problema atual: _despachar_formato() usa uma cadeia if/elif para decidir
+      entre exportar_csv(), exportar_excel() e exportar_pdf().
+   -> Ganho principal: ao adicionar novos formatos (ex: JSON, XML), basta
+      registrar um novo exportador sem modificar a cadeia de if/elif.
+
+3. Abstract Factory: OPCIONAL, caso o sistema passe a ter familias de
+   exportacao (por exemplo, relatorio simples, relatorio executivo e relatorio
+   tecnico em CSV/Excel/PDF).
+   -> So faz sentido se, no futuro, um mesmo conjunto de dados precisar ser
+      apresentado com layouts/regras diferentes dependendo do "perfil" do
+      relatorio (operacional vs executivo vs tecnico).
+   -> Atualmente NAO existe essa necessidade no codigo.
+
+4. Singleton: NAO RECOMENDADO como implementacao manual neste momento. O
+   Django ja possui gerenciamento de configuracoes, aplicativos e conexoes.
+   Se houver necessidade de reutilizar o cliente Gemini, pode-se usar um
+   cache controlado, mas isso nao precisa ser um Singleton classico.
+
+
+===============================================================================
+1. BUILDER - CONSTRUCAO DE PROMPTS DA IA
+===============================================================================
+
+O que e o padrao Builder
+------------------------
+Builder e um padrao de projeto criacional que separa a CONSTRUCAO de um objeto
+complexo da sua REPRESENTACAO final. Em vez de passar tudo no construtor ou
+concatenar tudo numa unica funcao, voce monta o produto passo a passo usando
+metodos encadeados (fluent interface).
+
+Participantes do padrao (teoria GoF):
+  - Builder (interface): define os metodos para construir cada parte do produto.
+  - ConcreteBuilder: implementa os metodos e acumula as partes.
+  - Director: coordena a ORDEM de chamada dos metodos do Builder.
+  - Product: o objeto complexo final.
+
+
+Onde usaria no projeto NanaSmart
+--------------------------------
+No pacote gemini_api, substituindo a montagem direta dos prompts em
+prompt_builder.py. Os metodos atuais fazem isto:
+
+  Arquivo: gemini_api/prompt_builder.py
+  Funcoes afetadas:
+    - build_chat_prompt()       (linhas 43-70)  -> monta contexto geral
+    - build_os_analysis_prompt() (linhas 73-92)  -> monta contexto de OS
+    - build_unassigned_orders_prompt() (linhas 95-109) -> monta contexto de ordens sem tecnico
+    - build_finance_prompt()    (linhas 112-130) -> monta contexto financeiro
+
+Cada funcao segue o mesmo PADRAO REPETITIVO:
+  1. Cria lista 'blocks = []'
+  2. Adiciona bloco de contextualizacao
+  3. Adiciona condicionalmente blocos de alertas, ordens, telemetria, KPIs
+  4. Adiciona instrucoes especificas
+  5. Adiciona a pergunta do usuario
+  6. Retorna "\n".join(blocks)
+
+Esse padrao de montagem e exatamente o problema que o Builder resolve.
+
+
+Por que o Builder e adequado aqui
+---------------------------------
+1. Um prompt possui muitas partes opcionais e varia conforme o objetivo e o
+   perfil do usuario. O Builder permitiria montar o prompt passo a passo, sem
+   espalhar concatenacoes de strings e regras condicionais por varias funcoes.
+
+2. Beneficios concretos para o codigo atual:
+   - deixa explicita a ordem dos blocos do prompt;
+   - permite incluir ou omitir alertas, telemetria, ordens e dados financeiros
+     de forma clara e legivel;
+   - facilita criar novos tipos de analise (ex: analise de telemetria, analise
+     de KPIs) sem duplicar a logica de montagem;
+   - permite testar cada combinacao de contexto separadamente (ex: testar
+     prompt so com alertas, so com ordens, com tudo);
+   - reduz o risco de enviar dados fora do escopo do usuario;
+   - centraliza a logica de truncamento (_truncate_lines) dentro do builder.
+
+3. Relacao com o codigo existente:
+   - A funcao _truncate_lines() ja e um helper compartilhado entre as funcoes
+     de prompt. No Builder, seria um metodo interno do ConcreteBuilder.
+   - A funcao build_system_instruction() NAO entraria no Builder. Ela monta
+     a instrucao do sistema (papel da IA), nao o prompt do usuario.
+   - O PromptDirector substituiria as 4 funcoes build_*_prompt(). Cada metodo
+     do Director definiria a receita (quais blocos usar e em que ordem).
+
+
+Sugestao de participantes
+-------------------------
+- PromptBuilder (ABC / interface): recebe as partes e oferece metodos como
+  com_contexto(), com_alertas(), com_ordens(), com_telemetria(),
+  com_financeiro(), com_instrucoes() e com_pergunta().
+- PromptBuilderConcreto: implementacao concreta que acumula strings em lista.
+- PromptDirector ou servico de aplicacao: define a sequencia adequada para
+  chat, analise de OS, ordens sem atribuicao e analise financeira.
+- Prompt: produto final, uma string pronta para generate_content().
+
+Exemplo conceitual de uso (nao implementado)
+---------------------------------------------
+# Em vez de chamar build_chat_prompt(user, context, message):
+builder = PromptBuilderConcreto()
+director = PromptDirector()
+prompt = director.montar_chat(builder, context, message)
+# prompt.obter_texto() retorna a string final
+
+# Internamente, director.montar_chat faz:
+#   builder.com_contexto(context)
+#          .com_alertas(context['alert_summary'])
+#          .com_ordens(context['open_order_summary'])
+#          .com_kpis(context['equipment_kpis'])
+#          .com_telemetria(context['telemetry'])
+#          .com_pergunta(message)
+#   return builder.build()
+
+
+Diagrama de classes
+-------------------
+
+Simbolos POO: + publico, - privado, # protegido, {static} membro estatico.
+Nas ligacoes: ^-- heranca, ..|> implementacao, --> associacao,
+..> dependencia e *-- composicao.
+
+  +----------------------------------+
+  | <<interface>>                    |
+  | PromptBuilder                    |
+  +----------------------------------+
+  | +com_contexto(context): Self     |
+  | +com_alertas(alertas): Self      |
+  | +com_ordens(ordens): Self        |
+  | +com_telemetria(dados): Self     |
+  | +com_financeiro(dados): Self     |
+  | +com_instrucoes(texto): Self     |
+  | +com_pergunta(texto): Self       |
+  | +com_kpis(dados): Self           |
+  | +build(): Prompt                 |
+  | +reset(): None                   |
+  +----------------------------------+
+                    ^ ..|>
+                    |
+  +----------------------------------+
+  | PromptBuilderConcreto            |
+  +----------------------------------+
+  | -_blocos: list[str]              |
+  | -_max_linhas: int                |
+  +----------------------------------+
+  | +com_contexto(context): Self     |
+  | +com_alertas(alertas): Self      |
+  | +com_ordens(ordens): Self        |
+  | +com_telemetria(dados): Self     |
+  | +com_financeiro(dados): Self     |
+  | +com_instrucoes(texto): Self     |
+  | +com_pergunta(texto): Self       |
+  | +com_kpis(dados): Self           |
+  | +build(): Prompt                 |
+  | +reset(): None                   |
+  | -_truncar(linhas, max): list     |
+  +----------------------------------+
+                    |
+                    | ..> cria
+                    v
+  +----------------------------------+
+  | Prompt                           |
+  +----------------------------------+
+  | -_texto: str                     |
+  +----------------------------------+
+  | +obter_texto(): str              |
+  | +__str__(): str                  |
+  +----------------------------------+
+
+  +----------------------------------+
+  | PromptDirector                   |
+  +----------------------------------+
+  | +montar_chat(builder, contexto,  |
+  |  pergunta): Prompt               |
+  | +montar_analise_os(builder,      |
+  |  contexto, pergunta): Prompt     |
+  | +montar_ordens_sem_atribuicao(   |
+  |  builder, contexto, pergunta):   |
+  |  Prompt                          |
+  | +montar_financeiro(builder,      |
+  |  contexto, pergunta): Prompt     |
+  +----------------------------------+
+                 |
+                 | ..> coordena
+                 v
+          PromptBuilder
+
+O Builder e indicado aqui porque o problema principal e construir um objeto
+complexo por etapas. O produto nao e uma entidade do banco; e o texto final
+enviado para a IA. Cada metodo do Director corresponde a uma das 4 funcoes
+build_*_prompt() atuais.
+
+
+===============================================================================
+2. FACTORY METHOD - EXPORTACAO POR FORMATO
+===============================================================================
+
+O que e o padrao Factory Method
+-------------------------------
+Factory Method e um padrao criacional que define uma interface para criar
+objetos, mas permite que subclasses decidam qual classe concreta instanciar.
+Em outras palavras: o codigo cliente pede "me de um exportador" e a fabrica
+decide qual tipo entregar, sem o cliente precisar saber dos detalhes.
+
+Participantes do padrao (teoria GoF):
+  - Product (interface): define o contrato do objeto criado.
+  - ConcreteProduct: implementacoes especificas (CSV, Excel, PDF).
+  - Creator (abstract): declara o factory method.
+  - ConcreteCreator: sobrescreve o factory method para retornar um produto.
+
+Nota: em Python, uma variacao muito comum (e mais pratica) e usar um
+DICIONARIO REGISTRADOR em vez de subclasses de Creator. Essa variacao mantem
+o espirito do Factory Method (desacoplar a criacao) sem criar uma hierarquia
+desnecessaria de classes Creator.
+
+
+Onde usaria no projeto NanaSmart
+--------------------------------
+No app exportacao. Atualmente:
+
+  Arquivo: exportacao/views.py (linhas 46-58)
+  Funcao: _despachar_formato(formato, nome, titulo, colunas, linhas)
+  Logica atual:
+    if formato == 'csv':    -> exportar_csv(...)
+    elif formato == 'excel': -> exportar_excel(...)
+    elif formato == 'pdf':   -> exportar_pdf(...)
+    else: -> erro 400
+
+  Exportadores atuais (funcoes soltas):
+    exportacao/utils/csv_exporter.py   -> exportar_csv(nome_arquivo, colunas, linhas)
+    exportacao/utils/excel_exporter.py -> exportar_excel(nome_arquivo, colunas, linhas, titulo_planilha)
+    exportacao/utils/pdf_exporter.py   -> exportar_pdf(nome_arquivo, titulo_relatorio, colunas, linhas)
+
+Problema: os exportadores atuais sao FUNCOES independentes com ASSINATURAS
+DIFERENTES. exportar_csv recebe (nome, colunas, linhas), exportar_excel
+recebe (nome, colunas, linhas, titulo_planilha), exportar_pdf recebe
+(nome, titulo, colunas, linhas). Isso obriga _despachar_formato a saber os
+detalhes de cada exportador.
+
+
+Por que o Factory Method e adequado aqui
+-----------------------------------------
+1. A view nao deveria conhecer todos os detalhes de criacao de respostas CSV,
+   Excel e PDF. O Factory Method centralizaria a escolha do produto correto a
+   partir do formato solicitado.
+
+2. Uma nova exportacao, como JSON, seria adicionada criando um novo produto e
+   registrando sua fabrica, sem aumentar uma cadeia grande de if/elif na view.
+
+3. Com o padrao, os exportadores passam a ter a MESMA INTERFACE, o que torna
+   o codigo mais previsivel e testavel.
+
+4. Relacao com o codigo existente:
+   - Cada classe de view (ExportarOrdensServicoView, ExportarEquipamentosView,
+     etc.) chama _despachar_formato() na ultima linha do get().
+   - Com Factory Method, _despachar_formato() seria substituida por:
+     exportador = ExportadorFactory.criar(formato)
+     return exportador.exportar(nome, titulo, colunas, linhas)
+
+
+Sugestao de participantes
+-------------------------
+- Exportador (ABC): contrato comum com exportar(nome, titulo, colunas, linhas)
+  retornando HttpResponse.
+- ExportadorCSV, ExportadorExcel e ExportadorPDF: implementacoes concretas.
+  Cada uma encapsula a logica atualmente nas funcoes exportar_csv(),
+  exportar_excel() e exportar_pdf().
+- ExportadorFactory: classe com metodo estatico criar_exportador(formato) que
+  retorna a instancia correta. Internamente usa dicionario de registro.
+- As Views: pedem um exportador e chamam exportar(), sem conhecer a implementacao.
+
+
+Diagrama de classes
+-------------------
+
+  +------------------------------------------+
+  | <<abstract>>                             |
+  | Exportador                               |
+  +------------------------------------------+
+  | +exportar(nome, titulo,                  |
+  |  colunas, linhas): HttpResponse          |
+  +------------------------------------------+
+                    ^
+                    | ..|> implementa
+        +-----------+-----------+-----------+
+        |                       |           |
+  +-------------+       +-------------+ +-------------+
+  | Exportador  |       | Exportador  | | Exportador  |
+  | CSV         |       | Excel       | | PDF         |
+  +-------------+       +-------------+ +-------------+
+  | +exportar() |       | +exportar() | | +exportar() |
+  +-------------+       +-------------+ +-------------+
+
+  +------------------------------------------+
+  | ExportadorFactory                        |
+  +------------------------------------------+
+  | -{static} _registro: dict[str, type]     |
+  +------------------------------------------+
+  | +{static} criar(formato): Exportador     |
+  | +{static} registrar(formato, cls): None  |
+  +------------------------------------------+
+            | ..> cria
+            v
+       Exportador (concreto)
+
+Variacao com dicionario registrador (recomendada para Python):
+  Em vez de criar subclasses CriadorCSV, CriadorExcel, CriadorPDF (como no GoF
+  classico), usa-se um dicionario:
+
+  _EXPORTADORES = {
+      'csv': ExportadorCSV,
+      'excel': ExportadorExcel,
+      'pdf': ExportadorPDF,
+  }
+
+  def criar(formato):
+      cls = _EXPORTADORES.get(formato)
+      if cls is None:
+          raise ValueError(f'Formato desconhecido: {formato}')
+      return cls()
+
+Essa variacao e mais Pythonica e evita a criacao de classes Creator
+desnecessarias. O espirito do Factory Method (desacoplar a decisao de criacao
+do uso) se mantem intacto.
+
+
+===============================================================================
+3. ABSTRACT FACTORY - FAMILIAS DE RELATORIOS
+===============================================================================
+
+O que e o padrao Abstract Factory
+---------------------------------
+Abstract Factory e um padrao criacional que fornece uma interface para criar
+FAMILIAS de objetos relacionados sem especificar suas classes concretas.
+A diferenca chave para o Factory Method: Factory Method cria UM produto,
+Abstract Factory cria VARIOS produtos que pertencem a mesma familia.
+
+
+Onde usaria no projeto NanaSmart
+--------------------------------
+No mesmo app exportacao, mas SOMENTE se o projeto precisar de familias de
+relatorios com componentes relacionados. Por exemplo:
+
+- familia Operacional: tabela simples e cabecalho operacional;
+- familia Executiva: tabela resumida, indicadores e grafico;
+- familia Tecnica: tabela detalhada, alertas e observacoes tecnicas.
+
+Cada familia poderia oferecer a versao CSV, Excel e PDF dos mesmos dados e
+com a mesma identidade visual/regras de apresentacao.
+
+Por que usaria
+--------------
+O Abstract Factory garante que os componentes de uma mesma familia sejam
+criados juntos e sejam compativeis. Assim, ao selecionar o tipo de relatorio,
+a aplicacao nao mistura acidentalmente o cabecalho executivo com o layout
+tecnico ou com regras de apresentacao de outra familia.
+
+IMPORTANTE: Este padrao NAO e necessario no estado atual do projeto.
+A exportacao atual e uniforme (mesma tabela, mesmos estilos). So faz sentido
+adotar Abstract Factory quando existirem 2+ familias com estilos e regras
+de apresentacao distintos.
+
+
+Exemplo de familias (hipotetico)
+--------------------------------
+- FabricaRelatorioOperacional cria ExportadorCSVOperacional,
+  ExportadorExcelOperacional e ExportadorPDFOperacional.
+- FabricaRelatorioExecutivo cria ExportadorCSVExecutivo,
+  ExportadorExcelExecutivo e ExportadorPDFExecutivo.
+
+
+Diagrama de classes
+-------------------
+
+  +----------------------------------+
+  | <<interface>>                    |
+  | FabricaRelatorio                 |
+  +----------------------------------+
+  | +criar_csv(): ExportadorCSV      |
+  | +criar_excel(): ExportadorExcel  |
+  | +criar_pdf(): ExportadorPDF      |
+  +----------------------------------+
+       ^ ..|> implementa       ^ ..|> implementa
+       |                       |
+  +----------------------+  +----------------------+
+  | FabricaRelatorio     |  | FabricaRelatorio     |
+  | Operacional           |  | Executivo            |
+  +----------------------+  +----------------------+
+  | +criar_csv()         |  | +criar_csv()         |
+  | +criar_excel()       |  | +criar_excel()       |
+  | +criar_pdf()         |  | +criar_pdf()         |
+  +----------------------+  +----------------------+
+       | ..> cria              | ..> cria
+       +-----------+-----------+-----------+
+                   |
+                   v
+  +------------------+  +------------------+  +------------------+
+  | <<interface>>    |  | <<interface>>    |  | <<interface>>    |
+  | ExportadorCSV    |  | ExportadorExcel  |  | ExportadorPDF    |
+  +------------------+  +------------------+  +------------------+
+  | +exportar(dados) |  | +exportar(dados) |  | +exportar(dados) |
+  +------------------+  +------------------+  +------------------+
+       ^ ..|>               ^ ..|>               ^ ..|>
+       |                    |                    |
+  +------------------+  +------------------+  +------------------+
+  | CSVOperacional   |  | ExcelOperacional |  | PDFOperacional   |
+  +------------------+  +------------------+  +------------------+
+
+  +------------------+  +------------------+  +------------------+
+  | CSVExecutivo     |  | ExcelExecutivo   |  | PDFExecutivo     |
+  +------------------+  +------------------+  +------------------+
+       ..|>                 ..|>                 ..|>
+       (implementam as respectivas interfaces de formato)
+
+
+Relacao com Factory Method
+--------------------------
+Factory Method resolve uma escolha de UM produto, como CSV ou PDF.
+Abstract Factory resolve a escolha de uma FAMILIA inteira de produtos
+relacionados. Por isso, Abstract Factory nao deve ser usado apenas para
+renomear o atual if/elif: nesse caso o Factory Method e suficiente.
+
+Quando ativar este padrao:
+  - Quando o cliente pedir "quero relatorio executivo em PDF" e "quero
+    relatorio operacional em PDF", e cada um ter layout/regras diferentes.
+  - Quando houver risco de misturar componentes de familias diferentes.
+  - NAO ativar so porque parece bonito na documentacao.
+
+
+===============================================================================
+4. SINGLETON - CONFIGURACAO OU CLIENTE EXTERNO
+===============================================================================
+
+O que e o padrao Singleton
+--------------------------
+Singleton e um padrao criacional que garante que uma classe tenha APENAS UMA
+instancia durante toda a vida da aplicacao, e fornece um ponto de acesso
+global a essa instancia.
+
+
+Possivel local no projeto NanaSmart
+------------------------------------
+O candidato mais proximo seria gemini_api/cliente.py, na criacao do cliente
+Google Gemini feita por get_gemini_client() (linhas 9-17). Outra possibilidade
+seria um objeto de configuracao de exportacao compartilhado.
+
+Como funciona atualmente:
+  - get_gemini_client() le GEMINI_API_KEY do ambiente e cria um novo
+    genai.Client() a cada chamada.
+  - generate_content() (linhas 24-83) chama get_gemini_client() toda vez
+    que precisa fazer uma requisicao.
+  - is_gemini_available() (linhas 20-21) tambem chama get_gemini_client().
+
+
+Por que pode parecer interessante
+---------------------------------
+Criar um cliente externo uma unica vez pode reduzir inicializacoes repetidas
+e manter uma configuracao comum de API. O acesso poderia ser feito por um
+servico compartilhado por generate_content() e pelas demais funcoes de IA.
+
+
+Por que NAO recomendo implementar agora
+---------------------------------------
+1. O Django ja controla settings e o ciclo de vida da aplicacao. Variaveis
+   globais sao gerenciadas pelo proprio framework.
+2. Clientes globais podem manter estado entre requisicoes, causando bugs
+   dificeis de rastrear.
+3. Testes ficam mais dificeis, pois um teste pode contaminar outro ao alterar
+   o estado do Singleton.
+4. A chave GEMINI_API_KEY e lida do ambiente e pode mudar entre execucoes
+   (ex: rotacao de chaves). Um Singleton nao refletiria essa mudanca.
+5. Em processos com multiplos workers (gunicorn, uvicorn), cada processo tera
+   seu proprio Singleton, portanto ele nao sera realmente unico no sistema.
+6. A funcao atual retorna None quando a chave nao esta disponivel, o que e uma
+   politica simples e explicita. Um Singleton teria que lidar com esses casos.
+
+Resumo: o Singleton resolveria um problema que NAO EXISTE neste projeto.
+Criar o genai.Client() e barato, a chave pode mudar, e o Django ja gerencia
+o ciclo de vida. Forcar um Singleton aqui aumentaria acoplamento e dificultaria
+testes sem nenhum beneficio real.
+
+
+Alternativa mais adequada (caso a criacao do cliente se torne cara)
+-------------------------------------------------------------------
+Usar um cache por processo com invalidacao clara e injecao de dependencia
+nos servicos. Isso entrega reutilizacao sem impor um Singleton rigido.
+O cache deve ser coberto por testes para os casos de chave ausente, chave
+alterada e erro de inicializacao.
+
+
+Diagrama conceitual, caso seja realmente necessario
+---------------------------------------------------
+
+  +----------------------------------+
+  | <<Singleton>>                    |
+  | GeminiClientProvider             |
+  +----------------------------------+
+  | -{static} _instance:             |
+  |  GeminiClientProvider            |
+  | -_client: GeminiClient           |
+  +----------------------------------+
+  | -GeminiClientProvider()          |
+  | +{static} get_instance():       |
+  |  GeminiClientProvider            |
+  | +get_client(): GeminiClient     |
+  +----------------------------------+
+                    *-- composicao
+                    |
+                    v
+  +----------------------------------+
+  | GeminiClient                     |
+  +----------------------------------+
+  | +generate_content(...): Response |
+  +----------------------------------+
+
+Simbolos POO usados neste diagrama:
+- - atributo ou operacao privada;
+- + operacao publica;
+- {static} membro da classe, compartilhado pela classe;
+- *-- composicao: o provider controla a instancia do cliente;
+- <<Singleton>> estereotipo que identifica o padrao.
+
+Esse diagrama representa uma alternativa futura, nao uma mudanca recomendada
+para a versao atual.
+
+
+===============================================================================
+CONCLUSAO
+===============================================================================
+
+Para a entrega atual, eu usaria dois padroes:
+
+- Builder em gemini_api/prompt_builder.py, porque os prompts sao montados por
+  varios blocos opcionais e possuem diferentes objetivos. As 4 funcoes
+  build_*_prompt() seguem a mesma estrutura repetitiva que o Builder elimina.
+
+- Factory Method em exportacao/views.py e exportacao/utils/, porque a escolha
+  CSV/Excel/PDF ja e uma fabrica natural escondida em _despachar_formato(), e
+  os exportadores atuais tem assinaturas inconsistentes que o padrao unifica.
+
+Eu deixaria Abstract Factory documentado como evolucao futura, ativando-o
+apenas quando existirem familias de relatorios relacionados com estilos
+diferentes. Tambem nao forcaria Singleton: padroes devem reduzir acoplamento
+e complexidade, e neste caso um Singleton manual provavelmente aumentaria ambos.
+
+Prioridade sugerida:
+1. Factory Method para exportadores (mais direto, menos risco).
+2. Builder para prompts (maior impacto na manutencao do codigo).
+3. Abstract Factory quando surgirem familias de relatorios.
+4. Singleton somente mediante uma necessidade comprovada de ciclo de vida e
+   cache, com testes de isolamento.

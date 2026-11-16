@@ -9,6 +9,9 @@ from .pdf_exporter import ExportadorPDF
 class CriadorExportador(ABC):
     """Creator do Factory Method para uma família de exportadores."""
 
+    def __init__(self, metadados=None):
+        self._metadados = metadados
+
     @abstractmethod
     def criar_exportador(self) -> Exportador:
         """Cria o exportador escolhido pelo criador concreto."""
@@ -17,14 +20,14 @@ class CriadorExportador(ABC):
 
 class CriadorExportadorCSV(CriadorExportador):
     def criar_exportador(self) -> ExportadorCSV:
-        return ExportadorCSV()
+        return ExportadorCSV(metadados=self._metadados)
 
 
 class CriadorExportadorExcel(CriadorExportador):
     def criar_exportador(self) -> ExportadorExcel:
-        return ExportadorExcel()
+        return ExportadorExcel(metadados=self._metadados)
 
 
 class CriadorExportadorPDF(CriadorExportador):
     def criar_exportador(self) -> ExportadorPDF:
-        return ExportadorPDF()
+        return ExportadorPDF(metadados=self._metadados)

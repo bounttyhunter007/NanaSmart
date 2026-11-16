@@ -4,6 +4,7 @@ import math
 
 from django.utils import timezone
 from .models import Sensor, Telemetria, TrendConfig
+from .iterators import IteradorLeituras
 
 
 CONFIG_FIELDS = (
@@ -42,7 +43,7 @@ def _select_sample(rows, maximum, minimum_minutes):
     count = rises = falls = 0
     mean_x = mean_y = sxx = syy = sxy = 0.0
     duration_seconds = minimum_minutes * 60
-    for row in rows.iterator(chunk_size=500):
+    for row in IteradorLeituras(rows):
         stamp, value = row['timestamp'], row['valor']
         if value is None or not math.isfinite(value) or stamp == previous_stamp:
             continue

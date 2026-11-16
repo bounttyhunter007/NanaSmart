@@ -1,0 +1,2 @@
+# Historical snapshots keep their original bytes so the recorded SHA-256 stays valid.
+DOCS/old/** -text

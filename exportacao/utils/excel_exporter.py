@@ -7,8 +7,12 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from .base_exporter import Exportador
+from .download_metadata import MetadadosExcel
 
 class ExportadorExcel(Exportador):
+    def __init__(self, metadados=None):
+        self._metadados = metadados if metadados is not None else MetadadosExcel()
+
     def exportar(self, nome: str, titulo: str, colunas: list, linhas: list) -> HttpResponse:
         """
         Gera um HttpResponse com conteúdo Excel (.xlsx) pronto para download.
@@ -67,9 +71,4 @@ class ExportadorExcel(Exportador):
         wb.save(buffer)
         buffer.seek(0)
 
-        response = HttpResponse(
-            buffer.getvalue(),
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{nome}.xlsx"'
-        return response
+        return self._metadados.aplicar(HttpResponse(buffer.getvalue()), nome)

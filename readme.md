@@ -17,6 +17,10 @@ A tela **Tendências** apresenta uma barra permanente de equipamento/sensor e fi
 
 A área **Telemetria** possui abas **Leituras** e **Sensores**. **Tendências** tem uma página própria no menu lateral, com seletores pesquisáveis de equipamento e sensor, filtros e configuração de análise independentes de Telemetria. O administrador também pode editar a configuração global. A página inclui um gráfico para o sensor selecionado e uma demonstração guiada de aproximadamente um minuto, exclusiva de admin. Consulte o [roteiro de demonstração de tendências](DOCS/DEMONSTRACAO_TENDENCIAS.md). Decisões de UX, compatibilidade da API e validações: [Telemetria e tendências no frontend](DOCS/TELEMETRIA_UX.md).
 
+## Documentação
+
+O [índice da documentação vigente](DOCS/README.md) reúne padrões, API, banco, regras e roteiros. A referência de padrões é a [verificação dos padrões GoF](DOCS/docs_padroes_projeto/Verificacao_Padroes_GoF_Verdes.md). Versões anteriores estão separadas em [DOCS/old](DOCS/old/README.md). Os 12 padrões analisados agora têm aplicações no backend; o guia indica classes, chamadas e testes das implementações próprias.
+
 ## Requisitos
 
 - Python compatível com Django 5.2: 3.10 a 3.14; para novas instalações, prefira 3.13. Python 3.15 não é suportado por esta versão do Django.
@@ -147,14 +151,14 @@ python scripts/stress_telemetry.py --help
 Para validar o projeto sem acessar o PostgreSQL de desenvolvimento, use o banco descartável configurado para testes:
 
 ```powershell
-python manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests --settings=app.test_settings --noinput
+python manage.py test accounts authentication ativos telemetria alertas manutencao exportacao gemini_api.tests gemini_api.test_order_analysis gemini_api.test_prompt_components app.test_schema --settings=app.test_settings --noinput
 python manage.py check --settings=app.test_settings
 python manage.py makemigrations --check --dry-run --settings=app.test_settings
 node --check FrontATT/app.js
 node --test FrontATT/telemetria.test.cjs
 ```
 
-As migrações do banco são versionadas. Antes de atualizar uma base já existente, consulte o procedimento de compatibilidade na [especificação de alertas e O.S.](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md#atualização-do-banco-e-compatibilidade). A descoberta padrão de testes pode omitir `gemini_api.tests`; o comando acima o inclui explicitamente.
+As migrações do banco são versionadas. Antes de atualizar uma base já existente, consulte o procedimento de compatibilidade na [especificação de alertas e O.S.](DOCS/HISTORICO_ALERTAS.md#atualização-do-banco-e-compatibilidade). A descoberta padrão de testes pode omitir `gemini_api.tests`; o comando acima o inclui explicitamente.
 
 ```powershell
 python manage.py check
@@ -196,7 +200,7 @@ Alertas são um histórico automático de ocorrências, sem cadastro, edição, 
 
 Alertas por limite são separados por sensor, preservam o maior nível do episódio e registram a normalização após duas novas leituras normais consecutivas, sem encerrar a O.S. Recorrências podem reutilizar uma ordem ainda aberta do mesmo sensor. Tendências preservam sua janela inicial de análise e maior gravidade. Uma ordem concluída ou cancelada não é recriada durante a mesma ocorrência.
 
-Funcionamento, filtros, compatibilidade e migração estão em [Histórico de alertas](DOCS/HISTORICO_ALERTAS.md). O [diagnóstico anterior](DOCS/FLUXO_ALERTAS_ORDENS_SERVICO.md) permanece como referência histórica.
+Funcionamento, filtros, compatibilidade e migração estão em [Histórico de alertas](DOCS/HISTORICO_ALERTAS.md). O [diagnóstico anterior](DOCS/old/FLUXO_ALERTAS_ORDENS_SERVICO.md) permanece como referência histórica.
 
 Os detalhes de parâmetros e respostas estão documentados no Swagger e nos serializers da API.
 

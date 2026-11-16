@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from .prompt import Prompt
+from .prompt_components import GrupoPrompt, TrechoPrompt
 
 class PromptBuilder(ABC):
     @abstractmethod
@@ -54,15 +55,21 @@ class PromptBuilderConcreto(PromptBuilder):
 
     def com_contexto(self, context_str: str) -> 'PromptBuilder':
         if context_str:
-            self._blocos.append(context_str)
+            self._blocos.append(TrechoPrompt(context_str))
         return self
+
+    def _adicionar_secao(self, titulo, linhas):
+        self._blocos.append(GrupoPrompt((
+            TrechoPrompt(f"\n{titulo}:"),
+            GrupoPrompt(tuple(TrechoPrompt(linha) for linha in linhas)),
+        )))
 
     def com_alertas(self, alertas: list) -> 'PromptBuilder':
         if alertas:
             linhas = [f"- {linha}" if not linha.startswith("-") else linha for linha in alertas]
             truncadas = self._truncar(linhas, self._max_linhas)
             if truncadas:
-                self._blocos.append("\nALERTAS RELEVANTES:\n" + "\n".join(truncadas))
+                self._adicionar_secao('ALERTAS RELEVANTES', truncadas)
         return self
 
     def com_ordens(self, ordens: list, titulo: str) -> 'PromptBuilder':
@@ -70,31 +77,31 @@ class PromptBuilderConcreto(PromptBuilder):
             linhas = [f"- {linha}" if not linha.startswith("-") else linha for linha in ordens]
             truncadas = self._truncar(linhas, self._max_linhas)
             if truncadas:
-                self._blocos.append(f"\n{titulo}:\n" + "\n".join(truncadas))
+                self._adicionar_secao(titulo, truncadas)
         return self
 
     def com_telemetria(self, dados: list) -> 'PromptBuilder':
         if dados:
             truncadas = self._truncar(dados, self._max_linhas)
             if truncadas:
-                self._blocos.append("\nTELEMETRIA RECENTE:\n" + "\n".join(truncadas))
+                self._adicionar_secao('TELEMETRIA RECENTE', truncadas)
         return self
 
     def com_financeiro(self, blocos_financeiros: list) -> 'PromptBuilder':
         if blocos_financeiros:
-            self._blocos.append("\n".join(blocos_financeiros))
+            self._blocos.append(GrupoPrompt(tuple(TrechoPrompt(bloco) for bloco in blocos_financeiros)))
         return self
 
     def com_instrucoes(self, texto: str) -> 'PromptBuilder':
         if texto:
-            self._blocos.append(f"\n{texto}")
+            self._blocos.append(TrechoPrompt(f"\n{texto}"))
         return self
 
     def com_pergunta(self, texto: str) -> 'PromptBuilder':
         if texto:
-            self._blocos.append(f"\nPERGUNTA DO USUÁRIO:\n{texto}")
+            self._adicionar_secao('PERGUNTA DO USUÁRIO', [texto])
         return self
 
     def build(self) -> Prompt:
-        resultado = "\n".join(self._blocos)
+        resultado = GrupoPrompt(tuple(self._blocos)).renderizar()
         return Prompt(resultado)

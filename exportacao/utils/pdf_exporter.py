@@ -16,10 +16,12 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from .base_exporter import Exportador
+from .download_metadata import MetadadosPDF
 
 class ExportadorPDF(Exportador):
-    def __init__(self, orientacao='landscape'):
+    def __init__(self, orientacao='landscape', metadados=None):
         self._orientacao = orientacao
+        self._metadados = metadados if metadados is not None else MetadadosPDF()
 
     def exportar(self, nome: str, titulo: str, colunas: list, linhas: list) -> HttpResponse:
         """
@@ -133,6 +135,4 @@ class ExportadorPDF(Exportador):
         doc.build(elements)
         buffer.seek(0)
 
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{nome}.pdf"'
-        return response
+        return self._metadados.aplicar(HttpResponse(buffer.getvalue()), nome)

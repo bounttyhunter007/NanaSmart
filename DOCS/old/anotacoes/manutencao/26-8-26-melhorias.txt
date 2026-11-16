@@ -1,0 +1,58 @@
+****Tela Dashboard**** (Tela Tecnico)
+
+Retirar a exportação PDF, excel, pois nao faz muito sentido o jeito que esta sendo exportado e as info, OU melhorar a exportação, vindo um resumo melhor, (talvez com graficos? nao sei se fica bom) e faz mais sentido gestor e admin exportar isso (E tratar no admin, se é todas empresas, por empresa, etc)
+
+Card Ordens Abertas
+Quando esta logado como tecnico, mostra ali, mas nao faz sentido, pois ele nao enxerga as o.s de outros da mesma empresa, deixar esse card para admin e gestores, como tecnico, colocar algum outro card util ali?
+
+Card Minhas Ordens
+Ao clicar nele, ir para area de "Minhas Ordens", nao tem uma area especifica, a tela de O.S mostra todas , atribuidas e nao atribuidas
+
+Card Sem Tecnicos
+Mudar nome para O.S aguardando Tecnicos
+
+Card Equipamentos de minha area
+Mostrar o total de equipamentos da empresa (Ja que minha Area nao faz sentido, ainda nao temos tecnicos separados por setor e sim por empresa), mesmo tendo ja embutido setores (futuramente colocar tecnico por empresa E por setores, de forma de checklist? e apenas gestor e admin podem fazer essas atribuição)
+
+Card Status Equipamentos
+Como sei qual equipamento esta parado e em manutenção? a abertura da O.S nao diz explicitamente se o equipamento esta parado, em manutenção, rodando, ao atribuir uma o.s nao nescessariamente "para" o equipamento, pois o tecnico pode ter varias o.s no dia, e cada parada é diferente, talvez mudar isso, pois para adicionar paradas, temos que revisar a logica toda, mas faz sentido ter (Fazer o peso para inserir isso?)
+
+Card Alertas Por Nivel
+Sao O.s abertas? Paradas? Ambas? nao esta explicito e faz mais sentidos nao pegar o.s ja finalizadas
+
+Card Ordens de serviço
+Mostrar apenas do tecnico atual, e de qual tempo esta usando, por exemplo em concluidas? do dia? semana? mes? tudo? Colocar um filtro para isso de forma responsiva?
+
+Grafico Telemetria
+aumentar e deixar mais visivel qual equipamento esta mostrando e qual sensor, melhorar a barra de escolha e deixar isso como titulos  e subtitulos tbm no grafico? e deixar maior e pegando a "Outra metadde" ja que usa metade vertical da tela esse card, expandir wide ele, para melhorar a visualização nele
+
+Alertas Ativas (abaixo de telemetria) e Ordens Recentes
+Melhorar isso ou tirar, tem muita coisa na tela, se for melhorar, deixar mais explicito e melhor escrito na tela, senao remover
+
+***Tela Equipamentos****
+
+Melhorar a forma de visualizar, achei lista uma forma muito poluida de ver, mais uma vez, o status em manutenção (parado), onde muda isso?
+
+
+****Tela Alertas*****
+Melhorar esta tela, esta muito poluido, ao clicar no alerta nao abre nada, nao faz nada, o alerta gerou o.s? se sim, ao encerrar a o.s, colocar uam coluna como numero e nome da os para cada alerta? e ao clicar, levar para para a o.s, ordenar melhor os alertas, por criticidade e equipamentos.
+
+**** Ordens de serviço ****
+é a principal tela (principalmente para tecnico), melhorar como cards as o.s e classificar com data, da mais antiga para mais nova e atribuida e depois naos atribuidas?
+
+melhorar a forma de como encerrar a o.S, ao abrir a o.s, ele mostra o grafico de ultimas leituras do sensor selecionado, porem qual a "distancia" que ele pega, 1 semana?, 1 mes? 1 dia? tudo? colocar mais uma escolha aqui e deixar padrao talvez, ultima hora? ou ultimo minuto (pois tem que ver a qtd de leituras que cada sensor faz, sem vez de dias, ultimas 20 leituras?)
+
+AO encerrar a O.S , melhorar o modal, ta muito ruim. Uma area da descrição do serviço realizado pelo manutentor (vem em branco e é obrigatorio preencher, ) e a area de descrição que ja tem o hitorico, tbm, mas separado (sem puder escrever ali, ali é o historico que gerou a O.S que ja tem, e se possivel historicos antigos mas com o numero e os na frente do header de cada um)
+
+Tipo de O.S que escolher ao fechar a o.s, tem que ser escolhido ao atribuir a o.s, SE FOR por alertas corretivas, se for gerada por tempo 
+(Preventiva) e Preditiva parecido com a preventiva, mas a o.s gerada, dará a lista de equipamentos para analise ao gerar a o.s (ou o que for melhor aqui neste caso, isso é uma regra de negocio que tem que ser mudado)
+
+Custos de Peças ao encerrar pode deixar, ainda nao temos integração com almoxarifado.
+
+
+*-**Tela telemetria****
+Melhorar a forma como enxergamos , ta muito poluida (ideias?)
+
+
+****Localizações*****
+Melhoar a visualização , por setores, depois por ordem alfabetica dos equipamentos, ao selecionar o equipamento, abrir a tela de historicos dele (igual ao selecionar equiapmento na tela equipamentos)

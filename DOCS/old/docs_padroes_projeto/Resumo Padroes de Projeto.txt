@@ -1,0 +1,173 @@
+===============================================================================
+RESUMO SIMPLIFICADO: PADROES DE PROJETO - NANASMART
+===============================================================================
+Este documento explica de forma direta, visual e estruturada quais padroes de 
+projeto serao adotados e quais nao serao (e por que), alem de detalhar o estado 
+atual do codigo, o diagrama de classes e o passo a passo simplificado do que 
+precisa ser feito.
+
+Pasta com documentos completos detalhados: docs_padroes_projeto/
+
+-------------------------------------------------------------------------------
+VISAO GERAL DAS DECISOES ARQUITETURAIS
+-------------------------------------------------------------------------------
+
+1. BUILDER
+   - Decisao: SERA USADO (Recomendado).
+   - Por que? A montagem de prompts da IA possui muitas partes opcionais e 
+     condicionais (alertas, telemetria, KPIs, etc.). O Builder separa a 
+     construcao por etapas e evita repeticao de logica de concatenacao.
+
+2. FACTORY METHOD
+   - Decisao: SERA USADO (Recomendado).
+   - Por que? A escolha do formato de exportacao (CSV, Excel ou PDF) e hoje um 
+     bloco fixo de "if/elifs". Centralizar isso em uma fabrica desacopla a 
+     view e unifica as assinaturas sob uma mesma interface (`Exportador`).
+
+3. ABSTRACT FACTORY
+   - Decisao: NAO SERA USADO (Opcional/Sem necessidade no momento).
+   - Por que? Este padrao serve para criar familias de produtos relacionados 
+     (ex: relatorio executivo em CSV/Excel/PDF vs relatorio tecnico em CSV/Excel/PDF).
+     Como o projeto exporta apenas tabelas e layouts uniformes sem familias 
+     diferentes de relatorios, o Factory Method ja e suficiente.
+
+4. SINGLETON
+   - Decisao: NAO SERA USADO (Nao recomendado).
+   - Por que? O Django ja gerencia configuracoes e conexoes do ciclo de vida 
+     da aplicacao. Forcar um Singleton para o cliente Gemini dificulta testes unitarios 
+     (contamina testes seguintes), ignora a possibilidade de a chave de API 
+     mudar em tempo de execucao, e nao garante unicidade real em servidores 
+     com multiplos processos (workers).
+
+-------------------------------------------------------------------------------
+1. FACTORY METHOD (Para a Exportacao de Relatorios)
+-------------------------------------------------------------------------------
+
+COMO ESTA HOJE:
+- Arquivo `exportacao/views.py`: A funcao `_despachar_formato` usa uma cadeia
+  de `if/elif` fixa para checar a string do formato (`csv`, `excel`, `pdf`) e 
+  chamar funcoes importadas.
+- Assinaturas Inconsistentes:
+  - `exportar_csv(nome_arquivo, colunas, linhas)` (nao aceita titulo)
+  - `exportar_excel(nome_arquivo, colunas, linhas, titulo_planilha='Dados')`
+  - `exportar_pdf(nome_arquivo, titulo_relatorio, colunas, linhas)`
+  A view precisa saber exatamente como chamar cada funcao de forma diferente.
+
+DIAGRAMA DO QUE QUEREMOS:
+
+  +--------------------------------------------------------------+
+  |                      ExportadorFactory                       |
+  +--------------------------------------------------------------+
+  | - _registro: dict[str, type]                                 |
+  +--------------------------------------------------------------+
+  | + criar(formato: str): Exportador                            |
+  | + registrar(formato: str, exportador_cls: type): None        |
+  +--------------------------------------------------------------+
+                                 |
+                                 | ..> Cria instâncias de
+                                 v
+  +--------------------------------------------------------------+
+  |                       << Interface >>                        |
+  |                          Exportador                          |
+  +--------------------------------------------------------------+
+  |                                                              |
+  +--------------------------------------------------------------+
+  | + exportar(nome, titulo, colunas, linhas): HttpResponse      |
+  +--------------------------------------------------------------+
+                                 ^
+                                 | ..|> Implementam
+           +---------------------+---------------------+
+           |                     |                     |
+  +-----------------+   +-----------------+   +-----------------+
+  |  ExportadorCSV  |   | ExportadorExcel |   |  ExportadorPDF  |
+  +-----------------+   +-----------------+   +-----------------+
+  |                 |   |                 |   | - _orientacao   |
+  +-----------------+   +-----------------+   +-----------------+
+  | + exportar(...) |   | + exportar(...) |   | + exportar(...) |
+  +-----------------+   +-----------------+   +-----------------+
+
+O QUE PRECISA SER FEITO:
+1. Criar `exportacao/utils/base_exporter.py`: Contendo a classe base abstrata 
+   `Exportador` padronizando a assinatura do metodo `exportar`.
+2. Criar classes em `csv_exporter.py`, `excel_exporter.py` e `pdf_exporter.py`: 
+   Encapsular a logica atual dentro do metodo `exportar` de classes herdadas de `Exportador`.
+3. Criar `exportacao/utils/exporter_factory.py`: Implementar `ExportadorFactory` 
+   usando um dicionario interno de chaves `csv`, `excel` e `pdf`.
+4. Atualizar `exportacao/utils/__init__.py`: Importar e expor as novas classes e a Factory.
+5. Refatorar a view (`exportacao/views.py`): Alterar `_despachar_formato` para 
+   chamar `ExportadorFactory.criar(formato).exportar(...)` dentro de um `try/except`.
+
+-------------------------------------------------------------------------------
+2. BUILDER (Para a Construcao de Prompts da IA)
+-------------------------------------------------------------------------------
+
+COMO ESTA HOJE:
+- Arquivo `gemini_api/prompt_builder.py`: Contem funcoes soltas como 
+  `build_chat_prompt`, `build_os_analysis_prompt`, etc. 
+- Cada uma cria manualmente uma lista `blocks = []`, adiciona trechos baseados 
+  em ifs e retorna `"\n".join(blocks)`. 
+- Se a estrutura de contextualizacao mudar ou novos blocos surgirem, a logica 
+  fica duplicada por todo o arquivo.
+
+DIAGRAMA DO QUE QUEREMOS:
+
+  +--------------------------------------------------------------+
+  |                        PromptDirector                        |
+  +--------------------------------------------------------------+
+  |                                                              |
+  +--------------------------------------------------------------+
+  | + montar_chat(builder, context, message): Prompt             |
+  | + montar_analise_os(builder, user, context, message): Prompt |
+  | + montar_financeiro(builder, context, message): Prompt       |
+  +--------------------------------------------------------------+
+                                 |
+                                 | ..> Coordena e chama métodos do
+                                 v
+  +--------------------------------------------------------------+
+  |                       << Interface >>                        |
+  |                        PromptBuilder                         |
+  +--------------------------------------------------------------+
+  |                                                              |
+  +--------------------------------------------------------------+
+  | + com_contexto(context): Self                                |
+  | + com_alertas(alertas): Self                                 |
+  | + com_ordens(ordens, titulo): Self                           |
+  | + com_telemetria(dados): Self                                |
+  | + com_financeiro(dados): Self                                |
+  | + com_instrucoes(texto): Self                                |
+  | + com_pergunta(texto): Self                                  |
+  | + build(): Prompt                                            |
+  | + reset(): None                                              |
+  +--------------------------------------------------------------+
+                                 ^
+                                 | ..|> Implementa
+  +--------------------------------------------------------------+
+  |                    PromptBuilderConcreto                     |
+  +--------------------------------------------------------------+
+  | - _blocos: list[str]                                         |
+  | - _max_linhas: int                                           |
+  +--------------------------------------------------------------+
+  | (Implementa todos os metodos encadeados de PromptBuilder)    |
+  | - _truncar(linhas, max): list                                |
+  +--------------------------------------------------------------+
+                                 |
+                                 | ..> Cria o produto final
+                                 v
+  +--------------------------------------------------------------+
+  |                            Prompt                            |
+  +--------------------------------------------------------------+
+  | - _texto: str                                                |
+  +--------------------------------------------------------------+
+  | + obter_texto(): str                                         |
+  | + __str__(): str                                             |
+  +--------------------------------------------------------------+
+
+O QUE PRECISA SER FEITO:
+1. Criar `gemini_api/prompt.py`: Com a classe `Prompt` para encapsular a string final.
+2. Criar `gemini_api/prompt_builder_pattern.py`: Definir a interface `PromptBuilder`
+   e a classe concreta `PromptBuilderConcreto` que acumula strings no array `_blocos`
+   e retorna `self` para permitir chamadas encadeadas.
+3. Criar `gemini_api/prompt_director.py`: Definir a classe `PromptDirector` que 
+   sabe a ordem dos blocos a chamar para cada tipo de IA (Chat, OS, Financeiro).
+4. Adaptar views e wrappers (`gemini_api/prompt_builder.py`): Ajustar as funcoes 
+   existentes de prompt para usar o novo Builder internamente (evitando quebrar as views).
