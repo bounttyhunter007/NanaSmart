@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="Guia didático dos padrões em uso no NanaSmart, com classes, exemplos e fluxos do projeto.">
+<meta name="source-sha256" content="a7a2439b9618027908e6e51213648411159a0ef75bad00dca962ead66a35cc6f">
+<title>Padrões de projeto em uso no NanaSmart</title>
+<style>
+:root{--nav:#132d39;--ink:#203440;--muted:#627681;--accent:#087e74;--accent-soft:#e8f5f1;--line:#dce5e8;--paper:#f3f6f7;--white:#fff;--gold:#e4b968;--shadow:0 8px 28px #183d4b08;--sidebar:260px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:30px}body{margin:0;background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.75}button,a{-webkit-tap-highlight-color:transparent}a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}a:hover{color:#04564f}button{font:inherit;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid #c6953a;outline-offset:4px}.skip-link{position:fixed;left:20px;top:-100px;background:#fff;padding:12px 22px;z-index:20}.skip-link:focus{top:10px}.progress{position:fixed;top:0;left:var(--sidebar);right:0;height:4px;z-index:10;background:transparent}.progress span{display:block;height:100%;width:0;background:var(--accent);transition:width .12s linear}
+.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:var(--nav);color:#fff;padding:32px 18px 22px;display:flex;flex-direction:column;z-index:12;overflow:auto}.brand{display:flex;align-items:center;gap:12px;padding:0 10px 24px;border-bottom:1px solid #ffffff18}.brand-mark{width:39px;height:39px;border:1px solid #ffffff40;border-radius:12px;display:grid;place-items:center;color:var(--gold);font-size:17px;font-weight:750;letter-spacing:-1px}.brand-name{font-size:19px;font-weight:700;line-height:1.25}.brand-sub{display:block;color:#a5bfc8;font-size:10px;font-weight:650;letter-spacing:2px;text-transform:uppercase;margin-top:5px}nav{padding-top:16px}.nav-group{margin-top:18px}.nav-label{color:#8db3be;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 12px 7px}.nav-item{display:flex;align-items:center;gap:11px;min-height:38px;padding:6px 12px;border-radius:7px;color:#d7e4e9;text-decoration:none;font-size:13px;line-height:1.45;transition:background .15s,color .15s}.nav-item:hover{background:#ffffff0d;color:#fff}.nav-item[aria-current]{background:#ffffff15;color:#fff;box-shadow:inset 3px 0 0 var(--gold)}.nav-number{font-size:11px;color:#92b3bd;font-variant-numeric:tabular-nums;min-width:18px}.nav-small{font-size:12px;color:#bad0d8}.sidebar-footer{font-size:11px;color:#94b2bd;border-top:1px solid #ffffff18;margin:24px 10px 0;padding-top:16px}.sidebar-footer a{color:#c6dce4}.mobilebar{display:none}.backdrop{display:none}
+main{margin-left:var(--sidebar);min-width:0}.page{max-width:1180px;margin:auto;padding:58px clamp(25px,5vw,72px) 70px}.hero{position:relative;margin-bottom:30px;padding-bottom:28px;border-bottom:1px solid var(--line)}.eyebrow{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--accent);font-weight:750;letter-spacing:2.4px;text-transform:uppercase}.eyebrow:before{content:'';display:inline-block;width:24px;height:2px;background:var(--accent)}h1{font-size:clamp(30px,3.1vw,43px);line-height:1.18;letter-spacing:-1.4px;margin:18px 0 22px;max-width:740px;font-weight:750}.hero-actions{display:flex;gap:10px;flex-wrap:wrap}.action{display:inline-flex;align-items:center;gap:7px;border:1px solid #cddbdd;border-radius:7px;padding:6px 12px;background:var(--white);text-decoration:none;color:#38505a;font-size:12px;font-weight:650}.action:hover{border-color:var(--accent);color:var(--accent)}.action-primary{color:var(--accent);background:var(--accent-soft);border-color:#b8dacf}article>p{max-width:900px}p{margin:0 0 17px}h2{font-size:25px;line-height:1.3;letter-spacing:-.5px;margin:48px 0 22px;color:#193a47;scroll-margin-top:30px}h2.category-title{display:flex;align-items:center;gap:14px;margin-top:58px;font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--accent)}h2.category-title:after{content:'';height:1px;background:#cddddd;flex:1}h3{font-size:25px;line-height:1.35;margin:0 0 22px;letter-spacing:-.5px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;scroll-margin-top:30px}h4{font-size:16px;font-weight:750;color:#284a58;margin:29px 0 12px}strong{font-weight:700}ul,ol{padding-left:25px;margin:0 0 20px}li{padding-left:3px;margin:7px 0}li::marker{color:var(--accent);font-weight:650}article>ul{columns:2;column-gap:32px}article>ul li{break-inside:avoid}.pattern-card{background:var(--white);border:1px solid var(--line);border-radius:13px;padding:clamp(22px,3.5vw,42px);margin:22px 0;box-shadow:var(--shadow)}.pattern-card>p:first-of-type{font-size:16px;color:#3b5360}.badge{font-size:10px;font-weight:700;letter-spacing:.3px;padding:5px 9px;border-radius:5px;color:#29645d;background:#eaf5f1;line-height:1.25;white-space:nowrap}.badge.framework{color:#77561d;background:#fff3d9}.availability{font-size:13px;padding:12px 15px;background:#f2f7f8;border-left:3px solid #75a99d;border-radius:0 7px 7px 0}
+.stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:28px 0 20px}.stat{border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:10px;background:var(--white);padding:19px 20px;display:flex;flex-direction:column;text-decoration:none;color:var(--ink);box-shadow:var(--shadow);transition:transform .15s,border-color .15s}.stat:nth-child(2){border-top-color:#6586a4}.stat:nth-child(3){border-top-color:#bd9756}.stat:hover{transform:translateY(-2px);border-color:#aac9c3;color:var(--ink)}.stat-number{font-size:42px;font-weight:750;line-height:1.15;letter-spacing:-2px}.stat-label{font-size:12px;font-weight:700;margin:9px 0 3px}.stat-note{font-size:10px;color:var(--muted);line-height:1.6}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:9px;background:#fff;margin:20px 0 25px;max-width:100%;-webkit-overflow-scrolling:touch}table{width:100%;border-collapse:collapse;font-size:13px;line-height:1.65;text-align:left}th{padding:13px 15px;background:#eaf1f3;border-bottom:1px solid #cfdee2;font-size:11px;letter-spacing:.4px;font-weight:750;color:#355461;vertical-align:top}td{padding:13px 15px;border-bottom:1px solid #e5ecee;vertical-align:top;min-width:120px;overflow-wrap:anywhere}td:first-child{font-weight:550}td.number{text-align:right;min-width:80px}td.number strong{font-size:24px;color:var(--accent)}tbody tr:nth-child(even){background:#f8fafb}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#f0f7f6}td a{overflow-wrap:anywhere}td code{font-size:11px;white-space:normal;overflow-wrap:anywhere}
+code{font-family:'Cascadia Code',Consolas,'Liberation Mono',monospace;font-size:.84em;padding:2px 5px;background:#edf3f4;color:#21556a;border-radius:4px;overflow-wrap:anywhere}.code-block{border:1px solid #223c4c;border-radius:9px;overflow:hidden;margin:20px 0;background:#122736;color:#d8e6ee}.code-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 15px;border-bottom:1px solid #ffffff15;color:#9bb8c7;font-size:10px;letter-spacing:.4px}.copy-code{font-size:10px;line-height:1.6;color:#d1e4eb;background:#ffffff0a;border:1px solid #ffffff26;border-radius:4px;padding:3px 10px;min-width:60px}.copy-code:hover{background:#ffffff18}pre{margin:0;padding:20px;overflow:auto;tab-size:4;font-family:'Cascadia Code',Consolas,monospace;font-size:12px;line-height:1.8}pre code{font:inherit;color:inherit;padding:0;background:transparent;border-radius:0;white-space:pre;overflow-wrap:normal}pre:focus-visible{outline-offset:-3px}.flow-figure{margin:20px 0 0;padding:24px;border:1px solid #cbded9;background:#f3f9f7;border-radius:10px}.flow-figure figcaption{font-size:10px;text-transform:uppercase;letter-spacing:1.6px;color:#54766b;font-weight:750;text-align:center;margin-bottom:20px}.flow{max-width:650px;margin:auto}.flow-step{background:#fff;border:1px solid #c5dad2;border-radius:7px;padding:12px 15px;text-align:center;font-size:12px;line-height:1.6;box-shadow:0 2px 4px #1e543407}.flow-decision{background:#fff7e8;border-color:#e0c794;color:#6c501c}.flow-arrow{text-align:center;color:#749a8d;font-size:19px;line-height:1.4}.flow-branches{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px;align-items:start}.branch-label{font-size:11px;text-align:center;color:#527467;font-weight:750;padding:5px 0 10px}.flow-branch:nth-child(2) .branch-label{color:#937340}.diagram-source{font-size:11px;color:var(--muted);margin:8px 0 22px}.diagram-source summary{cursor:pointer;display:list-item;padding:5px 0}.diagram-source pre{margin-top:8px;border:1px solid var(--line);border-radius:7px;background:#f5f8f9;color:#415865;font-size:11px}.page-footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;font-size:11px;color:var(--muted)}.to-top{white-space:nowrap}.toast{position:fixed;bottom:22px;left:calc(50% + var(--sidebar)/2);transform:translateX(-50%);background:var(--nav);color:#fff;padding:10px 18px;border-radius:7px;font-size:12px;box-shadow:0 5px 24px #0002;z-index:30}.toast[hidden]{display:none}
+@media(min-width:1400px){.page{padding-left:68px;padding-right:68px}}@media(max-width:1050px){:root{--sidebar:230px}.sidebar{padding-left:12px;padding-right:12px}.page{padding-left:28px;padding-right:28px}.stat{padding:16px 12px}.stat-label{font-size:11px}h1{font-size:34px}}@media(max-width:800px){:root{--sidebar:0px}html{scroll-padding-top:76px}.sidebar{width:260px;transform:translateX(-100%);transition:transform .2s}.nav-open .sidebar{transform:translateX(0)}.mobilebar{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;height:58px;background:var(--nav);color:#fff;padding:0 18px;z-index:11;font-size:13px;font-weight:650}.menu-button{border:1px solid #ffffff40;background:transparent;color:#fff;border-radius:5px;padding:4px 12px;font-size:12px}.nav-open .backdrop{display:block;position:fixed;inset:0;background:#10232b88;z-index:11}.progress{left:0;top:58px}.page{padding:32px 20px 40px}.hero{padding-bottom:24px}h1{font-size:33px;letter-spacing:-1px}h2,h3{scroll-margin-top:77px}h2{margin-top:35px}.pattern-card{padding:23px 20px;border-radius:10px}h3{font-size:23px}.badge{font-size:9px}.stat-note{font-size:10px}.flow-figure{padding:18px}.toast{left:50%}article>ul{columns:1}}@media(max-width:480px){body{font-size:15px}.page{padding-left:14px;padding-right:14px}.eyebrow{font-size:9px;letter-spacing:1.7px}h1{font-size:29px}.stat-grid{gap:7px}.stat{padding:13px 9px}.stat-number{font-size:35px}.stat-label{font-size:10px;line-height:1.5}.stat-note{font-size:9px}.pattern-card{padding:20px 16px}h3{font-size:21px;gap:8px}.table-wrap{margin-left:0;margin-right:0}th,td{padding:11px 12px}.flow-branches{gap:9px}.flow-step{padding:10px;font-size:11px}pre{padding:16px;font-size:11px}.page-footer{flex-direction:column;gap:7px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{html{scroll-padding:0}body{font-size:10pt;background:#fff;color:#111}.sidebar,.mobilebar,.progress,.hero-actions,.copy-code,.diagram-source,.toast,.skip-link,.page-footer{display:none!important}main{margin:0}.page{padding:0;max-width:none}.hero{margin:0 0 20px;padding:0 0 10px}h1{font-size:26pt}.pattern-card{box-shadow:none;border:0;border-top:1px solid #ccc;border-radius:0;padding:18px 0;margin:18px 0}h2.category-title{margin-top:24px}h2,h3,h4{break-after:avoid}p,li{orphans:3;widows:3}.stat{box-shadow:none}.table-wrap{overflow:visible}table{font-size:8pt}thead{display:table-header-group}tr{break-inside:avoid}pre{white-space:pre-wrap;color:#111;background:#f5f5f5;font-size:8pt}pre code{white-space:pre-wrap;overflow-wrap:anywhere}.code-block{background:#f5f5f5;border-color:#ccc;color:#111}.code-toolbar{color:#444;border-color:#ccc}.flow-figure{break-inside:avoid}.badge{border:1px solid #ccc}a{color:#244b59;text-decoration:underline}.availability{background:#f5f5f5}.stat-grid{break-inside:avoid}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<div class="progress" aria-hidden="true"><span></span></div>
+<div class="mobilebar"><span>NanaSmart · Padrões de projeto</span><button class="menu-button" type="button" aria-expanded="false" aria-controls="navegacao">Índice ☰</button></div>
+<button class="backdrop" type="button" aria-label="Fechar índice"></button>
+<aside class="sidebar" id="navegacao" aria-label="Índice do documento">
+<div class="brand"><span class="brand-mark" aria-hidden="true">NS</span><div class="brand-name">NanaSmart<span class="brand-sub">Guia de arquitetura</span></div></div>
+<nav aria-label="Seções do guia"><a class="nav-item nav-overview" href="#inicio">Visão geral</a><div class="nav-group"><p class="nav-label">criação</p><a class="nav-item" href="#1-builder"><span class="nav-number">01</span>Builder</a><a class="nav-item" href="#2-factory-method"><span class="nav-number">02</span>Factory Method</a></div><div class="nav-group"><p class="nav-label">estruturais</p><a class="nav-item" href="#3-adapter"><span class="nav-number">03</span>Adapter</a><a class="nav-item" href="#4-facade"><span class="nav-number">04</span>Facade</a><a class="nav-item" href="#5-composite"><span class="nav-number">05</span>Composite</a></div><div class="nav-group"><p class="nav-label">comportamentais</p><a class="nav-item" href="#6-iterator"><span class="nav-number">06</span>Iterator</a><a class="nav-item" href="#7-observer"><span class="nav-number">07</span>Observer</a><a class="nav-item" href="#8-strategy"><span class="nav-number">08</span>Strategy</a><a class="nav-item" href="#9-template-method"><span class="nav-number">09</span>Template Method</a></div><div class="nav-group"><p class="nav-label">Consulta rápida</p><a class="nav-item nav-small" href="#como-ler">Como ler</a><a class="nav-item nav-small" href="#como-os-padrões-trabalham-juntos">Fluxo integrado</a><a class="nav-item nav-small" href="#glossário-para-acompanhar-o-código">Glossário</a><a class="nav-item nav-small" href="#padrões-avaliados-sem-aplicação-gof-própria">Não aplicados</a></div></nav>
+<div class="sidebar-footer">Um guia para acompanhar o código.<br><a href="Verificacao_Padroes.md">Consultar o arquivo Markdown ↗</a></div>
+</aside>
+<main id="conteudo"><div class="page">
+<header class="hero" id="inicio"><div class="eyebrow">Documentação · Projeto interdisciplinar</div><h1>Padrões de projeto em uso no NanaSmart</h1><div class="hero-actions"><a class="action action-primary" href="#1-builder">Começar a leitura <span aria-hidden="true">→</span></a><a class="action" href="Verificacao_Padroes.md">Abrir Markdown</a><button type="button" class="action print-button">Imprimir / salvar PDF</button></div></header>
+<article aria-label="Documento completo"><p><strong>Revisado em:</strong> 16 de novembro de 2026.</p>
+<p>Este documento apresenta primeiro os padrões que têm uso real no projeto, na ordem combinada: <strong>criação, estruturais e comportamentais</strong>. As seções explicam o conceito, mostram onde procurar no código e acompanham exemplos do funcionamento.</p>
+<div class="stat-grid" aria-label="Resumo dos 12 padrões analisados"><a class="stat" href="#mapa-dos-usos"><span class="stat-number">7</span><span class="stat-label">Aplicados no projeto</span><span class="stat-note">Componentes do NanaSmart</span></a><a class="stat" href="#5-composite"><span class="stat-number">2</span><span class="stat-label">Via Python / Django</span><span class="stat-note">Iterator e Composite no ORM</span></a><a class="stat" href="#padrões-avaliados-sem-aplicação-gof-própria"><span class="stat-number">3</span><span class="stat-label">Sem implementação própria</span><span class="stat-note">Sem necessidade no caso atual</span></a></div>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Situação dos 12 padrões analisados"><table><thead><tr><th scope="col">Situação dos 12 padrões analisados</th><th scope="col">Quantidade</th><th scope="col">Padrões</th></tr></thead><tbody><tr><td>Aplicados nos componentes do projeto</td><td class="number"><strong>7</strong></td><td>Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method</td></tr><tr><td>Utilizados por mecanismos do Python/Django</td><td class="number"><strong>2</strong></td><td>Iterator e Composite no ORM</td></tr><tr><td>Sem implementação própria, por falta de necessidade</td><td class="number"><strong>3</strong></td><td>Abstract Factory, Singleton e Decorator GoF</td></tr></tbody></table></div>
+<p><strong>Total: 12 analisados, sendo 9 em uso e 3 sem necessidade de implementação própria.</strong></p>
+<p>Observer e Template Method também aproveitam infraestrutura do Django/DRF, mas já estão contados entre os sete; não serão contados novamente.</p>
+<h2 id="como-ler">Como ler</h2>
+<p>Comece pela explicação cotidiana, veja a indicação de quem fornece o mecanismo e depois abra os arquivos vinculados. Os nomes de classes e funções correspondem ao código real. Os trechos Python são recortes do projeto; diagramas e sequências em texto ajudam a visualizar as chamadas.</p>
+<p><strong>Criação</strong> organiza como os objetos são construídos. <strong>Estrutura</strong> organiza como componentes se conectam. <strong>Comportamento</strong> organiza regras, etapas e reações. As linhas indicadas nos links correspondem ao código conferido e podem mudar em versões futuras.</p>
+<h2 id="sumário-dos-padrões-em-uso">Sumário dos padrões em uso</h2>
+<p><strong>Criação:</strong></p>
+<ul><li><a href="#1-builder">1. Builder</a> — implementação do projeto.</li><li><a href="#2-factory-method">2. Factory Method</a> — implementação do projeto.</li></ul>
+<p><strong>Estruturais:</strong></p>
+<ul><li><a href="#3-adapter">3. Adapter</a> — implementação do projeto.</li><li><a href="#4-facade">4. Facade</a> — implementação do projeto.</li><li><a href="#5-composite">5. Composite</a> — fornecido pelo Django/ORM.</li></ul>
+<p><strong>Comportamentais:</strong></p>
+<ul><li><a href="#6-iterator">6. Iterator</a> — fornecido pelo Python/Django.</li><li><a href="#7-observer">7. Observer</a> — sinais do Django e receptores do projeto.</li><li><a href="#8-strategy">8. Strategy</a> — implementação do projeto.</li><li><a href="#9-template-method">9. Template Method</a> — implementação do projeto sobre o DRF.</li></ul>
+<h2 id="mapa-dos-usos">Mapa dos usos</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Categoria"><table><thead><tr><th scope="col">Categoria</th><th scope="col">Padrão</th><th scope="col">Quem fornece / implementa</th><th scope="col">Para que é usado</th></tr></thead><tbody><tr><td>Criação</td><td>Builder</td><td>Implementação do projeto</td><td>Montar o texto da IA em etapas.</td></tr><tr><td>Criação</td><td>Factory Method</td><td>Implementação do projeto</td><td>Criar o gerador de CSV, Excel ou PDF.</td></tr><tr><td>Estruturais</td><td>Adapter</td><td>Implementação do projeto</td><td>Traduzir as chamadas para o Gemini.</td></tr><tr><td>Estruturais</td><td>Facade</td><td>Implementação do projeto</td><td>Reunir os dados da IA por uma entrada simples.</td></tr><tr><td>Estruturais</td><td>Composite</td><td>Fornecido pelo Django/ORM</td><td>Combinar grupos e condições nas consultas.</td></tr><tr><td>Comportamentais</td><td>Iterator</td><td>Fornecido pelo Python/Django</td><td>Percorrer leituras sem montar uma lista completa.</td></tr><tr><td>Comportamentais</td><td>Observer</td><td>Sinais do Django e receptores do projeto</td><td>Reagir ao salvamento de leituras e alertas.</td></tr><tr><td>Comportamentais</td><td>Strategy</td><td>Implementação do projeto</td><td>Escolher uma regra de permissão.</td></tr><tr><td>Comportamentais</td><td>Template Method</td><td>Implementação do projeto sobre o DRF</td><td>Reaproveitar a sequência de atendimento das views.</td></tr></tbody></table></div>
+<h2 id="padrões-de-criação" class="category-title">Padrões de criação</h2>
+<section class="pattern-card" aria-labelledby="1-builder">
+<h3 id="1-builder">1. Builder<span class="badge">Código do projeto</span></h3>
+<p><strong>Builder — montar em etapas.</strong> Serve para construir um resultado que pode ter várias partes e combinações. Cada etapa acrescenta uma parte, e ao final o construtor entrega o resultado completo. É como montar um sanduíche escolhendo seus ingredientes. No NanaSmart, o Builder monta prompts para a IA com blocos como contexto, alertas, ordens e pergunta. Isso facilita criar prompts diferentes sem repetir toda a montagem.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido">Problema resolvido</h4>
+<p>O chat, a análise de ordens e a análise financeira precisam de textos com partes diferentes. O Builder separa a preparação de cada bloco da receita que determina quais blocos entram em cada pedido.</p>
+<h4 id="onde-está-e-quais-classes-participam">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe ou função"><table><thead><tr><th scope="col">Classe ou função</th><th scope="col">Localização</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>PromptBuilder</code></td><td><a href="../../gemini_api/prompt_builder_pattern.py#L4">prompt_builder_pattern.py, linha 4</a></td><td>Define as etapas disponíveis: contexto, alertas, ordens, telemetria, financeiro, instruções, pergunta, conclusão e reinicialização.</td></tr><tr><td><code>PromptBuilderConcreto</code></td><td><a href="../../gemini_api/prompt_builder_pattern.py#L42">prompt_builder_pattern.py, linha 42</a></td><td>Guarda os blocos em <code>_blocos</code>, formata o texto, limita algumas listas e entrega o produto.</td></tr><tr><td><code>PromptDirector</code></td><td><a href="../../gemini_api/prompt_director.py#L4">prompt_director.py, linha 4</a></td><td>Define as receitas de chat, análise de ordens, ordens não atribuídas e finanças.</td></tr><tr><td><code>Prompt</code></td><td><a href="../../gemini_api/prompt.py#L1">prompt.py, linha 1</a></td><td>Guarda o texto final e o entrega por <code>obter_texto()</code>.</td></tr><tr><td><code>build_chat_prompt</code> e funções semelhantes</td><td><a href="../../gemini_api/prompt_builder.py#L119">prompt_builder.py, linha 119</a></td><td>Preparam cabeçalhos e instruções, criam o builder e chamam o diretor.</td></tr><tr><td><code>GeminiBaseView.get_prompt</code> e subclasses</td><td><a href="../../gemini_api/views.py#L218">views.py, linha 218</a></td><td>Conectam a construção do prompt aos endpoints.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-padrão">Código que mostra o padrão</h4>
+<p>O começo da receita de chat em <code>PromptDirector.montar_chat</code> mostra as etapas:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">builder.reset()
+builder.com_contexto(context_str)
+builder.com_alertas(context.get(&#x27;alert_summary&#x27;, []))
+builder.com_ordens(context.get(&#x27;open_order_summary&#x27;, []), &quot;ORDENS EM ABERTO&quot;)</code></pre></div>
+<p>A mesma receita acrescenta indicadores quando disponíveis, telemetria e pergunta. No builder concreto, a etapa final é:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">def build(self) -&gt; Prompt:
+    resultado = &quot;\n&quot;.join(self._blocos)
+    return Prompt(resultado)</code></pre></div>
+<p>Em <code>build_chat_prompt</code>, a conexão entre as peças é:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">builder = PromptBuilderConcreto()
+prompt = PromptDirector.montar_chat(builder, context, context_str, message)
+return prompt.obter_texto()</code></pre></div>
+<p>Em linguagem simples: cria-se um montador, escolhe-se a receita de chat e obtém-se o texto pronto.</p>
+<h4 id="exemplo-do-fluxo-real">Exemplo do fluxo real</h4>
+<ol><li>Uma pessoa envia uma pergunta para <code>POST /api/gemini/chat/</code>.</li><li><code>GeminiChatView</code> usa <code>build_chat_prompt</code>.</li><li>A função prepara o cabeçalho e cria <code>PromptBuilderConcreto</code>.</li><li><code>PromptDirector.montar_chat</code> ordena as etapas.</li><li>O builder gera um <code>Prompt</code>, cujo texto será encaminhado à integração com a IA.</li></ol>
+<h4 id="por-que-a-classificação-é-válida">Por que a classificação é válida</h4>
+<p>Há um contrato de construção, um construtor concreto, um diretor com receitas e um produto final. Além de existirem, eles são chamados pelas funções utilizadas nas views.</p>
+<p><strong>Benefício observado na organização:</strong> a receita de cada solicitação fica separada das regras de formatação dos blocos. Isso facilita localizar onde alterar a ordem das informações ou sua apresentação.</p>
+</section>
+<section class="pattern-card" aria-labelledby="2-factory-method">
+<h3 id="2-factory-method">2. Factory Method<span class="badge">Código do projeto</span></h3>
+<p><strong>Factory Method — deixar um criador decidir o que produzir.</strong> Serve para separar o código que precisa de um objeto do código que sabe construir o tipo concreto. Pense em uma oficina com criadores especializados: cada um sabe produzir seu tipo de peça. No NanaSmart, criadores de exportadores produzem o objeto adequado para CSV, Excel ou PDF; a view usa a interface comum para gerar o arquivo.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido-1">Problema resolvido</h4>
+<p>Os dados de uma exportação são preparados pela view, enquanto o trabalho de gerar cada formato fica em classes próprias. A escolha e a criação do exportador são encaminhadas aos criadores.</p>
+<h4 id="onde-está-e-quais-classes-participam-1">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe ou arquivo"><table><thead><tr><th scope="col">Classe ou arquivo</th><th scope="col">Localização</th><th scope="col">Papel</th></tr></thead><tbody><tr><td><code>Exportador</code></td><td><a href="../../exportacao/utils/base_exporter.py#L4">base_exporter.py, linha 4</a></td><td>Contrato do produto: <code>exportar(nome, titulo, colunas, linhas)</code>.</td></tr><tr><td><code>ExportadorCSV</code></td><td><a href="../../exportacao/utils/csv_exporter.py#L8">csv_exporter.py, linha 8</a></td><td>Gera CSV com a biblioteca <code>csv</code>.</td></tr><tr><td><code>ExportadorExcel</code></td><td><a href="../../exportacao/utils/excel_exporter.py#L11">excel_exporter.py, linha 11</a></td><td>Gera uma planilha <code>.xlsx</code> com <code>openpyxl</code>.</td></tr><tr><td><code>ExportadorPDF</code></td><td><a href="../../exportacao/utils/pdf_exporter.py#L20">pdf_exporter.py, linha 20</a></td><td>Gera PDF com ReportLab.</td></tr><tr><td><code>CriadorExportador</code></td><td><a href="../../exportacao/utils/creators.py#L9">creators.py, linha 9</a></td><td>Declara o método abstrato <code>criar_exportador()</code>.</td></tr><tr><td><code>CriadorExportadorCSV</code>, <code>CriadorExportadorExcel</code>, <code>CriadorExportadorPDF</code></td><td><a href="../../exportacao/utils/creators.py#L18">creators.py, linha 18</a></td><td>Cada subclasse implementa o método e cria seu exportador.</td></tr><tr><td><code>ExportadorFactory</code></td><td><a href="../../exportacao/utils/exporter_factory.py#L4">exporter_factory.py, linha 4</a></td><td>Localiza a classe criadora pelo nome do formato e delega a criação.</td></tr><tr><td>Registro dos formatos</td><td><a href="../../exportacao/utils/__init__.py">utils/__init__.py</a></td><td>Associa <code>csv</code>, <code>excel</code> e <code>pdf</code> aos respectivos criadores.</td></tr><tr><td><code>_despachar_formato</code></td><td><a href="../../exportacao/views.py#L47">exportacao/views.py, linha 47</a></td><td>Pede o exportador e chama <code>exportar</code>.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-padrão-1">Código que mostra o padrão</h4>
+<p>Em <code>creators.py</code>, o criador base define a operação e a subclasse decide qual objeto construir:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">class CriadorExportador(ABC):
+    &quot;&quot;&quot;Creator do Factory Method para uma família de exportadores.&quot;&quot;&quot;
+
+    @abstractmethod
+    def criar_exportador(self) -&gt; Exportador:
+        &quot;&quot;&quot;Cria o exportador escolhido pelo criador concreto.&quot;&quot;&quot;
+        raise NotImplementedError
+
+
+class CriadorExportadorCSV(CriadorExportador):
+    def criar_exportador(self) -&gt; ExportadorCSV:
+        return ExportadorCSV()</code></pre></div>
+<p>As subclasses de Excel e PDF fazem a mesma especialização para seus produtos. Na fábrica de apoio, a delegação aparece nesta linha:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">return criador_cls().criar_exportador()</code></pre></div>
+<p>Na view, o uso é comum a qualquer formato:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">exportador = ExportadorFactory.criar(formato)
+return exportador.exportar(nome, titulo, colunas, linhas)</code></pre></div>
+<h4 id="exemplo-do-fluxo-real-1">Exemplo do fluxo real</h4>
+<p>Uma requisição a <code>GET /api/exportar/equipamentos/pdf/</code> segue esta sequência explicativa:</p>
+<div class="code-block"><div class="code-toolbar"><span>Fluxo explicado</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-text">ExportarEquipamentosView prepara as colunas e linhas
+    -&gt; _despachar_formato recebe &quot;pdf&quot;
+    -&gt; ExportadorFactory encontra CriadorExportadorPDF
+    -&gt; criar_exportador() produz ExportadorPDF
+    -&gt; exportar(...) devolve o arquivo para download</code></pre></div>
+<p>O mesmo mecanismo atende ordens de serviço, equipamentos, alertas, telemetria, histórico e dashboard. As rotas estão em <a href="../../exportacao/urls.py">exportacao/urls.py</a>.</p>
+<h4 id="por-que-a-classificação-é-válida-1">Por que a classificação é válida</h4>
+<p>O ponto que caracteriza <strong>Factory Method</strong> é o método de criação declarado no criador base e implementado pelas subclasses. O registro de formatos apenas escolhe o criador; ele não é, sozinho, a comprovação do padrão.</p>
+<p><strong>Benefício observado na organização:</strong> a função que despacha a exportação não precisa importar cada gerador concreto nem executar a lógica de geração dos três formatos.</p>
+<h4 id="limites-importantes">Limites importantes</h4>
+<p>Para acrescentar outro formato, seria necessário implementar o produto, seu criador e o registro. Também seria preciso revisar validações, mensagens, documentação e opções da interface que enumerem os formatos. A extensão do mecanismo central não significa que todos esses pontos já aceitem qualquer formato novo.</p>
+<p>Um formato sem registro resulta em <code>ValueError</code>, tratado pela view com resposta HTTP 400. A mensagem atual orienta usar CSV, Excel ou PDF.</p>
+</section>
+<h2 id="padrões-estruturais" class="category-title">Padrões estruturais</h2>
+<section class="pattern-card" aria-labelledby="3-adapter">
+<h3 id="3-adapter">3. Adapter<span class="badge">Código do projeto</span></h3>
+<p><strong>Adapter — traduzir entre interfaces.</strong> Serve para conectar dois componentes que esperam formatos ou formas de chamada diferentes. É como um adaptador de tomada: ele permite ligar um aparelho a uma tomada com outro encaixe. No NanaSmart, o adapter recebe instruções e histórico no formato da aplicação, converte esses dados para o formato do Gemini e entrega a resposta ao sistema. Isso concentra a tradução para o serviço externo em um lugar.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido-2">Problema resolvido</h4>
+<p>As views não precisam montar diretamente os objetos <code>Content</code>, <code>Part</code> e <code>GenerateContentConfig</code> do SDK Google GenAI. Essa preparação fica concentrada no adaptador.</p>
+<h4 id="onde-está-e-quais-classes-participam-2">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe ou função"><table><thead><tr><th scope="col">Classe ou função</th><th scope="col">Localização</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>AssistenteAdapter</code></td><td><a href="../../gemini_api/adapters.py#L8">adapters.py, linha 8</a></td><td>Define o contrato de disponibilidade e geração de conteúdo da aplicação.</td></tr><tr><td><code>GeminiAdapter</code></td><td><a href="../../gemini_api/adapters.py#L27">adapters.py, linha 27</a></td><td>Implementa a tradução e chama o SDK Gemini.</td></tr><tr><td><code>get_ai_adapter</code></td><td><a href="../../gemini_api/adapters.py#L112">adapters.py, linha 112</a></td><td>Fornece uma nova instância de <code>GeminiAdapter</code>.</td></tr><tr><td><code>generate_content</code> e <code>is_gemini_available</code></td><td><a href="../../gemini_api/cliente.py">cliente.py</a></td><td>Mantêm as funções de entrada usadas pelo restante da aplicação e delegam ao adaptador.</td></tr><tr><td><code>GeminiBaseView.run_gemini</code></td><td><a href="../../gemini_api/views.py#L224">views.py, linha 224</a></td><td>Encaminha a solicitação da view pela função de geração.</td></tr><tr><td><code>OrdemServicoViewSet.analise_ia</code></td><td><a href="../../manutencao/views.py#L54">manutencao/views.py, linha 54</a></td><td>Também usa as funções de <code>cliente.py</code> na análise individual de OS.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-padrão-2">Código que mostra o padrão</h4>
+<p>Ao converter o histórico, <code>GeminiAdapter.generate_content</code> executa:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">role = &quot;user&quot; if item.get(&quot;role&quot;) == &quot;user&quot; else &quot;model&quot;
+contents.append(
+    types.Content(
+        role=role,
+        parts=[types.Part.from_text(text=item.get(&quot;text&quot;, &quot;&quot;))],
+    )
+)</code></pre></div>
+<p>O histórico simples da aplicação vira objetos do SDK, incluindo a conversão do papel da mensagem para <code>user</code> ou <code>model</code>. Na chamada ao provedor:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">response = client.models.generate_content(
+    model=model_name,
+    contents=contents,
+    config=config,
+)
+return response.text, model_name</code></pre></div>
+<p>A aplicação recebe o texto e o nome do modelo utilizado, sem precisar manipular o objeto completo da resposta do SDK.</p>
+<h4 id="exemplo-do-fluxo-real-2">Exemplo do fluxo real</h4>
+<div class="code-block"><div class="code-toolbar"><span>Fluxo explicado</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-text">View pede uma resposta com instrução, prompt e histórico
+    -&gt; cliente.generate_content(...)
+    -&gt; get_ai_adapter() fornece GeminiAdapter
+    -&gt; adaptador converte os dados para os tipos do SDK
+    -&gt; SDK faz a chamada ao Gemini
+    -&gt; adaptador devolve texto e modelo utilizado</code></pre></div>
+<h4 id="por-que-a-classificação-é-válida-2">Por que a classificação é válida</h4>
+<p>Existe um contrato voltado à aplicação e uma implementação que o traduz para a interface externa. A tradução de dados está presente no código e é utilizada pelos pontos de entrada da IA.</p>
+<p><strong>Benefício observado na organização:</strong> os detalhes de formatação da chamada ao Gemini ficam concentrados no adaptador.</p>
+</section>
+<section class="pattern-card" aria-labelledby="4-facade">
+<h3 id="4-facade">4. Facade<span class="badge">Código do projeto</span></h3>
+<p><strong>Facade — oferecer uma entrada mais simples.</strong> Serve para apresentar uma operação de alto nível que coordena serviços ou partes de um sistema. Pense em uma recepção: você faz uma solicitação em um único lugar, e ela encaminha as etapas necessárias. No NanaSmart, a fachada prepara o contexto para a IA, reunindo os dados comuns e incluindo o resumo financeiro quando solicitado pela view.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido-3">Problema resolvido</h4>
+<p>A view precisa de dados de equipamentos, ordens, alertas e telemetria. Algumas solicitações também precisam de informações financeiras. A fachada oferece um ponto para coordenar essa escolha.</p>
+<h4 id="onde-está-e-quem-participa">Onde está e quem participa</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe ou função"><table><thead><tr><th scope="col">Classe ou função</th><th scope="col">Localização</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>GeminiContextFacade</code></td><td><a href="../../gemini_api/facades.py#L4">facades.py, linha 4</a></td><td>Expõe <code>build_context</code> e coordena o contexto comum com a inclusão financeira opcional.</td></tr><tr><td><code>build_base_context</code></td><td><a href="../../gemini_api/context_service.py#L151">context_service.py, linha 151</a></td><td>Reúne consultas, contagens e resumos operacionais.</td></tr><tr><td><code>get_financial_summary</code></td><td><a href="../../gemini_api/context_service.py#L115">context_service.py, linha 115</a></td><td>Prepara os números e os resumos financeiros.</td></tr><tr><td><code>get_user_equipment_queryset</code> e demais funções auxiliares</td><td><a href="../../gemini_api/context_service.py">context_service.py</a></td><td>Buscam dados e aplicam os recortes usados pelo serviço de contexto.</td></tr><tr><td><code>GeminiBaseView.build_context</code></td><td><a href="../../gemini_api/views.py#L232">views.py, linha 232</a></td><td>Usa a fachada e informa se precisa do resumo financeiro.</td></tr><tr><td><code>GeminiFinanceView</code></td><td><a href="../../gemini_api/views.py#L307">views.py, linha 307</a></td><td>Configura <code>requires_financial_summary = True</code>.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-padrão-3">Código que mostra o padrão</h4>
+<p>A implementação da fachada é pequena:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">class GeminiContextFacade:
+    &quot;&quot;&quot;Oferece às views uma entrada única para montar o contexto da IA.&quot;&quot;&quot;
+
+    def build_context(self, user, *, include_financial_summary=False):
+        context = build_base_context(user)
+        if include_financial_summary:
+            context[&quot;financial_summary&quot;] = get_financial_summary(user)
+        return context</code></pre></div>
+<p>Na view base, a entrada utilizada é:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">def build_context(self, user):
+    return self.context_facade_class().build_context(
+        user,
+        include_financial_summary=self.requires_financial_summary,
+    )</code></pre></div>
+<h4 id="exemplo-do-fluxo-real-3">Exemplo do fluxo real</h4>
+<p>No chat, a configuração padrão pede o contexto comum. Na solicitação financeira, <code>GeminiFinanceView</code> ativa o resumo financeiro. A fachada recebe essa escolha e coordena os serviços necessários.</p>
+<h4 id="por-que-a-classificação-é-válida-3">Por que a classificação é válida</h4>
+<p>A view usa uma entrada de nível mais alto, sem coordenar diretamente a combinação dos dois serviços. A maior parte do trabalho de consulta continua em <code>context_service.py</code>; a fachada é uma camada fina de coordenação.</p>
+<p><strong>Benefício observado na organização:</strong> a decisão de incluir os dados financeiros fica concentrada nessa entrada, e a view base mantém uma forma comum de solicitar o contexto.</p>
+<h4 id="limites-importantes-1">Limites importantes</h4>
+<ul><li>A fachada não faz a chamada ao Gemini e não monta o texto final do prompt.</li><li>Sua existência não prova redução de consultas ao banco nem ganho de velocidade. O benefício identificado é de organização.</li><li>A fachada não substitui permissões nem validações de acesso. Ela delega a coleta aos serviços e recebe da view a opção financeira.</li><li>A análise individual de uma OS usa <code>build_order_analysis_context</code> em <code>order_analysis.py</code>, sem passar por essa fachada.</li></ul>
+</section>
+<section class="pattern-card" aria-labelledby="5-composite">
+<h3 id="5-composite">5. Composite<span class="badge framework">Django / ORM</span></h3>
+<p><strong>Composite — tratar itens e grupos pela mesma operação.</strong> Imagine uma pasta que contém arquivos e outras pastas. É possível percorrer essa estrutura inteira usando a mesma operação. No NanaSmart, o exemplo em uso está na árvore de condições que o Django monta para consultar as ordens de serviço.</p>
+<p class="availability"><strong>Como está disponível:</strong> fornecido pelo Django/ORM. Não há classe Composite própria de domínio no NanaSmart.</p>
+<h4 id="onde-está-e-quais-classes-participam-3">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Componente"><table><thead><tr><th scope="col">Componente</th><th scope="col">Onde está</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>visible_work_orders</code></td><td><a href="../../manutencao/visibility.py#L7">manutencao/visibility.py, linha 7</a></td><td>Monta o filtro de empresa e de responsável permitido ao usuário.</td></tr><tr><td><code>Q</code></td><td><code>django.db.models.Q</code>, importado no arquivo acima</td><td>Permite combinar condições com <code>AND</code> e <code>OR</code>.</td></tr><tr><td><code>WhereNode</code></td><td><code>django.db.models.sql.where</code>, fornecido pelo Django</td><td>Representa um grupo de condições, podendo conter outros grupos.</td></tr><tr><td><code>Lookup</code>, incluindo <code>RelatedExact</code> e <code>RelatedIsNull</code></td><td>Implementações fornecidas pelo ORM</td><td>Representam condições individuais, como igualdade e ausência de responsável.</td></tr></tbody></table></div>
+<p>Os nomes internos foram conferidos no Django 5.2.12 instalado no projeto. Essas classes pertencem à biblioteca; não precisam ser copiadas para o backend.</p>
+<h4 id="exemplo-real-e-fácil-de-acompanhar">Exemplo real e fácil de acompanhar</h4>
+<p>O técnico pode consultar ordens atribuídas a ele <strong>ou</strong> sem responsável, sempre dentro de sua empresa. Em <code>visible_work_orders</code>, a segunda parte desse filtro é:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">qs = qs.filter(Q(responsavel=user) | Q(responsavel__isnull=True))</code></pre></div>
+<p>Com o filtro da empresa, o ORM produz esta árvore interna:</p>
+<div class="code-block"><div class="code-toolbar"><span>Fluxo explicado</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-text">Grupo AND: as duas condições precisam ser satisfeitas
+    -&gt; Equipamento pertence à empresa do usuário
+    -&gt; Grupo OR: basta uma destas condições
+        -&gt; Responsável é o técnico
+        -&gt; Ordem está sem responsável</code></pre></div>
+<p>O grupo maior contém uma condição simples e outro grupo. <code>WhereNode</code> e as condições <code>Lookup</code> oferecem <code>as_sql(...)</code>; o compilador percorre os filhos para montar a expressão SQL. Essa composição recursiva pelo mesmo contrato é o exemplo de Composite fornecido pelo ORM.</p>
+<h4 id="como-é-usado-e-por-que-é-útil">Como é usado e por que é útil</h4>
+<p>O filtro começa em <code>visible_work_orders</code> e é aplicado ao conjunto de ordens que o usuário pode consultar. O Django cuida da montagem da expressão SQL; o projeto declara as condições e sua combinação.</p>
+<p>Isso permite expressar “empresa correta <strong>E</strong> (responsável correto <strong>OU</strong> sem responsável)” de maneira agrupada, mantendo a regra de visibilidade. A árvore foi conferida sem executar SQL ou abrir uma conexão com o banco.</p>
+<h4 id="limites-da-interpretação">Limites da interpretação</h4>
+<p>O uso é interno ao ORM. Ele não transforma o relacionamento empresa/equipamento/sensor em um Composite de entidades e não significa que exista uma árvore própria de prompts. Nenhuma dessas estruturas adicionais é necessária para aproveitar o mecanismo de consultas já disponível.</p>
+</section>
+<h2 id="padrões-comportamentais" class="category-title">Padrões comportamentais</h2>
+<section class="pattern-card" aria-labelledby="6-iterator">
+<h3 id="6-iterator">6. Iterator<span class="badge framework">Python / Django</span></h3>
+<p><strong>Iterator — percorrer uma coleção.</strong> Serve para acessar os elementos de uma coleção em sequência sem expor sua representação interna. Imagine um fichário: você consulta as fichas pelo mesmo mecanismo de avanço, sem precisar reorganizar todo o arquivo.</p>
+<p class="availability"><strong>Como está disponível:</strong> fornecido pelo Python/Django e utilizado pelo projeto; não há classe iteradora própria.</p>
+<h4 id="problema-resolvido-e-situação">Problema resolvido e situação</h4>
+<p>A análise de tendências precisa percorrer leituras para selecionar uma amostra e acumular estatísticas. O projeto já utiliza o percurso oferecido pelo ORM e os geradores da linguagem, sem precisar implementar <code>__iter__</code> e <code>__next__</code> em uma classe própria.</p>
+<h4 id="onde-está-e-quem-participa-1">Onde está e quem participa</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Componente"><table><thead><tr><th scope="col">Componente</th><th scope="col">Arquivo</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>_select_sample</code></td><td><a href="../../telemetria/trend_analysis.py#L33">trend_analysis.py, linha 33</a></td><td>Percorre as leituras retornadas pelo QuerySet para selecionar a amostra e acumular estatísticas.</td></tr><tr><td><code>Command.handle</code></td><td><a href="../../telemetria/management/commands/analisar_tendencias.py">analisar_tendencias.py</a></td><td>Percorre os IDs dos sensores ativos e sincroniza cada tendência.</td></tr><tr><td><code>reprocessar_limites_historicos</code></td><td><a href="../../scripts/seed_db.py">seed_db.py</a></td><td>Percorre leituras em ordem temporal para importar ocorrências sintéticas pelos serviços reais.</td></tr><tr><td><code>gerar_historico_sensor</code> e <code>gerar_historico_apresentacao</code></td><td><a href="../../scripts/seed_db.py">seed_db.py</a></td><td>Usam <code>yield</code> para entregar pares de horário/valor como geradores Python.</td></tr><tr><td><code>QuerySet.iterator</code></td><td>Fornecido pelo Django</td><td>Oferece o percurso dos resultados sem usar o cache normal de resultados do QuerySet. Não é uma classe criada pelo projeto.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-uso">Código que mostra o uso</h4>
+<p>Em <code>_select_sample</code>, o percurso começa assim:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">for row in rows.iterator(chunk_size=500):
+    stamp, value = row[&#x27;timestamp&#x27;], row[&#x27;valor&#x27;]
+    if value is None or not math.isfinite(value) or stamp == previous_stamp:
+        continue</code></pre></div>
+<p><code>row</code> é a leitura corrente. A função verifica seu horário e valor, atualiza as estatísticas, mantém os pontos necessários e pode interromper o percurso com <code>break</code> ao satisfazer os critérios da seleção.</p>
+<p>No comando de análise periódica, a operação percorre os sensores:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">for sensor_id in Sensor.objects.filter(ativo=True).values_list(&#x27;id&#x27;, flat=True).iterator():
+    try:
+        trend = sync_sensor_trend(sensor_id)
+        processados += 1</code></pre></div>
+<p>O bloco completo trata também dados insuficientes e falhas individuais. O comando utiliza o iterador fornecido pelo QuerySet; a regra de tendência continua no serviço.</p>
+<h4 id="como-visualizar-o-fluxo">Como visualizar o fluxo</h4>
+<div class="code-block"><div class="code-toolbar"><span>Fluxo explicado</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-text">QuerySet seleciona as leituras
+    -&gt; iterator() oferece o percurso dos resultados
+    -&gt; for recebe cada leitura
+    -&gt; _select_sample verifica valores e acumula estatísticas
+    -&gt; a função devolve a amostra selecionada e os resultados acumulados</code></pre></div>
+<h4 id="por-que-é-usado-e-quais-são-os-limites">Por que é usado e quais são os limites</h4>
+<p>O percurso evita depender do cache normal de resultados do QuerySet e permite processar cada item sem manipular sua representação interna. <code>chunk_size=500</code> é um parâmetro de busca, não a quantidade final de pontos da amostra.</p>
+<p>Isso não significa que toda a operação use memória constante: a função mantém suas próprias estruturas, e o comportamento de busca também depende do backend/driver. Uma lista, um <code>for</code> isolado ou paginação HTTP não comprovam uma classe Iterator própria.</p>
+<p><strong>Decisão:</strong> manter o uso existente. Não criar um iterador manual que replique o mecanismo de Python/Django. O uso real pode ser demonstrado nos trechos acima, com essa distinção explícita.</p>
+</section>
+<section class="pattern-card" aria-labelledby="7-observer">
+<h3 id="7-observer">7. Observer<span class="badge framework">Django + projeto</span></h3>
+<p><strong>Observer — reagir a um acontecimento.</strong> Serve para avisar componentes interessados quando um evento ocorre, permitindo que eles executem suas próprias ações. É parecido com uma inscrição em notificações: quando há uma novidade, os inscritos são avisados. No NanaSmart, sinais do Django acionam verificações quando uma leitura de telemetria, um alerta ou outro registro é salvo.</p>
+<p class="availability"><strong>Como está disponível:</strong> infraestrutura de sinais fornecida pelo Django, com funções receptoras e reações definidas no NanaSmart.</p>
+<h4 id="problema-resolvido-4">Problema resolvido</h4>
+<p>O código que salva uma leitura não precisa chamar diretamente todas as reações em cada lugar. O sistema registra as funções interessadas no evento, e o mecanismo de sinais as aciona.</p>
+<h4 id="onde-está-e-quem-participa-2">Onde está e quem participa</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Evento e modelo"><table><thead><tr><th scope="col">Evento e modelo</th><th scope="col">Função receptora</th><th scope="col">Localização</th><th scope="col">Reação</th></tr></thead><tbody><tr><td><code>post_save</code> de <code>Telemetria</code></td><td><code>checar_limites_telemetria</code></td><td><a href="../../telemetria/signals.py#L9">telemetria/signals.py, linha 9</a></td><td>Em uma nova leitura elegível, chama a sincronização da tendência e dos limites.</td></tr><tr><td><code>post_save</code> de <code>Alerta</code></td><td><code>vincular_ordem_servico_ao_alerta</code></td><td><a href="../../alertas/signals.py#L6">alertas/signals.py, linha 6</a></td><td>Se o alerta estiver ativo, encaminha-o ao serviço conforme sua origem e registra o vínculo da ordem.</td></tr><tr><td><code>post_save</code> de <code>Equipamento</code></td><td><code>verificar_planos_por_horimetro</code></td><td><a href="../../ativos/signals.py#L13">ativos/signals.py, linha 13</a></td><td>Verifica planos ativos e pode abrir uma OS preditiva por horímetro.</td></tr><tr><td><code>pre_save</code> de <code>OrdemServico</code></td><td><code>verificar_manutencao</code></td><td><a href="../../ativos/signals.py#L66">ativos/signals.py, linha 66</a></td><td>Se faltar descrição e houver configuração de chave, tenta obter texto pela integração com a IA.</td></tr></tbody></table></div>
+<p>As classes de domínio envolvidas são <code>Telemetria</code>, <code>Sensor</code>, <code>Alerta</code>, <code>Equipamento</code>, <code>PlanoManutencao</code> e <code>OrdemServico</code>. Nesta implementação, os observadores são <strong>funções</strong>, registradas no mecanismo de sinais do Django; não há necessidade de uma classe própria chamada <code>Observer</code>.</p>
+<p>O registro ocorre ao importar os módulos de sinais em <code>ready()</code>: <a href="../../ativos/apps.py#L4">AtivosConfig</a>, <a href="../../alertas/apps.py#L4">AlertasConfig</a> e <a href="../../telemetria/apps.py#L4">TelemetriaConfig</a>. O método <code>ready()</code> é executado na inicialização da aplicação pelo Django.</p>
+<h4 id="código-que-mostra-o-padrão-4">Código que mostra o padrão</h4>
+<p>Este é o receptor da telemetria:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">@receiver(post_save, sender=Telemetria)
+def checar_limites_telemetria(sender, instance, created, raw=False, **kwargs):
+    if raw or not created or not instance.sensor.ativo:
+        return
+    sync_sensor_trend(instance.sensor_id)
+    sync_limit_reading(instance)</code></pre></div>
+<p><code>@receiver</code> registra a função para o aviso de salvamento de <code>Telemetria</code>. A função ignora carregamentos brutos, alterações de leituras existentes e sensores inativos. Se a leitura for elegível, chama os dois serviços na ordem mostrada.</p>
+<h4 id="exemplo-do-fluxo-real-4">Exemplo do fluxo real</h4>
+<figure class="flow-figure"><figcaption>O fluxo, passo a passo</figcaption><div class="flow"><div class="flow-step">Nova leitura de sensor ativo é salva</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Django emite post_save de Telemetria</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Receptor chama os serviços de tendência e limite</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step flow-decision">A avaliação salva um alerta ativo?</div><div class="flow-branches"><div class="flow-branch"><div class="branch-label">Sim</div><div class="flow-step">Django emite post_save de Alerta</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Receptor encaminha ao serviço de ordens</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Serviço cria ou reutiliza uma OS conforme as regras</div></div><div class="flow-branch"><div class="branch-label">Não</div><div class="flow-step">Fluxo termina sem essa etapa</div></div></div></div></figure><details class="diagram-source"><summary>Ver o texto original do diagrama</summary><pre><code>flowchart TD
+    A[Nova leitura de sensor ativo é salva] --&gt; B[Django emite post_save de Telemetria]
+    B --&gt; C[Receptor chama os serviços de tendência e limite]
+    C --&gt; D{A avaliação salva um alerta ativo?}
+    D --&gt;|Sim| E[Django emite post_save de Alerta]
+    E --&gt; F[Receptor encaminha ao serviço de ordens]
+    F --&gt; G[Serviço cria ou reutiliza uma OS conforme as regras]
+    D --&gt;|Não| H[Fluxo termina sem essa etapa]</code></pre></details>
+<p>As decisões de negócio ficam nos serviços, como <a href="../../telemetria/limit_service.py">sync_limit_reading</a>, <a href="../../telemetria/predictive_service.py#L21">sync_sensor_trend</a> e <a href="../../manutencao/services.py#L62">PrioridadeOSService</a>. O sinal aciona o trabalho; não substitui as regras desses serviços.</p>
+<h4 id="por-que-a-classificação-é-válida-4">Por que a classificação é válida</h4>
+<p>Há eventos, receptores registrados e reações a esses eventos. É uma aplicação de Observer fornecida pelo framework, utilizada explicitamente pelo projeto.</p>
+<p><strong>Benefício observado na organização:</strong> diferentes pontos que salvam um modelo pelo fluxo normal podem acionar as mesmas reações registradas.</p>
+<h4 id="limites-importantes-2">Limites importantes</h4>
+<ul><li>Esses receptores são síncronos: o trabalho acontece durante o fluxo de salvamento. Não existe, nesses trechos, uma fila em segundo plano ou um serviço de mensagens.</li><li>Nem todo salvamento gera uma ordem nova. Os serviços verificam condições e vínculos existentes. A recuperação do sensor não conclui a manutenção automaticamente.</li><li>O receptor de alertas não restringe a execução a <code>created=True</code>. O que efetivamente filtra no começo da função é <code>raw</code> e o status ativo, apesar do comentário interno mencionar alerta “novo ou escalado”.</li><li>O vínculo <code>ordem_servico</code> é gravado com <code>QuerySet.update()</code> para evitar disparar novamente o mesmo sinal apenas para registrar essa associação.</li><li>Operações como <code>QuerySet.update()</code> e <code>bulk_create()</code> não percorrem o salvamento individual normal com esses sinais. Assim, “salvar por qualquer caminho sempre avisa os observadores” seria uma afirmação ampla demais.</li><li>No fluxo normal de <code>Telemetria.save()</code>, o projeto usa transação e bloqueio do sensor. Isso é um mecanismo adicional de consistência, não um padrão Observer separado.</li></ul>
+</section>
+<section class="pattern-card" aria-labelledby="8-strategy">
+<h3 id="8-strategy">8. Strategy<span class="badge">Código do projeto</span></h3>
+<p><strong>Strategy — escolher uma regra.</strong> Serve quando há maneiras diferentes de realizar uma tarefa e todas podem ser chamadas pelo mesmo contrato. Imagine escolher uma rota de carro, a pé ou de bicicleta: o destino é o mesmo, mas a regra para chegar muda. No NanaSmart, políticas de permissão usam o mesmo método para avaliar acesso, com regras diferentes para gestores, técnicos e outros casos.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido-5">Problema resolvido</h4>
+<p>As regras de perfil e método HTTP ficam em políticas separadas. As classes que integram essas regras ao Django REST Framework delegam a avaliação, em vez de repetir cada condição.</p>
+<h4 id="onde-está-e-quais-classes-participam-4">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe"><table><thead><tr><th scope="col">Classe</th><th scope="col">Localização</th><th scope="col">Responsabilidade</th></tr></thead><tbody><tr><td><code>BasePermissionPolicy</code></td><td><a href="../../accounts/permission_policies.py#L4">permission_policies.py, linha 4</a></td><td>Contrato comum <code>can_access(user, method, obj=None, request=None)</code>.</td></tr><tr><td><code>GestorPolicy</code></td><td><a href="../../accounts/permission_policies.py#L12">permission_policies.py, linha 12</a></td><td>Exige autenticação e perfil gestor/admin ou condição de superusuário.</td></tr><tr><td><code>TecnicoPolicy</code></td><td><a href="../../accounts/permission_policies.py#L19">permission_policies.py, linha 19</a></td><td>Exige autenticação e perfil técnico.</td></tr><tr><td><code>GestorOrReadOnlyPolicy</code></td><td><a href="../../accounts/permission_policies.py#L26">permission_policies.py, linha 26</a></td><td>Permite leitura a autenticados e escrita a gestor/admin ou superusuário.</td></tr><tr><td><code>AuthenticatedNoDeleteForTecnicoPolicy</code></td><td><a href="../../accounts/permission_policies.py#L37">permission_policies.py, linha 37</a></td><td>Permite leitura a autenticados; nas demais ações, aplica as restrições de perfil do código.</td></tr><tr><td><code>PermissionPolicyFactory</code></td><td><a href="../../accounts/permission_policies.py#L51">permission_policies.py, linha 51</a></td><td>Fornece a política registrada para um nome.</td></tr><tr><td><code>IsGestor</code>, <code>IsTecnico</code>, <code>IsGestorOrReadOnly</code>, <code>IsAuthenticatedNoDeleteForTecnico</code></td><td><a href="../../accounts/permissions.py">accounts/permissions.py</a></td><td>Integram a decisão das políticas às permissões do DRF.</td></tr></tbody></table></div>
+<h4 id="código-que-mostra-o-padrão-5">Código que mostra o padrão</h4>
+<p>Em <code>accounts/permissions.py</code>, a permissão escolhe uma regra e delega:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">class IsGestorOrReadOnly(permissions.BasePermission):
+    &quot;&quot;&quot;Gestores podem tudo. Técnicos/Outros apenas leitura.&quot;&quot;&quot;
+
+    def has_permission(self, request, view):
+        policy = PermissionPolicyFactory.create(&#x27;gestor_or_readonly&#x27;)
+        return policy.can_access(request.user, request.method)</code></pre></div>
+<p>Em <code>permission_policies.py</code>, a estratégia concreta contém a regra:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">class GestorOrReadOnlyPolicy(BasePermissionPolicy):
+    def can_access(self, user, method: str, obj=None, request=None) -&gt; bool:
+        if not user or not getattr(user, &#x27;is_authenticated&#x27;, False):
+            return False
+
+        if method in [&#x27;GET&#x27;, &#x27;HEAD&#x27;, &#x27;OPTIONS&#x27;]:
+            return True
+
+        return user.tipo_usuario in [&#x27;gestor&#x27;, &#x27;admin&#x27;] or getattr(user, &#x27;is_superuser&#x27;, False)</code></pre></div>
+<h4 id="exemplo-do-fluxo-real-5">Exemplo do fluxo real</h4>
+<p><code>EquipamentoViewSet</code>, em <a href="../../ativos/views.py#L16">ativos/views.py, linha 16</a>, configura <code>IsGestorOrReadOnly</code> como permissão.</p>
+<ol><li>Um técnico autenticado pede uma consulta com <code>GET</code>.</li><li>A permissão obtém <code>GestorOrReadOnlyPolicy</code>.</li><li>A política permite a leitura.</li><li>Se esse técnico tentar criar um equipamento com <code>POST</code>, essa mesma política não autoriza a ação.</li></ol>
+<p>Outros usos confirmados são <code>IsGestor</code> no cadastro de usuários e nas ações de ajuste de prioridade, e <code>IsAuthenticatedNoDeleteForTecnico</code> nos recursos de telemetria.</p>
+<h4 id="por-que-a-classificação-é-válida-5">Por que a classificação é válida</h4>
+<p>As políticas implementam um contrato comum e oferecem comportamentos diferentes. As permissões funcionam como os componentes que utilizam essas estratégias. A escolha atual é feita pelo nome da política em cada permissão; não é necessário que uma tela permita trocar a estratégia para que essa organização exista.</p>
+<p><strong>Benefício observado na organização:</strong> uma regra compartilhada pode ser localizada e revisada na política correspondente.</p>
+</section>
+<section class="pattern-card" aria-labelledby="9-template-method">
+<h3 id="9-template-method">9. Template Method<span class="badge">Projeto + DRF</span></h3>
+<p><strong>Template Method — compartilhar uma sequência e variar etapas.</strong> Serve para manter o roteiro de uma operação em uma classe base e permitir que subclasses especializem algumas partes. É como uma ficha de atendimento com etapas comuns, preenchidas de forma diferente por cada setor. No NanaSmart, o atendimento comum das views Gemini segue essa organização.</p>
+<p class="availability"><strong>Como está disponível:</strong> implementado no código do projeto e utilizado pelos endpoints indicados abaixo.</p>
+<h4 id="problema-resolvido-6">Problema resolvido</h4>
+<p>Os endpoints de chat, ordens, finanças e tendências compartilham boa parte do atendimento. O Template Method permite reaproveitar essa sequência e personalizar pontos específicos por herança.</p>
+<h4 id="onde-está-e-quais-classes-participam-5">Onde está e quais classes participam</h4>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Classe ou método"><table><thead><tr><th scope="col">Classe ou método</th><th scope="col">Localização</th><th scope="col">Papel</th></tr></thead><tbody><tr><td><code>GeminiBaseView</code></td><td><a href="../../gemini_api/views.py#L198">views.py, linha 198</a></td><td>Classe base com a sequência comum.</td></tr><tr><td><code>GeminiBaseView.post</code></td><td><a href="../../gemini_api/views.py#L238">views.py, linha 238</a></td><td>Método que organiza validação, verificações, contexto, prompt, chamada e resposta.</td></tr><tr><td><code>check_access</code>, <code>get_prompt</code>, <code>run_gemini</code>, <code>build_context</code></td><td><a href="../../gemini_api/views.py#L215">views.py, linha 215</a></td><td>Etapas separadas chamadas pela sequência. Algumas são especializadas nas subclasses.</td></tr><tr><td><code>GeminiChatView</code></td><td><a href="../../gemini_api/views.py#L264">views.py, linha 264</a></td><td>Define a função de prompt de chat, propósito e temperatura.</td></tr><tr><td><code>GeminiOsAnalysisView</code></td><td><a href="../../gemini_api/views.py#L279">views.py, linha 279</a></td><td>Define a função de prompt para análise de ordens em conjunto.</td></tr><tr><td><code>GeminiUnassignedOrdersView</code></td><td><a href="../../gemini_api/views.py#L292">views.py, linha 292</a></td><td>Especializa <code>get_prompt</code> para ordens sem atribuição.</td></tr><tr><td><code>GeminiFinanceView</code></td><td><a href="../../gemini_api/views.py#L307">views.py, linha 307</a></td><td>Especializa acesso e prompt, além de solicitar contexto financeiro.</td></tr><tr><td><code>GeminiTrendAnalysisView</code></td><td><a href="../../gemini_api/views.py#L330">views.py, linha 330</a></td><td>Especializa o prompt e envolve o atendimento comum com validações e tratamento próprios.</td></tr></tbody></table></div>
+<h4 id="o-que-o-django-rest-framework-já-fornece">O que o Django REST Framework já fornece</h4>
+<p>A classe <code>APIView</code>, da qual <code>GeminiBaseView</code> herda, já possui o método <code>dispatch</code>. Ele organiza a inicialização da requisição, a escolha do método HTTP, o tratamento de exceções e a finalização da resposta. Esse roteiro com etapas especializáveis é fornecido pelo DRF 3.16.1 usado no projeto.</p>
+<p>No NanaSmart, há também um roteiro próprio em <code>GeminiBaseView.post</code>: preparar contexto, montar o prompt, chamar a IA e devolver a resposta. As subclasses especializam partes desse atendimento. O exemplo abaixo mostra essa aplicação no código do projeto.</p>
+<h4 id="código-que-mostra-o-padrão-6">Código que mostra o padrão</h4>
+<p>Este recorte de <code>GeminiBaseView.post</code> mostra a sequência após as verificações iniciais:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">context = self.build_context(user)
+
+system_instruction = build_system_instruction(user, self.system_purpose)
+user_prompt = self.get_prompt(user, context, message)
+
+try:
+    response_text, model_used = self.run_gemini(system_instruction, user_prompt, history)
+    return Response({&quot;response&quot;: response_text, &quot;model_used&quot;: model_used})
+except Exception as e:
+    return Response({&quot;response&quot;: f&quot;Erro ao gerar resposta da IA: {e}&quot;})</code></pre></div>
+<p>O método da classe base chama <code>self.get_prompt</code>. Na subclasse financeira, esse ponto é especializado:</p>
+<div class="code-block"><div class="code-toolbar"><span>Python · código do projeto</span><button class="copy-code" type="button">Copiar</button></div><pre tabindex="0"><code class="language-python">def get_prompt(self, user, context, message):
+    return build_finance_prompt(user, context, message)</code></pre></div>
+<p>Assim, a sequência comum permanece na classe base, enquanto a versão financeira determina qual texto preparar. As subclasses de chat e análise de ordens também personalizam o comportamento por atributos usados pela base.</p>
+<h4 id="exemplo-do-fluxo-real-6">Exemplo do fluxo real</h4>
+<ol><li>Uma solicitação chega a <code>POST /api/gemini/gestao/financeira/</code>.</li><li>A subclasse chama <code>super().post(request)</code>, reutilizando o atendimento da classe base.</li><li>A classe base valida a mensagem e aplica a verificação de acesso configurada para esse endpoint.</li><li>Com a IA configurada, solicita contexto, prepara as instruções e chama <code>self.get_prompt</code>.</li><li>O método financeiro prepara o prompt apropriado, e a classe base realiza a chamada e devolve a resposta.</li></ol>
+<h4 id="por-que-a-classificação-é-válida-6">Por que a classificação é válida</h4>
+<p>Existe uma sequência de operações na classe base, com pontos chamados por <code>self</code> que podem variar nas subclasses. Isso caracteriza Template Method, mesmo sem uma classe com esse nome e sem exigir que todos os passos sejam abstratos.</p>
+<p><strong>Benefício observado na organização:</strong> os endpoints compartilham o atendimento comum, e diferenças específicas ficam em atributos ou métodos especializados.</p>
+<h4 id="relação-com-os-outros-padrões">Relação com os outros padrões</h4>
+<p>Template Method organiza <strong>a sequência de atendimento da view</strong>. Builder organiza <strong>a construção do texto</strong>. Facade organiza <strong>a obtenção do contexto</strong>, e Adapter organiza <strong>a tradução da chamada externa</strong>.</p>
+</section>
+<h2 id="como-os-padrões-trabalham-juntos">Como os padrões trabalham juntos</h2>
+<p>No chat, cada componente tem uma responsabilidade:</p>
+<figure class="flow-figure"><figcaption>O fluxo, passo a passo</figcaption><div class="flow"><div class="flow-step">Pessoa envia uma pergunta</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Template Method organiza o atendimento da view</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Facade reúne o contexto permitido</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Builder monta o texto por etapas</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Adapter traduz a chamada para o Gemini</div><div class="flow-arrow" aria-hidden="true">↓</div><div class="flow-step">Resposta volta para a pessoa</div></div></figure><details class="diagram-source"><summary>Ver o texto original do diagrama</summary><pre><code>flowchart TD
+    A[Pessoa envia uma pergunta] --&gt; B[Template Method organiza o atendimento da view]
+    B --&gt; C[Facade reúne o contexto permitido]
+    C --&gt; D[Builder monta o texto por etapas]
+    D --&gt; E[Adapter traduz a chamada para o Gemini]
+    E --&gt; F[Resposta volta para a pessoa]</code></pre></details>
+<p>Na exportação, Factory Method cria o exportador e o contrato comum permite gerar o arquivo. Na telemetria, Observer aciona as reações aos eventos; Iterator ajuda no percurso das leituras; as políticas de Strategy participam das permissões dos recursos. Nenhum desses papéis substitui o outro.</p>
+<h2 id="glossário-para-acompanhar-o-código">Glossário para acompanhar o código</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Termo"><table><thead><tr><th scope="col">Termo</th><th scope="col">Explicação simples</th></tr></thead><tbody><tr><td>Classe</td><td>Definição de um tipo de componente do programa.</td></tr><tr><td>Objeto ou instância</td><td>Um componente concreto criado a partir de uma classe.</td></tr><tr><td>Método</td><td>Uma função definida em uma classe para executar uma ação.</td></tr><tr><td>Contrato ou interface</td><td>Conjunto de operações que um componente promete oferecer.</td></tr><tr><td>Classe abstrata / <code>ABC</code></td><td>Base que define operações e pode exigir sua implementação nas subclasses.</td></tr><tr><td>Subclasse / herança</td><td>Classe que aproveita uma base e pode especializar seu comportamento.</td></tr><tr><td>Sobrescrever um método</td><td>Fornecer na subclasse uma versão específica de um método da classe base.</td></tr><tr><td>View</td><td>Parte do backend que atende uma requisição e prepara uma resposta.</td></tr><tr><td>Endpoint</td><td>Endereço da API usado para uma operação, como enviar uma pergunta.</td></tr><tr><td>API</td><td>Forma organizada de um programa solicitar operações a outro.</td></tr><tr><td>DRF</td><td>Django REST Framework, biblioteca usada para construir a API do projeto.</td></tr><tr><td>Modelo</td><td>Classe que representa dados persistidos, como equipamento ou ordem de serviço.</td></tr><tr><td>QuerySet / ORM</td><td>Recursos do Django para consultar e manipular dados usando Python.</td></tr><tr><td>Sinal / receptor</td><td>Aviso de um evento e função registrada para reagir a ele.</td></tr><tr><td>Prompt</td><td>Texto com informações e instruções enviado à inteligência artificial.</td></tr><tr><td>Contexto</td><td>Dados usados para orientar uma operação ou resposta.</td></tr><tr><td>SDK</td><td>Biblioteca que facilita conversar com um serviço externo.</td></tr><tr><td>HTTP <code>GET</code> / <code>POST</code> / <code>PATCH</code> / <code>DELETE</code></td><td>Métodos normalmente associados a consultar, enviar/criar, alterar parcialmente e excluir. O comportamento exato depende da rota.</td></tr><tr><td>Mock ou simulação</td><td>Substituto controlado de uma dependência durante uma verificação.</td></tr><tr><td>OS / O.S.</td><td>Ordem de serviço: registro de um trabalho de manutenção.</td></tr><tr><td>Horímetro</td><td>Medida das horas de funcionamento de um equipamento.</td></tr><tr><td>JSON</td><td>Formato de dados estruturados que programas conseguem trocar.</td></tr></tbody></table></div>
+<h2 id="conferência-do-código-e-referências">Conferência do código e referências</h2>
+<p>A organização deste documento não alterou o backend. As explicações foram confrontadas com classes, pontos de chamada e trechos do projeto. Os exemplos de infraestrutura foram conferidos no Django 5.2.12 e no Django REST Framework 3.16.1 instalados.</p>
+<p>A verificação funcional anterior executou 292 testes de backend: 287 aprovados e cinco pulados por dependerem de bloqueios de linha do PostgreSQL, indisponíveis no SQLite. Esses resultados pertencem à execução de 16/11/2026; esta reorganização documental não é apresentada como uma nova execução da suíte. Comandos e limites estão no <a href="../README.md#verificação-da-revisão-de-16112026">índice da documentação</a>.</p>
+<p>As versões históricas ficam em <a href="../old/README.md">old</a>. As regras funcionais e os demais guias atuais estão no <a href="../README.md">índice principal</a>.</p>
+<h2 id="padrões-avaliados-sem-aplicação-gof-própria">Padrões avaliados sem aplicação GoF própria</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Tabela: Padrão"><table><thead><tr><th scope="col">Padrão</th><th scope="col">Por que não foi acrescentado</th></tr></thead><tbody><tr><td>Abstract Factory</td><td>A exportação escolhe um gerador por vez; não precisa criar uma família de vários tipos de produtos relacionados. Factory Method já atende ao caso atual.</td></tr><tr><td>Singleton</td><td>O Django já gerencia configurações e conexões. Esse acesso compartilhado não garante um Singleton GoF global, e não foi encontrado requisito para uma classe própria.</td></tr><tr><td>Decorator</td><td>O projeto usa decoradores de função, como <code>@receiver</code> e <code>@transaction.atomic</code>; isso não comprova uma cadeia de objetos Decorator GoF. Não há necessidade atual dessa composição adicional.</td></tr></tbody></table></div></article>
+<footer class="page-footer"><span>Mesmo conteúdo do Markdown · HTML independente, sem conexão externa.</span><a class="to-top" href="#inicio">Voltar ao início ↑</a></footer>
+</div></main>
+<div class="toast" role="status" aria-live="polite" hidden></div>
+<script>
+const menu = document.querySelector('.menu-button');
+const closeMenu = () => { document.body.classList.remove('nav-open'); menu.setAttribute('aria-expanded','false'); };
+menu.addEventListener('click', () => { const open = !document.body.classList.contains('nav-open'); document.body.classList.toggle('nav-open',open); menu.setAttribute('aria-expanded',String(open)); });
+document.querySelector('.backdrop').addEventListener('click', closeMenu);
+document.querySelectorAll('.sidebar a').forEach(a => a.addEventListener('click', closeMenu));
+document.addEventListener('keydown', event => { if(event.key === 'Escape') closeMenu(); });
+document.querySelector('.print-button').addEventListener('click', () => window.print());
+const links = [...document.querySelectorAll('nav a[href^="#"]')];
+const observed = links.map(link => document.getElementById(decodeURIComponent(link.hash.slice(1)))).filter(Boolean);
+const progress = document.querySelector('.progress span');
+let pending = false;
+function updateReading() {
+  const height = document.documentElement.scrollHeight - window.innerHeight;
+  progress.style.width = (height > 0 ? Math.min(100, Math.max(0, window.scrollY / height * 100)) : 100) + '%';
+  let current = observed[0];
+  let nearest = -Infinity;
+  observed.forEach(section => { const top = section.getBoundingClientRect().top; if(top <= 130 && top > nearest) { current = section; nearest = top; } });
+  links.forEach(link => { if(current && decodeURIComponent(link.hash.slice(1)) === current.id) link.setAttribute('aria-current','location'); else link.removeAttribute('aria-current'); });
+  pending = false;
+}
+window.addEventListener('scroll', () => { if(!pending) { pending = true; requestAnimationFrame(updateReading); } }, {passive:true});
+window.addEventListener('resize', updateReading);
+updateReading();
+const toast = document.querySelector('.toast');
+let toastTimer;
+document.querySelectorAll('.copy-code').forEach(button => button.addEventListener('click', async () => {
+  const text = button.closest('.code-block').querySelector('code').textContent;
+  try {
+    if(navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+    else {
+      const area = document.createElement('textarea'); area.value = text; area.style.position = 'fixed'; area.style.left = '-9999px'; document.body.appendChild(area); area.select();
+      const copied = document.execCommand('copy'); area.remove(); button.focus(); if(!copied) throw new Error('copy');
+    }
+    toast.textContent = 'Trecho copiado.';
+  } catch(error) { toast.textContent = 'Selecione o trecho e use Ctrl+C para copiar.'; }
+  toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, 2600);
+}));
+</script>
+</body>
+</html>

@@ -4,9 +4,15 @@
 
 Este documento apresenta primeiro os padrões que têm uso real no projeto, na ordem combinada: **criação, estruturais e comportamentais**. As seções explicam o conceito, mostram onde procurar no código e acompanham exemplos do funcionamento.
 
-São sete padrões aplicados nos componentes do NanaSmart e dois mecanismos utilizados por meio de Python/Django: **Iterator e Composite no ORM**. Algumas das aplicações do projeto também se apoiam no framework, como Observer pelos sinais do Django e Template Method sobre as views do DRF. Essa origem aparece no início de cada seção.
+| Situação dos 12 padrões analisados | Quantidade | Padrões |
+|---|---:|---|
+| Aplicados nos componentes do projeto | **7** | Builder, Factory Method, Adapter, Facade, Observer, Strategy e Template Method |
+| Utilizados por mecanismos do Python/Django | **2** | Iterator e Composite no ORM |
+| Sem implementação própria, por falta de necessidade | **3** | Abstract Factory, Singleton e Decorator GoF |
 
-Os outros padrões avaliados aparecem apenas em uma tabela curta no final. Recursos compartilhados ou decoradores de função não são contados automaticamente como implementações GoF.
+**Total: 12 analisados, sendo 9 em uso e 3 sem necessidade de implementação própria.**
+
+Observer e Template Method também aproveitam infraestrutura do Django/DRF, mas já estão contados entre os sete; não serão contados novamente.
 
 ## Como ler
 
