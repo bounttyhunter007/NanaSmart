@@ -116,6 +116,65 @@ createApp({
       localizacoes: { search: '', setor: '' },
     });
 
+    const locationState = reactive({ rows: [], busy: false, error: '', sectorPage: 1, equipmentPage: 1 });
+    let locationRequest = 0;
+    const locationText = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+    const locationGroups = computed(() => {
+      const groups = new Map();
+      for (const row of locationState.rows) {
+        const sector = String(row.setor || '').trim().replace(/\s+/g, ' ') || 'Sem setor informado';
+        const key = JSON.stringify([row.companyId, locationText(sector)]);
+        if (!groups.has(key)) groups.set(key, { key, sector, company: row.company, items: [] });
+        groups.get(key).items.push(row);
+      }
+      return [...groups.values()].map(group => ({ ...group,
+        items: group.items.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }) || a.id - b.id),
+      })).sort((a, b) => a.sector.localeCompare(b.sector, 'pt-BR', { numeric: true }) || a.company.localeCompare(b.company, 'pt-BR'));
+    });
+    const filteredLocationGroups = computed(() => {
+      const search = locationText(filters.localizacoes.search).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return locationGroups.value
+        .map(group => ({ ...group, items: group.items.filter(row =>
+          locationText(`${row.name} ${row.equipamento} ${group.sector} ${group.company}`).normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(search)) }))
+        .filter(group => group.items.length);
+    });
+    const locationEquipmentCount = computed(() => filteredLocationGroups.value.reduce((total, group) => total + group.items.length, 0));
+    const locationSectorPageCount = computed(() => Math.max(1, Math.ceil(filteredLocationGroups.value.length / 5)));
+    const locationSectorPage = computed(() => Math.max(1, Math.min(locationState.sectorPage, locationSectorPageCount.value)));
+    const locationSectorRows = computed(() => filteredLocationGroups.value.slice((locationSectorPage.value - 1) * 5, locationSectorPage.value * 5));
+    const selectedLocationGroup = computed(() => locationSectorRows.value.find(group => group.key === filters.localizacoes.setor) || locationSectorRows.value[0] || null);
+    const locationEquipmentPageCount = computed(() => Math.max(1, Math.ceil((selectedLocationGroup.value?.items.length || 0) / 4)));
+    const locationEquipmentPage = computed(() => Math.max(1, Math.min(locationState.equipmentPage, locationEquipmentPageCount.value)));
+    const locationEquipmentRows = computed(() => selectedLocationGroup.value?.items.slice((locationEquipmentPage.value - 1) * 4, locationEquipmentPage.value * 4) || []);
+    function selectLocationSector(key) {
+      filters.localizacoes.setor = key;
+      const index = filteredLocationGroups.value.findIndex(group => group.key === key);
+      locationState.sectorPage = index < 0 ? 1 : Math.floor(index / 5) + 1;
+      locationState.equipmentPage = 1;
+    }
+    function changeLocationSectorPage(page) {
+      locationState.sectorPage = Math.max(1, Math.min(page, locationSectorPageCount.value));
+      filters.localizacoes.setor = '';
+      locationState.equipmentPage = 1;
+    }
+    function changeLocationEquipmentPage(page) {
+      locationState.equipmentPage = Math.max(1, Math.min(page, locationEquipmentPageCount.value));
+    }
+    function applyLocationSearch() {
+      filters.localizacoes.setor = '';
+      locationState.sectorPage = 1;
+      locationState.equipmentPage = 1;
+    }
+    function clearLocationFilters() {
+      filters.localizacoes.search = '';
+      applyLocationSearch();
+    }
+    function resetLocations() {
+      ++locationRequest;
+      Object.assign(locationState, { rows: [], busy: false, error: '', sectorPage: 1, equipmentPage: 1 });
+      clearLocationFilters();
+    }
+
     // ─ Modal ─────────────────────────────────────────
     const modal = reactive({ open: false, type: '', title: '', editId: null, saving: false, oldStatus: null });
     const fd = reactive({});
@@ -624,6 +683,7 @@ createApp({
     }
 
     function logout() {
+      resetLocations();
       clearOsPrompt();
       closeABC(); closeEquipModal();
       ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; liveOpen.value = false; telemetryLiveOpen.value = false; performanceOpen.value = false;
@@ -1857,14 +1917,28 @@ createApp({
     }
 
     async function fetchLocalizacoes() {
-      await withLoading(async () => {
-        const p = new URLSearchParams();
-        if (filters.localizacoes.search) p.set('search', filters.localizacoes.search);
-        if (filters.localizacoes.setor) p.set('setor__icontains', filters.localizacoes.setor);
-        const d = await api('/api/localizacao/?' + p);
-        lists.localizacoes = normList(d);
-        Object.assign(pages.localizacoes, normPages(d));
-      });
+      const request = ++locationRequest, company = globalEmpresa.value, actor = me.value?.id;
+      const current = () => request === locationRequest && company === globalEmpresa.value && actor === me.value?.id;
+      locationState.busy = true; locationState.error = '';
+      try {
+        // Carrega todas as páginas para manter cada setor completo.
+        const [locations, equipments, companies] = await Promise.all([
+          telemetryAll('/api/localizacao/?limit=200'),
+          telemetryAll('/api/equipamentos/?limit=200' + (company ? '&empresa=' + company : '')),
+          isAdmin.value ? telemetryAll('/api/empresas/?limit=200') : Promise.resolve([]),
+        ]);
+        if (!current()) return;
+        const equipmentById = new Map(equipments.map(eq => [Number(eq.id), eq]));
+        const companyById = new Map(companies.map(item => [Number(item.id), item.nome]));
+        lists.localizacoes = locations;
+        locationState.rows = locations.filter(loc => !company || equipmentById.has(Number(loc.equipamento))).map(loc => {
+          const eq = equipmentById.get(Number(loc.equipamento));
+          return { ...loc, name: eq?.nome || `Equipamento #${loc.equipamento}`, status: eq?.status || '',
+            companyId: eq?.empresa ?? null, company: companyById.get(Number(eq?.empresa)) || (eq?.empresa ? `Empresa #${eq.empresa}` : 'Empresa não informada') };
+        });
+      } catch {
+        if (current()) { locationState.rows = []; locationState.error = 'Não foi possível carregar as localizações. Tente novamente.'; }
+      } finally { if (current()) locationState.busy = false; }
     }
 
     async function fetchEmpresasAll() {
@@ -2694,6 +2768,7 @@ createApp({
     });
 
     function onGlobalEmpresaChange() {
+      resetLocations();
       closeABC(); closeEquipModal();
       ++dashboardRequest; dashboardKpisLoading.value = false; dashboardSummary.value = null; dashboardUpdatedAt.value = null; dashSetor.value = ''; dashEquipamento.value = ''; performanceOpen.value = false; liveOpen.value = false;
       clearTrendDemo(); resetTrendMonitoring();
@@ -3013,6 +3088,10 @@ createApp({
     }
 
     return {
+      locationState, locationGroups, filteredLocationGroups, locationEquipmentCount,
+      locationSectorPageCount, locationSectorPage, locationSectorRows, selectedLocationGroup,
+      locationEquipmentPageCount, locationEquipmentPage, locationEquipmentRows,
+      clearLocationFilters, selectLocationSector, changeLocationSectorPage, changeLocationEquipmentPage, applyLocationSearch,
       orderAnalysis, analyzeOrder, osPrompt, promptCompanyId, saveOsPrompt, loadOtherPrompts,
       orderDetail, openOrderDetails, closeOrderDetails, orderDetailKeydown, orderStatusLabel, orderTypeLabel, orderExtraFilters,
       alertLevelLabel, orderEscalations, orderLastEscalation, fmtTimestamp,

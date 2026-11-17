@@ -4068,65 +4068,79 @@ html.light-mode .sensor-card:hover {
 /* ═══════════════════════════════════════════════
    LOCALIZACAO CARDS LAYOUT
 ═══════════════════════════════════════════════ */
-.loc-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-  padding: 8px 0;
+.locations-page { max-width: 1360px; margin: 0 auto; }
+.locations-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 16px; }
+.locations-heading h2 { color: var(--t1); font: 600 clamp(20px, 2vw, 25px)/1.35 var(--body); letter-spacing: -.5px; margin: 0 0 6px; }
+.locations-heading p { color: var(--t3); font-size: 13px; line-height: 1.6; }
+.locations-heading > button { flex-shrink: 0; }
+.locations-filters { display: flex; align-items: flex-end; gap: 12px; }
+.locations-filters label { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; color: var(--t3); font-size: 12px; }
+.locations-filters .filter-input, .locations-filters .filter-select { width: 100%; min-width: 0; margin: 0; }
+.locations-filters > button { min-height: 38px; }
+.locations-overview { margin: 12px 0 16px; }
+.locations-overview p { color: var(--t3); font-size: 12px; line-height: 1.6; }
+.locations-overview strong { color: var(--t1); font-weight: 600; }
+.locations-overview p > span { color: var(--t4); }
+.locations-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.location-sector-picker { min-width: 0; background: var(--s2); border: 1px solid var(--edge); border-radius: 12px; padding: 12px; }
+.location-step { display: flex; align-items: center; gap: 8px; color: var(--t3); font: 500 12px/1.5 var(--body); }
+.location-step > span { display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; border: 1px solid var(--edge); border-radius: 50%; color: var(--t2); background: var(--s3); font-size: 11px; }
+.location-sector-picker-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.location-sector-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; list-style: none; }
+.location-sector-options > li { min-width: 0; }
+.location-sector-option { display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; min-height: 56px; padding: 10px; border: 1px solid var(--edge); border-radius: 8px; background: transparent; color: var(--t3); font: inherit; text-align: left; cursor: pointer; }
+.location-sector-option:hover { background: var(--s3); color: var(--t1); }
+.location-sector-option[aria-current="true"] { border-color: var(--acid); background: var(--acid-b); color: var(--t1); }
+.location-sector-option > span:first-child { display: grid; gap: 4px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.location-sector-option strong { font: 500 13px/1.4 var(--body); }
+.location-sector-option small { color: var(--t3); font: 11px/1.4 var(--body); }
+.location-sector-option-count { color: var(--t2); background: var(--s3); padding: 3px 7px; border-radius: 5px; font: 11px var(--mono); }
+.location-sector-pagination { display: flex; align-items: center; gap: 12px; color: var(--t3); font-size: 11px; }
+.location-sector-pagination > div { display: flex; gap: 6px; }
+.location-mobile-picker { display: none; }
+.location-sector { min-width: 0; border: 1px solid var(--edge); border-radius: 12px; background: var(--s2); overflow: hidden; }
+.location-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; }
+.location-detail-heading > div { min-width: 0; }
+.location-detail-heading h4 { color: var(--t1); font: 600 17px/1.4 var(--body); overflow-wrap: anywhere; margin: 10px 0 0; }
+.location-detail-heading p { color: var(--t3); font-size: 11px; overflow-wrap: anywhere; margin-top: 4px; }
+.location-sector-count { color: var(--t3); background: var(--s3); border: 1px solid var(--edge); border-radius: 20px; padding: 5px 10px; font: 11px/1.4 var(--body); white-space: nowrap; }
+.location-equipment-list { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 16px 16px; gap: 10px; }
+.location-equipment { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--edge); border-radius: 8px; background: var(--s1); }
+.location-equipment-identity { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px; min-width: 0; }
+.location-equipment-code { color: var(--t4); font: 10px var(--mono); }
+.location-equipment-name { grid-row: 2; grid-column: 1 / -1; justify-self: start; max-width: 100%; border: 0; padding: 0; text-align: left; background: none; color: var(--t1); font: 500 14px/1.5 var(--body); cursor: pointer; overflow-wrap: anywhere; }
+.location-equipment-name:hover { color: var(--acid); text-decoration: underline; text-underline-offset: 3px; }
+.location-equipment-identity .badge { grid-column: 2; grid-row: 1; font-size: 10px; }
+.location-equipment-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--edge); padding-top: 10px; }
+.location-equipment-actions .btn { color: var(--t3); padding-left: 0; text-align: left; white-space: normal; }
+.location-equipment-actions .btn:hover { color: var(--t1); }
+.location-remove { min-width: 44px; min-height: 32px; padding: 4px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--t3); font: 11px var(--body); cursor: pointer; }
+.location-remove:hover { color: var(--danger); border-color: var(--edge); background: var(--s3); }
+.location-equipment-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--edge); color: var(--t3); font-size: 11px; }
+.location-equipment-pagination > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.locations-page button:disabled { opacity: .4; cursor: default; }
+.locations-empty { display: grid; justify-items: center; gap: 14px; padding: 48px 20px; text-align: center; border: 1px dashed var(--edge); border-radius: 12px; }
+.locations-empty h3 { color: var(--t1); font: 500 16px/1.5 var(--body); }
+.locations-empty p { color: var(--t3); font-size: 13px; line-height: 1.6; }
+.locations-page button:focus-visible, .locations-page input:focus-visible, .locations-page select:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; }
+@media (min-width: 1200px) {
+  .location-equipment-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-
-.loc-card {
-  background: var(--s2);
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  padding: 16px;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+@media (max-width: 760px) {
+  .locations-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .locations-filters { flex-wrap: wrap; }
+  .locations-filters label { flex: 1 1 100%; }
+  .locations-workspace { grid-template-columns: 1fr; gap: 12px; }
+  .location-sector-picker { padding: 12px; }
+  .location-sector-options, .location-sector-pagination { display: none; }
+  .location-mobile-picker { display: grid; gap: 6px; color: var(--t3); font-size: 12px; }
+  .location-mobile-picker select { width: 100%; min-width: 0; }
+  .location-detail-heading { align-items: flex-start; flex-wrap: wrap; }
+  .location-equipment-pagination > div { width: 100%; }
 }
-
-.loc-card:hover {
-  border-color: var(--wire);
-}
-
-.loc-card-equip {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--t1);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.loc-card-empresa {
-  font-size: 10px;
-  color: var(--t4);
-}
-
-.loc-card-setor {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--acid);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.loc-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid var(--edge);
-}
-
-.loc-card-date {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--t4);
+@media (max-width: 440px) {
+  .location-equipment-list { grid-template-columns: 1fr; }
+  .location-equipment { gap: 8px; }
 }
 
 /* ═══════════════════════════════════════════════
