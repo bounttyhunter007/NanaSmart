@@ -55,6 +55,15 @@ class PresentationDataTests(TestCase):
                         return Sensor.objects.get(pk=sensor['id'])
         raise AssertionError(f'Perfil não encontrado no manifesto: {perfil}')
 
+    def test_operador_incluido_no_total_e_no_resumo_sem_ordens_atribuidas(self):
+        for item in self.manifesto['empresas']:
+            empresa = Empresa.objects.get(pk=item['id'])
+            operador = empresa.usuarios.get(tipo_usuario='operador')
+            self.assertEqual(item['operador'], operador.username)
+            self.assertEqual(empresa.usuarios.count(), 4)
+            self.assertTrue(operador.check_password('123'))
+            self.assertFalse(OrdemServico.objects.filter(responsavel=operador).exists())
+
     def test_cadastros_operacionais_sem_marcacoes_de_demonstracao(self):
         campos = [(Empresa, ['nome', 'endereco']), (Usuario, ['username', 'first_name', 'last_name']),
                   (Equipamento, ['nome', 'numero_serie', 'descricao', 'justificativa_criticidade']),
@@ -133,12 +142,15 @@ class PresentationDataTests(TestCase):
             self.assertLess(ordem.evidencia_preditiva['analise']['current_value'],
                             ordem.evidencia_preditiva['limite_operacional'])
 
-    def test_dashboards_dos_tres_perfis_e_isolamento(self):
+    def test_dashboards_dos_quatro_perfis_e_isolamento(self):
         factory = APIRequestFactory()
         for usuario in Usuario.objects.all():
             request = factory.get('/api/dashboards/resumo/', {'dias': 30})
             force_authenticate(request, user=usuario)
             response = DashboardSummaryView.as_view()(request)
+            if usuario.tipo_usuario == 'operador':
+                self.assertEqual(response.status_code, 403)
+                continue
             self.assertEqual(response.status_code, 200)
             self.assertGreater(response.data['ordens_sem_tecnico'], 0)
             self.assertGreater(response.data['alertas_24h']['total'], 0)
@@ -196,7 +208,7 @@ class SeedSafetyTests(TestCase):
 
     def test_validacao_precede_qualquer_limpeza(self):
         for kwargs in [{'num_empresas': 0}, {'equip_por_empresa': -1}, {'dias_historico': 0},
-                       {'funcionarios_por_empresa': 1}]:
+                       {'funcionarios_por_empresa': 1}, {'funcionarios_por_empresa': 2}]:
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 popular(**kwargs)
             self.assertTrue(Empresa.objects.filter(pk=self.empresa.pk).exists())
@@ -212,7 +224,7 @@ class SeedSafetyTests(TestCase):
     def test_falha_depois_da_limpeza_restaura_base_e_admin(self):
         with patch.object(seed, 'validar_populacao', side_effect=RuntimeError('falha ao validar')):
             with self.assertRaisesRegex(RuntimeError, 'falha ao validar'):
-                popular(num_empresas=1, equip_por_empresa=1, dias_historico=1, funcionarios_por_empresa=2)
+                popular(num_empresas=1, equip_por_empresa=1, dias_historico=1, funcionarios_por_empresa=3)
         self.assertEqual(list(Empresa.objects.values_list('nome', flat=True)), ['Preservar até commit'])
         self.assertFalse(Telemetria.objects.exists())
         self.admin.refresh_from_db()
@@ -251,7 +263,7 @@ class SeedSafetyTests(TestCase):
     def test_janelas_curta_e_longa_tem_kpis_recentes(self):
         for dias in [1, 120, 365]:
             with self.subTest(dias=dias):
-                popular(num_empresas=1, equip_por_empresa=1, dias_historico=dias, funcionarios_por_empresa=2)
+                popular(num_empresas=1, equip_por_empresa=1, dias_historico=dias, funcionarios_por_empresa=3)
                 eq = Equipamento.objects.get()
                 concluidas = OrdemServico.objects.filter(status='concluida',
                     data_abertura__gte=timezone.now() - timedelta(days=7))
@@ -260,7 +272,7 @@ class SeedSafetyTests(TestCase):
                 self.assertGreater(kpi['custo_total_manutencao'], 0)
 
     def test_um_dia_tambem_cobre_cenarios_e_inativos_tem_historico(self):
-        popular(num_empresas=1, equip_por_empresa=5, dias_historico=1, funcionarios_por_empresa=2)
+        popular(num_empresas=1, equip_por_empresa=5, dias_historico=1, funcionarios_por_empresa=3)
         for sensor in Sensor.objects.all():
             self.assertTrue(sensor.leituras.exists())
         self.assertTrue(Alerta.objects.filter(status='ativo', nivel='critico').exists())
@@ -269,7 +281,7 @@ class SeedSafetyTests(TestCase):
     def test_mesma_seed_reproduz_cadastros_e_valores(self):
         amostras = []
         for _ in range(2):
-            popular(num_empresas=1, equip_por_empresa=1, dias_historico=1, funcionarios_por_empresa=2, rng_seed=9)
+            popular(num_empresas=1, equip_por_empresa=1, dias_historico=1, funcionarios_por_empresa=3, rng_seed=9)
             amostras.append((list(Empresa.objects.values_list('nome', 'cnpj')),
                             list(Usuario.objects.filter(tipo_usuario='tecnico').values_list('username', 'email')),
                             list(Telemetria.objects.order_by('pk').values_list('valor', flat=True))))

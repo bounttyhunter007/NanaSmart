@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsOperationalUser
 from rest_framework import serializers
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, inline_serializer
@@ -86,7 +86,7 @@ class DashboardSummaryView(APIView):
         ?empresa_id=1      → Admin filtra por empresa específica
         ?dias=30           → Limita KPIs às OS dos últimos N dias (padrão: todo o histórico)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
@@ -103,7 +103,7 @@ class KpiDashboardView(APIView):
         ?equipamento_id=1  → Filtra por equipamento específico
         ?dias=30           → Limita às OS dos últimos N dias
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(
         responses=inline_serializer(

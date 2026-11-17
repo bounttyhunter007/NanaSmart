@@ -1,8 +1,8 @@
 from rest_framework import viewsets
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Alerta
-from .serializers import AlertaSerializer
-from rest_framework.permissions import IsAuthenticated
+from .serializers import AlertaSerializer, AlertaOperadorSerializer
+from accounts.permissions import IsOperationalUser, IsOperationalOrOperatorReadOnly
 from .filters import AlertaFilter, ordenar_historico
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Coalesce
@@ -11,9 +11,14 @@ from manutencao.visibility import visible_work_orders
 
 class AlertaViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AlertaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser | IsOperationalOrOperatorReadOnly]
     filter_backends = [DjangoFilterBackend]
     filterset_class = AlertaFilter
+
+    def get_serializer_class(self):
+        if getattr(getattr(self.request, 'user', None), 'tipo_usuario', None) == 'operador':
+            return AlertaOperadorSerializer
+        return super().get_serializer_class()
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):

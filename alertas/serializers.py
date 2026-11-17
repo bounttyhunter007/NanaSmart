@@ -34,3 +34,12 @@ class AlertaSerializer(serializers.ModelSerializer):
 
     def get_legado(self, obj) -> bool:
         return not obj.dados_deteccao or obj.dados_deteccao.get('legado', False)
+
+
+class AlertaOperadorSerializer(AlertaSerializer):
+    """Resumo de acompanhamento, sem IA, evidências internas ou vínculo de OS."""
+
+    class Meta(AlertaSerializer.Meta):
+        fields = ['id', 'equipamento', 'equipamento_nome', 'sensor_nome', 'tipo_alerta',
+                  'origem', 'nivel', 'descricao', 'data_alerta', 'status', 'data_normalizacao']
+        read_only_fields = fields

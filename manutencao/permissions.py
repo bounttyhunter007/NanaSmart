@@ -15,6 +15,8 @@ class IsOwnerOrGestorOrUnassigned(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
+        if user.tipo_usuario not in ('admin', 'gestor', 'tecnico'):
+            return user.tipo_usuario == 'operador' and request.method == 'POST' and view.action == 'create'
 
         if request.method == 'POST' and user.tipo_usuario == 'tecnico':
             novo_responsavel_id = request.data.get('responsavel')

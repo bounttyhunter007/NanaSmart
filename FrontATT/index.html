@@ -125,8 +125,8 @@
         Online
       </div>
 
-      <div class="sidebar-group-label">Principal</div>
-      <div class="nav-item" :class="{active:view==='dashboard'}" role="button" tabindex="0" :aria-label="'Dashboard'" @keydown.enter="navigate('dashboard')" @keydown.space.prevent="navigate('dashboard')" @click="navigate('dashboard')">
+      <div v-if="!isOperador" class="sidebar-group-label">Principal</div>
+      <div v-if="!isOperador" class="nav-item" :class="{active:view==='dashboard'}" role="button" tabindex="0" :aria-label="'Dashboard'" @keydown.enter="navigate('dashboard')" @keydown.space.prevent="navigate('dashboard')" @click="navigate('dashboard')">
         <span class="nav-icon">◈</span> <span class="nav-label">Dashboard</span>
       </div>
 
@@ -137,14 +137,14 @@
       <div class="nav-item" :class="{active:view==='alertas'}" role="button" tabindex="0" :aria-label="'Histórico de alertas'" @keydown.enter="navigate('alertas')" @keydown.space.prevent="navigate('alertas')" @click="navigate('alertas')">
         <span class="nav-icon">◉</span> <span class="nav-label">Histórico de alertas</span>
       </div>
-      <div class="nav-item" :class="{active:view==='ordens'}" role="button" tabindex="0" :aria-label="'Ordens de Serviço'" @keydown.enter="navigate('ordens')" @keydown.space.prevent="navigate('ordens')" @click="navigate('ordens')">
+      <div v-if="!isOperador" class="nav-item" :class="{active:view==='ordens'}" role="button" tabindex="0" :aria-label="'Ordens de Serviço'" @keydown.enter="navigate('ordens')" @keydown.space.prevent="navigate('ordens')" @click="navigate('ordens')">
         <span class="nav-icon">✦</span> <span class="nav-label">Ordens de Serviço</span>
         <span v-if="osSemTecnicoCount>0" class="nav-count">{{ osSemTecnicoCount }}</span>
       </div>
-      <div class="nav-item" :class="{active:view==='telemetria'}" role="button" tabindex="0" :aria-label="'Telemetria'" @keydown.enter="navigate('telemetria')" @keydown.space.prevent="navigate('telemetria')" @click="navigate('telemetria')">
+      <div v-if="!isOperador" class="nav-item" :class="{active:view==='telemetria'}" role="button" tabindex="0" :aria-label="'Telemetria'" @keydown.enter="navigate('telemetria')" @keydown.space.prevent="navigate('telemetria')" @click="navigate('telemetria')">
         <span class="nav-icon">⬡</span> <span class="nav-label">Telemetria</span>
       </div>
-      <div class="nav-item" :class="{active:view==='tendencias'}" role="button" tabindex="0" :aria-label="'Tendências'" @keydown.enter="navigate('tendencias')" @keydown.space.prevent="navigate('tendencias')" @click="navigate('tendencias')">
+      <div v-if="!isOperador" class="nav-item" :class="{active:view==='tendencias'}" role="button" tabindex="0" :aria-label="'Tendências'" @keydown.enter="navigate('tendencias')" @keydown.space.prevent="navigate('tendencias')" @click="navigate('tendencias')">
         <span class="nav-icon">↗</span> <span class="nav-label">Tendências</span>
         <span v-if="trendMonitor.updatedAt" class="nav-count" :title="trendMonitor.error || 'Tendências anormais na empresa selecionada: ' + trendAlerts.length">{{ trendAlerts.length }}</span>
       </div>
@@ -299,7 +299,8 @@
             </select>
             <button v-if="isAdminOrGestor" class="btn btn-ghost" @click="openCriteria()">Critérios ABC da empresa</button>
             <button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal('equipamento')">+ Novo</button>
-            <div class="export-btns">
+            <button v-if="isOperador" class="btn btn-primary" @click="openModal('ordem')">+ Abrir O.S. manual</button>
+            <div v-if="!isOperador" class="export-btns">
               <span class="export-label">Exportar:</span>
               <button class="btn-export pdf" @click="exportData('equipamentos', 'pdf')">📄 PDF</button>
               <button class="btn-export excel" @click="exportData('equipamentos', 'excel')">📊 Excel</button>
@@ -343,7 +344,7 @@
               <div class="equip-card-footer">
                 <div style="display:flex;gap:6px;align-items:center">
                   <span class="badge" :class="eqStatusBadge(e.status)"><span class="badge-dot"></span>{{ e.status || '—' }}</span>
-                  <span class="badge badge-gray" style="font-family:var(--mono);font-size:9px" title="Sensores ativos"><span style="color:var(--t4)">Sensores:</span> {{ countSensores(e.id) }}</span>
+                  <span v-if="!isOperador" class="badge badge-gray" style="font-family:var(--mono);font-size:9px" title="Sensores ativos"><span style="color:var(--t4)">Sensores:</span> {{ countSensores(e.id) }}</span>
                 </div>
                 <div class="equip-card-actions">
                   <button v-if="isAdminOrGestor" class="btn btn-ghost btn-sm" @click.stop="editItem('equipamento',e)">Editar</button>
@@ -362,11 +363,11 @@
 
         <!-- ══════════ HISTÓRICO DE ALERTAS ══════════ -->
         <section v-if="view==='alertas'" class="alert-history">
-          <div class="telemetry-heading"><div><h1>Histórico de alertas</h1><p>O que o monitoramento detectou e quais evidências originaram cada ocorrência. O atendimento é realizado na O.S.</p></div><button class="btn btn-primary" :disabled="alertHistory.busy" @click="fetchAlertas(alertHistory.url || null)">↻ Atualizar</button></div>
+          <div class="telemetry-heading"><div><h1>Histórico de alertas</h1><p>{{ isOperador ? 'Consulte as ocorrências dos equipamentos da sua empresa.' : 'O que o monitoramento detectou e quais evidências originaram cada ocorrência. O atendimento é realizado na O.S.' }}</p></div><button class="btn btn-primary" :disabled="alertHistory.busy" @click="fetchAlertas(alertHistory.url || null)">↻ Atualizar</button></div>
           <form class="filter-bar alert-history-filters" @submit.prevent="fetchAlertas()">
             <label>Busca<input class="filter-input" v-model="filters.alertas.search" placeholder="Tipo ou descrição" /></label>
             <label>Equipamento<select class="filter-select" v-model="filters.alertas.equipamento" @change="filters.alertas.sensor=''"><option value="">Todos</option><option v-if="filters.alertas.equipamento && !telemetry.equipments.some(e => Number(e.id) === Number(filters.alertas.equipamento))" :value="filters.alertas.equipamento">Equipamento #{{ filters.alertas.equipamento }}</option><option v-for="e in telemetry.equipments" :key="e.id" :value="e.id">{{ e.nome }}</option></select></label>
-            <label>Sensor<select class="filter-select" v-model="filters.alertas.sensor"><option value="">Todos</option><option v-for="sensor in alertSensors" :key="sensor.id" :value="sensor.id">{{ sensor.nome }} · {{ sensor.equipamento_nome }}</option></select></label>
+            <label v-if="!isOperador">Sensor<select class="filter-select" v-model="filters.alertas.sensor"><option value="">Todos</option><option v-for="sensor in alertSensors" :key="sensor.id" :value="sensor.id">{{ sensor.nome }} · {{ sensor.equipamento_nome }}</option></select></label>
             <label>Origem<select class="filter-select" v-model="filters.alertas.origem"><option value="">Todas</option><option value="limite">Limite operacional</option><option value="tendencia">Tendência preditiva</option><option value="manual">Manual · legado</option></select></label>
             <label>Nível máximo<select class="filter-select" v-model="filters.alertas.nivel"><option value="">Todos</option><option value="baixo">Baixo</option><option value="medio">Médio</option><option value="critico">Crítico</option></select></label>
             <label>De<input class="filter-input" type="datetime-local" v-model="filters.alertas.from" /></label>
@@ -384,10 +385,10 @@
           <div v-else-if="!alertHistory.error" class="table-wrap alert-history-list" role="region" aria-label="Lista de alertas por gravidade; deslize para ver todas as colunas" tabindex="0">
             <table class="alert-history-table">
               <caption>Mais graves primeiro: crítico → médio → baixo. Dentro de cada nível, os mais recentes aparecem acima.</caption>
-              <thead><tr><th scope="col">Maior nível</th><th scope="col">Ocorrência e motivo</th><th scope="col">Equipamento / sensor</th><th scope="col">Registrado em</th><th scope="col">Normalização detectada</th><th scope="col">O.S. vinculada</th><th scope="col">Consulta</th></tr></thead>
+              <thead><tr><th scope="col">Maior nível</th><th scope="col">Ocorrência e motivo</th><th scope="col">Equipamento / sensor</th><th scope="col">Registrado em</th><th scope="col">Normalização detectada</th><th v-if="!isOperador" scope="col">O.S. vinculada</th><th scope="col">Consulta</th></tr></thead>
               <tbody>
                 <tr v-for="a in lists.alertas" :key="a.id" :style="{'--alerta-nivel-color':nivelColor(a.nivel)}">
-                  <td class="alert-history-severity"><span class="badge" :class="nivelBadge(a.nivel)">{{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.nivel] || a.nivel }}</span><small>Inicial: {{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.dados_deteccao?.nivel] || 'não disponível' }}</small></td>
+                  <td class="alert-history-severity"><span class="badge" :class="nivelBadge(a.nivel)">{{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.nivel] || a.nivel }}</span><small v-if="!isOperador">Inicial: {{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[a.dados_deteccao?.nivel] || 'não disponível' }}</small></td>
                   <td class="alert-history-occurrence"><strong>#{{ a.id }} · {{ a.dados_deteccao?.tipo_alerta || a.tipo_alerta }}</strong><small>{{ a.origem === 'limite' ? 'Limite operacional' : a.origem === 'tendencia' ? 'Tendência preditiva' : 'Manual · legado' }}</small>
                     <details v-if="(a.dados_deteccao?.descricao || a.descricao || '').length > 140" class="alert-history-reason"><summary>{{ (a.dados_deteccao?.descricao || a.descricao).slice(0,140) }}… <span>Ver motivo completo</span></summary><p>{{ a.dados_deteccao?.descricao || a.descricao }}</p></details>
                     <p v-else class="alert-history-reason">{{ a.dados_deteccao?.descricao || a.descricao || 'Motivo não disponível.' }}</p>
@@ -396,8 +397,8 @@
                   <td class="alert-history-equipment"><strong>{{ a.dados_deteccao?.equipamento_nome || a.equipamento_nome || eqNome(a.equipamento) }}</strong><small>{{ a.dados_deteccao?.sensor_nome || a.sensor_nome || 'Sem sensor identificado' }}</small></td>
                   <td class="alert-history-date"><time :datetime="a.data_alerta">{{ fmtDate(a.data_alerta) }}</time></td>
                   <td class="alert-history-date"><time v-if="a.data_normalizacao" :datetime="a.data_normalizacao">{{ fmtDate(a.data_normalizacao) }}</time><span v-else class="alert-history-note">Sem registro</span></td>
-                  <td><button v-if="a.ordem_servico_id" class="btn btn-ghost btn-sm" @click="openAlertaOS(a)" :aria-label="'Abrir O.S. #' + a.ordem_servico_id + ' do alerta #' + a.id">#{{ a.ordem_servico_id }} ↗</button><span v-else class="alert-history-note">Sem vínculo</span></td>
-                  <td><div class="alert-history-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails(a)" :aria-label="'Ver detalhes e leituras do alerta #' + a.id">Detalhes e leituras</button><button v-if="a.sensor" class="btn btn-ghost btn-sm" @click="openAlertaSensor(a)" :aria-label="'Acompanhar sensor do alerta #' + a.id">Acompanhar sensor</button></div></td>
+                  <td v-if="!isOperador"><button v-if="a.ordem_servico_id" class="btn btn-ghost btn-sm" @click="openAlertaOS(a)" :aria-label="'Abrir O.S. #' + a.ordem_servico_id + ' do alerta #' + a.id">#{{ a.ordem_servico_id }} ↗</button><span v-else class="alert-history-note">Sem vínculo</span></td>
+                  <td><div class="alert-history-actions"><button class="btn btn-ghost btn-sm" @click="openAlertaDetails(a)" :aria-label="'Ver detalhes e leituras do alerta #' + a.id">{{ isOperador ? 'Ver alerta' : 'Detalhes e leituras' }}</button><button v-if="a.sensor" class="btn btn-ghost btn-sm" @click="openAlertaSensor(a)" :aria-label="'Acompanhar sensor do alerta #' + a.id">Acompanhar sensor</button></div></td>
                 </tr>
               </tbody>
             </table>
@@ -959,7 +960,7 @@
             <div class="field"><label>Data de Instalação</label><input type="date" v-model="fd.data_instalacao" /></div>
           </div>
           <div class="field-row">
-            <div class="field" :class="{hasError:formErrors.status}">
+            <div v-if="!isOperador" class="field" :class="{hasError:formErrors.status}">
               <label>Status</label>
               <select v-model="fd.status">
                 <option value="ativo">Ativo</option>
@@ -1004,13 +1005,14 @@
 
         <!-- ORDEM -->
         <template v-if="modal.type==='ordem'">
+          <p v-if="isOperador" class="abc-notice">Descreva o problema. A O.S. será corretiva, pendente e sem responsável; a equipe de manutenção fará o atendimento.</p>
           <fieldset :disabled="['concluida', 'cancelada'].includes(modal.oldStatus)" style="border:none; padding:0; margin:0;">
           <div class="field" :class="{hasError:formErrors.titulo}">
             <label>Título *</label><input v-model="fd.titulo" placeholder="Ex: Manutenção preventiva compressor" />
             <span v-if="formErrors.titulo" class="field-error">{{ formErrors.titulo }}</span>
           </div>
           <div class="field-row">
-            <div class="field" :class="{hasError:formErrors.tipo_os}">
+            <div v-if="!isOperador" class="field" :class="{hasError:formErrors.tipo_os}">
               <label>Tipo de OS</label>
               <select v-model="fd.tipo_os">
                 <option value="preventiva">Preventiva</option>
@@ -1035,7 +1037,7 @@
           </div>
           <div class="field-row">
             <div class="field"><label>Prioridade da OS</label><p class="abc-notice">{{ modal.editId ? prioridadeLabel(fd.prioridade) : prioridadeLabel(orderEquipmentOptions.find(e=>e.id===fd.equipamento)?.criticidade) }}</p><small>{{ modal.editId ? 'A prioridade é alterada em Prioridade e histórico, com justificativa.' : 'A OS copiará a criticidade vigente do equipamento ao salvar.' }}</small></div>
-            <div class="field" :class="{hasError:formErrors.status}">
+            <div v-if="!isOperador" class="field" :class="{hasError:formErrors.status}">
               <label>Status</label>
               <select v-model="fd.status">
                 <option value="pendente">Pendente</option>
@@ -1050,10 +1052,10 @@
             <label>Responsável</label>
             <select v-model.number="fd.responsavel">
               <option :value="null">— Sem responsável —</option>
-              <option v-for="u in lists.usuarios" :key="u.id" :value="u.id">{{ u.username }} ({{ u.tipo_usuario }})</option>
+              <option v-for="u in lists.usuarios.filter(u => u.tipo_usuario !== 'operador')" :key="u.id" :value="u.id">{{ u.username }} ({{ u.tipo_usuario }})</option>
             </select>
           </div>
-          <div class="field" v-else>
+          <div class="field" v-else-if="!isOperador">
             <label>Responsável</label>
             <div style="padding:0.75rem; background:#111; border:1px solid #333; border-radius:8px; color:var(--ice);">
               {{ usuarioNome(fd.responsavel) || usuarioNome(me?.id) || '— Sem responsável —' }}
@@ -1336,6 +1338,7 @@
             <div class="field"><label>Tipo de Usuário</label>
               <select v-model="fd.tipo_usuario">
                 <option value="admin">Admin</option>
+                <option value="operador">Operador</option>
                 <option value="tecnico">Técnico</option>
                 <option value="gestor">Gestor</option>
               </select>
@@ -1368,7 +1371,7 @@
        CHAT FLOAT WIDGET (NanaSmart AI)
   ══════════════════════════════════════ -->
   <!-- Floating Button -->
-  <div class="ai-chat-trigger" @click="toggleChat" :class="{ open: chatOpen }">
+  <div v-if="!isOperador" class="ai-chat-trigger" @click="toggleChat" :class="{ open: chatOpen }">
     <div class="ai-chat-trigger-icon">
       <span class="ai-pulse-ring"></span>
       <span class="ai-pulse-dot"></span>
@@ -1378,7 +1381,7 @@
   </div>
 
   <!-- Chat Window -->
-  <div v-if="chatOpen" :class="['ai-chat-window', { expanded: chatExpanded }]">
+  <div v-if="chatOpen && !isOperador" :class="['ai-chat-window', { expanded: chatExpanded }]">
     <!-- Window Header -->
     <div class="ai-chat-header">
       <div class="ai-header-info">
@@ -1470,7 +1473,20 @@
 
   <div v-if="priorityModal.open" class="modal-backdrop abc-modal-backdrop" @click.self="!priorityModal.saving && (priorityModal.open=false)"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="abc-priority-title"><header class="modal-header"><h2 id="abc-priority-title">Prioridade e histórico</h2><button class="modal-close" aria-label="Fechar prioridade" :disabled="priorityModal.saving" @click="priorityModal.open=false">×</button></header><div class="modal-body"><p v-if="priorityModal.busy" role="status">Carregando OS e histórico…</p><p v-if="priorityModal.error" class="abc-error" role="alert">{{ priorityModal.error }}</p><template v-if="priorityModal.order && !priorityModal.busy"><h3>#{{ priorityModal.order.id }} — {{ priorityModal.order.titulo }}</h3><p><span class="badge" :class="prioridadeBadge(priorityModal.order.prioridade)">{{ prioridadeLabel(priorityModal.order.prioridade) }}</span></p><p v-if="priorityModal.order.prioridade_origem==='ajustada'">{{ priorityModal.order.justificativa_prioridade }}</p><p>Criticidade atual: {{ criticidadeLabel(priorityModal.order.criticidade_atual) }}</p><p>Criticidade do equipamento na abertura: {{ criticidadeLabel(priorityModal.order.criticidade_na_abertura,!priorityModal.order.prioridade_herdada_conhecida) }}</p><p v-if="priorityModal.order.justificativa_criticidade_na_abertura">Justificativa na abertura: {{ priorityModal.order.justificativa_criticidade_na_abertura }}</p><details v-if="priorityModal.order.criterios_abertura" class="abc-guide"><summary>Critérios na abertura · revisão {{ priorityModal.order.criterios_abertura.revisao }}</summary><p v-for="letter in ['a','b','c']" :key="letter">{{ letter.toUpperCase() }}: {{ priorityModal.order.criterios_abertura['criterio_'+letter] }}</p><p>Validados por {{ priorityModal.order.criterios_abertura.representante_manutencao }} em {{ priorityModal.order.criterios_abertura.data_validacao }}.</p></details><p v-if="priorityModal.order.risco_seguranca" class="abc-notice">Risco de segurança informado. Avalie a necessidade de ajuste da prioridade.</p><form v-if="isAdminOrGestor && ['pendente','andamento'].includes(priorityModal.order.status)" @submit.prevent="savePriority(false)"><fieldset class="abc-fieldset" :disabled="priorityModal.saving"><div class="field"><label for="abc-adjust">Nova prioridade</label><select id="abc-adjust" v-model="priorityModal.choice"><option value="A">A — Alta</option><option value="B">B — Média</option><option value="C">C — Baixa</option></select></div><div class="field"><label for="abc-reason">Justificativa da alteração *</label><textarea id="abc-reason" v-model="priorityModal.reason" required rows="3" placeholder="Explique a decisão e as condições observadas."></textarea></div><div class="abc-row-actions"><button class="btn btn-primary" type="submit">{{ priorityModal.saving ? 'Salvando…' : 'Registrar ajuste' }}</button><button v-if="priorityModal.order.prioridade_herdada_conhecida" type="button" class="btn btn-ghost" @click="savePriority(true)">Restaurar {{ prioridadeLabel(priorityModal.order.prioridade_automatica) }} da abertura</button></div><p v-if="!priorityModal.order.prioridade_herdada_conhecida" class="abc-note">A prioridade da abertura não foi preservada neste registro antigo. Registre um ajuste para revisar a prioridade.</p></fieldset></form><p v-else class="abc-note">{{ ['concluida','cancelada'].includes(priorityModal.order.status) ? 'OS encerrada: prioridade preservada.' : 'Somente gestor ou administrador pode ajustar a prioridade.' }}</p><h3 class="abc-history-heading">Histórico de prioridade</h3><p v-if="!priorityModal.history.length">Sem registros de alteração.</p><article v-for="h in priorityModal.history" :key="h.id" class="abc-history"><strong>{{ historicPriorityLabel(h.prioridade_anterior) }} → {{ historicPriorityLabel(h.prioridade_nova) }}</strong><p v-if="h.origem!=='herdada'">{{ h.justificativa }}</p><small>{{ h.alterado_por_nome || 'Sistema / legado' }} · {{ fmtTimestamp(h.criado_em) }} · {{ priorityOrigin(h.origem) }}</small><details v-if="h.origem==='migracao'"><summary>Valores preservados do legado</summary><p>Prioridade anterior: {{ historicPriorityLabel(h.dados_anteriores.prioridade) }}</p><p>Referência automática anterior: {{ h.dados_anteriores.prioridade_automatica || 'Não registrada' }}</p><p>Motivo anterior: {{ h.dados_anteriores.justificativa || 'Não registrado' }}</p></details></article></template></div></section></div>
 
-  <div v-if="equipModal.open" class="modal-backdrop" @click.self="closeEquipModal">
+  <div v-if="equipModal.open && isOperador" class="modal-backdrop" @click.self="closeEquipModal">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="operator-equipment-title">
+      <header class="modal-header"><h2 id="operator-equipment-title">{{ equipModal.equipamento?.nome }}</h2><button class="modal-close" aria-label="Fechar equipamento" @click="closeEquipModal">×</button></header>
+      <div class="modal-body"><p>Status: {{ equipModal.equipamento?.status }}</p><p>Setor: {{ locSetor(equipModal.equipamento?.id) }}</p><p>Modelo: {{ equipModal.equipamento?.modelo || '—' }}</p><p>Número de série: {{ equipModal.equipamento?.numero_serie }}</p><p>Criticidade: {{ criticidadeLabel(equipModal.equipamento?.criticidade) }}</p><p>{{ equipModal.equipamento?.descricao }}</p><p>Acesso de consulta. Para solicitar manutenção, abra uma O.S. manual.</p></div>
+      <footer class="modal-footer"><button class="btn btn-primary" @click="openModal('ordem').then(() => {fd.equipamento=equipModal.equipamento.id;closeEquipModal()})">Abrir O.S. manual</button></footer>
+    </section>
+  </div>
+  <div v-if="alertHistory.detail && isOperador" class="modal-backdrop" @click.self="closeAlertaDetails">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="operator-alert-title">
+      <header class="modal-header"><h2 id="operator-alert-title">Alerta #{{ alertHistory.detail.id }}</h2><button class="modal-close" aria-label="Fechar alerta" @click="closeAlertaDetails">×</button></header>
+      <div class="modal-body"><p v-if="alertHistory.detailBusy">Carregando…</p><p v-if="alertHistory.detailError" role="alert">{{ alertHistory.detailError }}</p><p>{{ alertHistory.detail.equipamento_nome }} · {{ alertHistory.detail.sensor_nome }}</p><p>{{ alertHistory.detail.descricao }}</p><p>Nível: {{ {critico:'Crítico',medio:'Médio',baixo:'Baixo'}[alertHistory.detail.nivel] || alertHistory.detail.nivel }}</p><p>Registro: {{ fmtDate(alertHistory.detail.data_alerta) }}</p><p>Normalização: {{ alertHistory.detail.data_normalizacao ? fmtDate(alertHistory.detail.data_normalizacao) : 'Sem registro' }}</p></div>
+    </section>
+  </div>
+  <div v-if="equipModal.open && !isOperador" class="modal-backdrop" @click.self="closeEquipModal">
     <div class="modal modal-wide">
       <div class="modal-header">
         <div>
@@ -1686,7 +1702,7 @@
   </div>
 
   <!-- Consulta da ocorrência: nenhuma ação de manutenção modifica o alerta. -->
-  <div v-if="alertHistory.detail" class="modal-backdrop" @click.self="closeAlertaDetails" @keydown.esc="closeAlertaDetails">
+  <div v-if="alertHistory.detail && !isOperador" class="modal-backdrop" @click.self="closeAlertaDetails" @keydown.esc="closeAlertaDetails">
     <section id="alert-detection-dialog" class="modal alert-detection-modal" role="dialog" aria-modal="true" aria-labelledby="alert-detection-title" tabindex="-1">
       <header class="modal-header"><div><h2 id="alert-detection-title">Detecção #{{ alertHistory.detail.id }}</h2><p>{{ alertEvidence.tipo_alerta || alertHistory.detail.tipo_alerta }}</p></div><button class="btn btn-ghost" aria-label="Fechar detalhes do alerta" @click="closeAlertaDetails">✕</button></header>
       <div class="modal-body">
@@ -1767,6 +1783,6 @@
 
 </div><!-- /#app -->
 <script src="live-chart.js?v=20261113-trends-header"></script>
-<script src="app.js?v=20261116-location-navigation"></script>
+<script src="app.js?v=20261117-operador"></script>
 </body>
 </html>

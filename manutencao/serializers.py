@@ -18,6 +18,34 @@ class OcorrenciaAlertaOSSerializer(serializers.Serializer):
     historico_incompleto = serializers.BooleanField()
     data_normalizacao = serializers.DateTimeField(allow_null=True)
 
+class OrdemServicoOperadorSerializer(serializers.ModelSerializer):
+    """Abertura manual de solicitação; o atendimento permanece com a manutenção."""
+
+    class Meta:
+        model = OrdemServico
+        fields = ['id', 'equipamento', 'titulo', 'descricao', 'risco_seguranca',
+                  'tipo_os', 'status', 'prioridade', 'data_abertura']
+        read_only_fields = ['id', 'tipo_os', 'status', 'prioridade', 'data_abertura']
+
+    def to_internal_value(self, data):
+        permitidos = {'equipamento', 'titulo', 'descricao', 'risco_seguranca'}
+        proibidos = set(data) - permitidos
+        if proibidos:
+            raise serializers.ValidationError({campo: 'Campo não permitido na abertura pelo operador.'
+                                               for campo in sorted(proibidos)})
+        return super().to_internal_value(data)
+
+    def validate_equipamento(self, equipamento):
+        user = self.context['request'].user
+        if not user.empresa_id or equipamento.empresa_id != user.empresa_id:
+            raise serializers.ValidationError('O equipamento deve pertencer à sua empresa.')
+        return equipamento
+
+    def create(self, validated_data):
+        return super().create({**validated_data, 'tipo_os': 'corretiva',
+                               'status': 'pendente', 'responsavel': None})
+
+
 class OrdemServicoSerializer(serializers.ModelSerializer):
     equipamento_nome = serializers.CharField(source='equipamento.nome', read_only=True)
     criticidade_atual = serializers.CharField(source='equipamento.criticidade', read_only=True, allow_null=True)
@@ -75,6 +103,9 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
         user = request.user if request and request.user.is_authenticated else None
         equipamento = data.get('equipamento', getattr(self.instance, 'equipamento', None))
         responsavel = data.get('responsavel', getattr(self.instance, 'responsavel', None))
+
+        if responsavel and responsavel.tipo_usuario == 'operador':
+            raise serializers.ValidationError({'responsavel': 'Operadores não podem ser responsáveis por ordens de serviço.'})
 
         if user and user.tipo_usuario != 'admin' and equipamento and equipamento.empresa_id != user.empresa_id:
             raise serializers.ValidationError({'equipamento': 'O equipamento deve pertencer à sua empresa.'})

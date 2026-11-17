@@ -19,7 +19,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("Nenhuma empresa encontrada! Rode 'python manage.py popular_banco' primeiro."))
             return
 
-        tipos_usuario = ['admin', 'gestor', 'tecnico']
+        tipos_usuario = [tipo for tipo, _ in Usuario.TIPO_USUARIO_CHOICES]
         cargos = ['Engenheiro Mecânico', 'Eletricista Sênior', 'Técnico de Manutenção', 'Gerente de Planta', 'Analista de Vibração']
 
         # Vamos criar 50 usuários
@@ -35,7 +35,7 @@ class Command(BaseCommand):
             # Sorteia uma empresa, um tipo e um cargo
             empresa_escolhida = random.choice(empresas)
             tipo_escolhido = random.choice(tipos_usuario)
-            cargo_escolhido = random.choice(cargos)
+            cargo_escolhido = 'Operador de Máquinas' if tipo_escolhido == 'operador' else random.choice(cargos)
 
             # Verifica se o username já existe por garantia
             if not Usuario.objects.filter(username=username).exists():

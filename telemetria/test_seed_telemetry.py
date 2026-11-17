@@ -93,7 +93,7 @@ class SeedTelemetryIntegrationTests(TestCase):
 
     def test_complete_small_seed_preserves_recent_history_without_artificial_final_spikes(self):
         with redirect_stdout(StringIO()):
-            run_seed(num_empresas=1, equip_por_empresa=1, dias_historico=2, funcionarios_por_empresa=2)
+            run_seed(num_empresas=1, equip_por_empresa=1, dias_historico=2, funcionarios_por_empresa=3)
         for sensor in Sensor.objects.all():
             rows = list(Telemetria.objects.filter(sensor=sensor).order_by('-timestamp')[:3])
             self.assertEqual(len(rows), 3)

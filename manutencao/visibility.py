@@ -6,6 +6,8 @@ from .models import OrdemServico
 
 def visible_work_orders(user, queryset=None):
     qs = OrdemServico.objects.all() if queryset is None else queryset
+    if user.tipo_usuario not in ('admin', 'gestor', 'tecnico'):
+        return qs.none()
     if user.tipo_usuario == 'admin':
         return qs
     if not user.empresa_id:

@@ -1,6 +1,6 @@
 # Banco de dados do NanaSmart
 
-**Revisão:** 16/11/2026. Inventário obtido das classes de modelo registradas pelo Django no código local, sem consultar registros nem modificar bancos. PostgreSQL é o banco de desenvolvimento configurado; os testes desta revisão usaram SQLite em memória.
+**Revisão:** 17/11/2026. Inventário obtido das classes de modelo registradas pelo Django no código local, sem consultar registros nem modificar bancos. PostgreSQL é o banco de desenvolvimento configurado; os testes desta revisão usaram SQLite em memória.
 
 ## Como entender os relacionamentos
 
@@ -76,7 +76,7 @@ Tabela: `accounts_usuario`.
 | `is_active` | BooleanField | não | — |
 | `date_joined` | DateTimeField | não | — |
 | `empresa` | FK → accounts.Empresa | sim | coluna empresa_id; on_delete=CASCADE |
-| `tipo_usuario` | CharField(20) | não | valores: admin, gestor, tecnico |
+| `tipo_usuario` | CharField(20) | não | valores: admin, gestor, tecnico, operador; padrão: operador |
 | `cargo` | CharField(100) | sim | — |
 | `telefone` | CharField(20) | sim | — |
 | `foto_perfil` | FileField(100) | sim | — |
@@ -360,4 +360,4 @@ Tabela: `gemini_api_promptconfig`.
 
 Este inventário descreve o estado dos modelos no código, não comprova que uma base existente já recebeu todas as migrações. Consulte `python manage.py showmigrations --plan` e o [procedimento de compatibilidade](HISTORICO_ALERTAS.md#atualização-do-banco-e-compatibilidade).
 
-A revisão documental não modificou modelos nem gerou/aplicou migrações. Modelos sem tabela própria, como views, builders, criadores de exportador, políticas e adapters, estão explicados no [guia oficial de padrões](docs_padroes_projeto/Verificacao_Padroes.md).
+A migração `accounts.0002_alter_usuario_managers_alter_usuario_tipo_usuario` inclui `operador` nas opções e o define como padrão de novos usuários; não altera os perfis já existentes. O `UsuarioManager` mantém `createsuperuser` com perfil `admin`. Execute `python manage.py migrate` antes de usar a versão atual. O seed passa a incluir um operador por empresa (cinco funcionários por padrão, mínimo três). Não execute o seed para atualizar uma base operacional. As permissões são aplicadas pela API, não por restrições SQL no campo de perfil. A O.S. manual do operador usa a tabela existente, sem novos campos: `tipo_os=corretiva`, `status=pendente`, `responsavel=NULL` e prioridade calculada na abertura. Veja [perfis e permissões](PERFIS_E_PERMISSOES.md). Modelos sem tabela própria, como views, builders, criadores de exportador, políticas e adapters, estão explicados no [guia oficial de padrões](docs_padroes_projeto/Verificacao_Padroes.md).

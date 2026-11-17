@@ -1,6 +1,6 @@
 # Documentação vigente do NanaSmart
 
-**Revisão de organização:** 16/11/2026. Comece pelo [README do projeto](../readme.md) para instalar e executar. Esta página indica a referência atual de cada assunto; versões anteriores ficam em [old](old/README.md).
+**Revisão de organização:** 17/11/2026. Comece pelo [README do projeto](../readme.md) para instalar e executar. Esta página indica a referência atual de cada assunto; versões anteriores ficam em [old](old/README.md).
 
 ## Padrões e arquitetura
 
@@ -25,6 +25,7 @@
 
 | Assunto | Documento atual |
 |---|---|
+| Perfis, operador e abertura manual de O.S. | [Perfis e permissões](PERFIS_E_PERMISSOES.md) |
 | Criticidade de equipamentos e prioridade herdada das OS | [Priorização ABC](PRIORIZACAO_ABC.md) |
 | Detecções, evidências, normalização, vínculo de OS e atualização do banco | [Histórico de alertas](HISTORICO_ALERTAS.md) |
 | Critérios matemáticos, janela, amostra e abertura de OS preditiva | [Identificação de tendências](IDENTIFICACAO_TENDENCIAS.md) |

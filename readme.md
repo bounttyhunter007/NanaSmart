@@ -5,7 +5,7 @@ Plataforma web para gestão de ativos e manutenção industrial. O projeto reún
 ## Funcionalidades
 
 - Cadastro de empresas, usuários, equipamentos, tipos de equipamento e planos de manutenção.
-- Separação de dados por empresa e permissões por perfil: administrador, gestor e técnico.
+- Separação de dados por empresa e permissões por perfil: administrador, gestor, técnico e operador.
 - Telemetria por sensor, alertas por limites configuráveis e análise de tendências.
 - Ordens de serviço preventivas, corretivas e preditivas, com prioridade ABC herdada na abertura e histórico de revisões justificadas.
 - Painéis com indicadores de manutenção, exportações CSV/Excel/PDF e integração opcional com Google Gemini.
@@ -102,7 +102,7 @@ python scripts/seed_db.py
 python scripts/seed_db.py --check
 
 # Exemplo com parâmetros personalizados
-python scripts/seed_db.py --empresas 5 --equipamentos 30 --funcionarios 4 --days 60 --seed 42
+python scripts/seed_db.py --empresas 5 --equipamentos 30 --funcionarios 5 --days 60 --seed 42
 
 # Apaga os dados gerenciados pelo seed, sem repopular
 python scripts/seed_db.py --clean-only
@@ -113,16 +113,16 @@ python scripts/seed_db.py --clean-only
 | `--empresas` | `2` | Quantidade de empresas criadas |
 | `--equipamentos` | `10` | Equipamentos criados por empresa |
 | `--days` | `120` | Dias de histórico de telemetria |
-| `--funcionarios` | `4` | Total por empresa: um gestor e três técnicos; mínimo dois |
+| `--funcionarios` | `5` | Total por empresa: um gestor, três técnicos e um operador; mínimo três |
 | `--seed` | `42` | Reproduz os cadastros e valores; datas são relativas à execução e IDs podem mudar |
 | `--check` | desativada | Verifica parâmetros e migrações sem limpar ou gerar dados |
 | `--clean-only` | desativada | Limpa os dados gerenciados pelo seed e encerra |
 
 Em uma base limpa, o seed cria `admin` com senha `admin` caso esse usuário ainda não exista. Usuários de demonstração recebem a senha `123`. Em bases existentes, não presuma que a senha do superusuário seja `admin`.
 
-Gestores e técnicos recebem logins derivados do nome (`nome.sobrenome`), com senha `123`, e cadastros com aparência operacional, sem prefixos de demonstração. O resumo imprime os logins reais (com sufixo se houver colisão com conta preservada), os IDs dos equipamentos/sensores, seus cenários e o próximo disparo por horímetro. Com pelo menos três equipamentos por empresa, há exemplos A/B/C, alerta ativo, recuperação, recorrência e O.S. gerada por tendência. Todos os técnicos recebem trabalho pendente e em andamento; todos os equipamentos têm conclusões recentes com custos. Quantidades menores continuam disponíveis, com aviso de cobertura parcial.
+Gestores, técnicos e operadores recebem logins derivados do nome (`nome.sobrenome`), com senha `123`, e cadastros com aparência operacional, sem prefixos de demonstração. O resumo imprime os logins reais (com sufixo se houver colisão com conta preservada), os IDs dos equipamentos/sensores, seus cenários e o próximo disparo por horímetro. Com pelo menos três equipamentos por empresa, há exemplos A/B/C, alerta ativo, recuperação, recorrência e O.S. gerada por tendência. Todos os técnicos recebem trabalho pendente e em andamento; todos os equipamentos têm conclusões recentes com custos. Quantidades menores continuam disponíveis, com aviso de cobertura parcial.
 
-O seed importa histórico sintético com datas anteriores ao momento da execução; os episódios por limite são avaliados em ordem pelos serviços operacionais. Não muda o relógio nem encurta os critérios globais de tendência. O [roteiro de apresentação](DOCS/APRESENTACAO_DADOS.md) explica os três perfis, os cenários e a preparação.
+O seed importa histórico sintético com datas anteriores ao momento da execução; os episódios por limite são avaliados em ordem pelos serviços operacionais. Não muda o relógio nem encurta os critérios globais de tendência. O [roteiro de apresentação](DOCS/APRESENTACAO_DADOS.md) explica os quatro perfis, os cenários e a preparação.
 
 ## Simulação de telemetria
 
@@ -169,6 +169,8 @@ Para executar um conjunto específico, informe o app ou módulo, por exemplo `py
 
 ## Autenticação e acesso
 
+O perfil `operador` é o padrão de novos usuários sem perfil explícito. `createsuperuser` continua criando administradores. Para atualizar uma base existente, execute `python manage.py migrate`; a migração `accounts.0002` adiciona a opção e altera o padrão sem converter usuários existentes. O seed é opcional e destrutivo, não é necessário para habilitar o perfil.
+
 O login da API recebe usuário e senha e retorna tokens JWT:
 
 ```http
@@ -186,7 +188,7 @@ Envie o token de acesso nas chamadas autenticadas:
 Authorization: Bearer SEU_TOKEN
 ```
 
-Os perfis têm escopos diferentes. Administradores têm acesso global; gestores administram os dados da própria empresa; técnicos acessam os recursos operacionais permitidos e suas ordens atribuídas ou sem responsável. A API aplica isolamento por empresa nos conjuntos de dados.
+Os perfis têm escopos diferentes. Administradores têm acesso global; gestores administram os dados da própria empresa; técnicos acessam os recursos operacionais permitidos e suas ordens atribuídas ou sem responsável. Operadores consultam somente equipamentos, localizações e resumos de alertas da própria empresa, editam o próprio perfil e trocam a senha. Também abrem O.S. manuais corretivas, sempre pendentes, sem responsável e com prioridade herdada do equipamento; não consultam a fila nem editam ou executam ordens. A API aplica isolamento por empresa nos conjuntos de dados. Consulte a [matriz de acesso](DOCS/PERFIS_E_PERMISSOES.md).
 
 ## Fluxos automáticos
 

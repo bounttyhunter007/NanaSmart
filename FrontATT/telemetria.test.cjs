@@ -26,6 +26,59 @@ function fixture(handler, { rawResponses = false, initialStorage = {} } = {}) {
   vm.runInNewContext(source, context);
   return { app, urls, timers, storage, document: context.document, unmount: () => unmount.forEach(callback => callback()) };
 }
+
+test('operador entra em equipamentos sem consultar recursos restritos ou iniciar tendências', async () => {
+  const { app, urls, timers } = fixture(url => {
+    if (url.includes('/auth/login/')) return { access: 'operator-token', refresh: 'operator-refresh' };
+    if (url.includes('/auth/me/')) return { id: 10, tipo_usuario: 'operador', empresa: 1, empresa_nome: 'Fábrica' };
+    return { results: [], next: null };
+  });
+  await app.doLogin();
+  assert.equal(app.view.value, 'equipamentos');
+  assert.equal(app.isOperador.value, true);
+  for (const view of ['dashboard', 'ordens', 'telemetria', 'tendencias', 'usuarios', 'empresas', 'prompts', 'historico'])
+    app.navigate(view);
+  await app.refreshTrendMonitoring();
+  app.startTrendPolling();
+  assert.equal(app.view.value, 'equipamentos');
+  assert.equal(timers.size, 0);
+  assert.ok(urls.every(url => /\/auth\/|\/equipamentos\/|\/localizacao\//.test(url)), urls.join('\n'));
+});
+
+test('operador consulta equipamentos e alertas sem sensores, ordens ou critérios', async () => {
+  const { app, urls } = fixture(() => ({ results: [], next: null }));
+  app.me.value = { id: 10, tipo_usuario: 'operador', empresa: 1 };
+  await app.openEquipamentoDetails({ id: 1, nome: 'Motor', empresa: 1 });
+  assert.equal(urls.length, 0);
+  await app.enterAlertHistory();
+  assert.ok(urls.some(url => url.includes('/alertas/')));
+  assert.ok(urls.every(url => /\/equipamentos\/|\/alertas\//.test(url)));
+  await app.editItem('equipamento', { id: 1 });
+  await app.openModal('equipamento');
+  assert.equal(app.modal.open, false);
+});
+
+test('operador abre O.S. com campos básicos e mantém o atendimento fora do formulário', async () => {
+  let sent;
+  const { app, urls } = fixture((url, options) => {
+    if (url.includes('/ordens-servico/')) {
+      assert.equal(options.method, 'POST');
+      sent = JSON.parse(options.body);
+      return { id: 42, status: 'pendente', prioridade: 'B' };
+    }
+    return { results: [{ id: 1, nome: 'Motor', empresa: 1 }], next: null };
+  });
+  app.me.value = { id: 10, tipo_usuario: 'operador', empresa: 1 };
+  app.view.value = 'equipamentos';
+  await app.openModal('ordem');
+  Object.assign(app.fd, { equipamento: 1, titulo: 'Ruído', descricao: 'Verificar motor', risco_seguranca: true,
+    status: 'concluida', responsavel: 10, prioridade: 'A', tipo_os: 'preditiva', custo_pecas: 100 });
+  await app.saveItem();
+  assert.deepEqual(sent, { equipamento: 1, titulo: 'Ruído', descricao: 'Verificar motor', risco_seguranca: true });
+  assert.equal(app.modal.open, false);
+  assert.equal(app.view.value, 'equipamentos');
+  assert.ok(urls.every(url => /\/equipamentos\/|\/localizacao\/|\/ordens-servico\//.test(url)));
+});
 test('leituras preservam zero, empresa, contexto e paginação sem truncar resultados', async () => {
   const { app, urls } = fixture(() => ({ count: 150, results: Array.from({ length: 50 }, (_, id) => ({ id })) }));
   app.globalEmpresa.value = '2';

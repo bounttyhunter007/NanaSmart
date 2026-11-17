@@ -3,6 +3,25 @@ from rest_framework import permissions
 from .permission_policies import PermissionPolicyFactory
 
 
+class IsOperationalUser(permissions.BasePermission):
+    """Recursos de manutenção reservados a técnico, gestor e administrador."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.tipo_usuario in ('admin', 'gestor', 'tecnico'))
+
+
+class IsOperationalOrOperatorReadOnly(IsOperationalUser):
+    """Operador consulta somente os recursos básicos que usam esta permissão."""
+
+    def has_permission(self, request, view):
+        if super().has_permission(request, view):
+            return request.method in permissions.SAFE_METHODS or IsGestor().has_permission(request, view)
+        user = request.user
+        return bool(user and user.is_authenticated and user.tipo_usuario == 'operador'
+                    and request.method in permissions.SAFE_METHODS)
+
+
 class IsGestor(permissions.BasePermission):
     """Permite acesso total apenas para Gestores ou Admins."""
 
@@ -38,7 +57,7 @@ class IsTecnico(permissions.BasePermission):
 
 
 class IsGestorOrReadOnly(permissions.BasePermission):
-    """Gestores podem tudo. Técnicos/Outros apenas leitura."""
+    """Gestores e admins escrevem; técnicos consultam; operadores sem acesso."""
 
     def has_permission(self, request, view):
         policy = PermissionPolicyFactory.create('gestor_or_readonly')
@@ -46,7 +65,7 @@ class IsGestorOrReadOnly(permissions.BasePermission):
 
 
 class IsAuthenticatedNoDeleteForTecnico(permissions.BasePermission):
-    """Usuários autenticados podem consultar recursos. Técnicos não podem deletar."""
+    """Admin, gestor e técnico consultam; somente gestor/admin escrevem."""
 
     def has_permission(self, request, view):
         policy = PermissionPolicyFactory.create('authenticated_no_delete_for_tecnico')

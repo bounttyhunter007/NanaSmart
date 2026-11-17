@@ -288,9 +288,9 @@ def validar_parametros(num_empresas, equip_por_empresa, dias_historico, funciona
             raise ValueError(f'{nome} deve ser um inteiro maior ou igual a 1.')
     if funcionarios_por_empresa is not None and (
         isinstance(funcionarios_por_empresa, bool) or not isinstance(funcionarios_por_empresa, int)
-        or funcionarios_por_empresa < 2
+        or funcionarios_por_empresa < 3
     ):
-        raise ValueError('Use pelo menos 2 funcionários por empresa: 1 gestor e 1 técnico.')
+        raise ValueError('Use pelo menos 3 funcionários por empresa: 1 gestor, 1 técnico e 1 operador.')
 
 
 def verificar_banco():
@@ -308,7 +308,7 @@ def criar_usuario_demo(empresa, papel, fake, rng):
     return Usuario.objects.create_user(
         username=login, email=email, password='123', empresa=empresa, tipo_usuario=papel,
         first_name=nome.split()[0], last_name=' '.join(nome.split()[1:]),
-        cargo=rng.choice(CARGOS_GESTOR if papel == 'gestor' else CARGOS_TECNICO),
+        cargo=rng.choice({'gestor': CARGOS_GESTOR, 'tecnico': CARGOS_TECNICO, 'operador': ['Operador de Produção', 'Operador de Máquinas']}[papel]),
         telefone=fake.phone_number(),
     )
 
@@ -409,12 +409,13 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
             empresa=empresa, nome=nome, criticidade_padrao=classe, descricao_criterios=justificativa,
         ) for nome, (classe, justificativa) in CRITICIDADE_TIPOS.items()}
         gestor = criar_usuario_demo(empresa, 'gestor', fake, rng)
+        operador = criar_usuario_demo(empresa, 'operador', fake, rng)
         CriteriosCriticidade.objects.create(
             empresa=empresa, revisao=1, **CRITERIOS_SUGERIDOS,
             representante_manutencao=gestor.get_full_name(),
             data_validacao=timezone.localdate(inicio) - timedelta(days=1),
         )
-        total_tecnicos = funcionarios_por_empresa - 1 if funcionarios_por_empresa is not None else 3
+        total_tecnicos = funcionarios_por_empresa - 2 if funcionarios_por_empresa is not None else 3
         tecnicos = [criar_usuario_demo(empresa, 'tecnico', fake, rng)
                     for i in range(1, total_tecnicos + 1)]
         itens, ativos = [], []
@@ -488,7 +489,7 @@ def _popular(num_empresas, equip_por_empresa, dias_historico, funcionarios_por_e
                     descricao=f'Trabalho atribuído a {tecnico.get_full_name()}. {SERVICOS_POR_TIPO[eq.tipo]}',
                     data_abertura=now - timedelta(minutes=30 if status == 'pendente' else 60),
                 )
-        roteiro.append({'id': empresa.pk, 'nome': empresa.nome, 'gestor': gestor.username,
+        roteiro.append({'id': empresa.pk, 'nome': empresa.nome, 'gestor': gestor.username, 'operador': operador.username,
                         'tecnicos': [t.username for t in tecnicos], 'equipamentos': itens})
     validar_populacao(empresas, now, equip_por_empresa)
     return {'admin': admin.username, 'admin_criado': criado, 'empresas': roteiro, 'seed': rng_seed}
@@ -527,7 +528,7 @@ def run_seed(num_empresas=2, equip_por_empresa=10, dias_historico=120, clean_onl
     print(f'Administrador: {resultado["admin"]} | senha: {"admin" if resultado["admin_criado"] else "preservada (não redefinida)"}')
     for empresa in resultado['empresas']:
         print(f'\nEmpresa {empresa["id"]}: {empresa["nome"]}')
-        print(f'  Gestor: {empresa["gestor"]} | Técnicos: {", ".join(empresa["tecnicos"])} | senha: 123')
+        print(f'  Gestor: {empresa["gestor"]} | Operador: {empresa["operador"]} | Técnicos: {", ".join(empresa["tecnicos"])} | senha: 123')
         for eq in empresa['equipamentos']:
             print(f'  Equipamento {eq["id"]}: {eq["nome"]} | {eq["status"]}')
             for sensor in eq['sensores']:
@@ -544,7 +545,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--empresas', type=int, default=2)
     parser.add_argument('--equipamentos', type=int, default=10, help='Por empresa; mínimo 3 para cobertura completa')
-    parser.add_argument('--funcionarios', type=int, default=None, help='Total por empresa; padrão 4 (1 gestor e 3 técnicos)')
+    parser.add_argument('--funcionarios', type=int, default=None, help='Total por empresa; padrão 5 (1 gestor, 3 técnicos e 1 operador); mínimo 3')
     parser.add_argument('--days', type=int, default=120, help='Dias de histórico')
     parser.add_argument('--seed', type=int, default=42, help='Semente reproduzível de dados sintéticos')
     parser.add_argument('--clean-only', action='store_true', help='Apaga dados e preserva contas administrativas')

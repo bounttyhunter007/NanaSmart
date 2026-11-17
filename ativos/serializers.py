@@ -36,6 +36,16 @@ class CriteriosCriticidadeSerializer(serializers.ModelSerializer):
             revisao=(ultima.revisao + 1 if ultima else 1), criado_por=self.context['request'].user)
 
 
+class EquipamentoOperadorSerializer(serializers.ModelSerializer):
+    """Identificação e situação do ativo, sem critérios e histórico gerencial."""
+
+    class Meta:
+        model = Equipamento
+        fields = ['id', 'empresa', 'nome', 'tipo', 'fabricante', 'modelo', 'numero_serie',
+                  'descricao', 'data_instalacao', 'horimetro', 'status', 'criticidade']
+        read_only_fields = fields
+
+
 class EquipamentoSerializer(serializers.ModelSerializer):
     criticidade_sugerida = serializers.SerializerMethodField(read_only=True)
     aceitar_sugestao = serializers.BooleanField(write_only=True, required=False, default=False)

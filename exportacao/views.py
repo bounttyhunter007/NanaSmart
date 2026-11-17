@@ -6,7 +6,7 @@ aplicando o mesmo isolamento multi-tenant das views originais.
 """
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsOperationalUser
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
@@ -87,7 +87,7 @@ class ExportarOrdensServicoView(APIView):
         ?equipamento=1
         ?responsavel=2
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
@@ -130,7 +130,7 @@ class ExportarEquipamentosView(APIView):
         ?tipo=motor_eletrico
         ?empresa=1
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
@@ -182,7 +182,7 @@ class ExportarEquipamentosView(APIView):
 
 class ExportarAlertasView(APIView):
     """Exporta o mesmo histórico e os mesmos filtros de /api/alertas/."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
@@ -225,7 +225,7 @@ class ExportarTelemetriaView(APIView):
         ?sensor__equipamento=2
         ?limite=1000  (máximo de registros, padrão: 5000)
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
@@ -291,7 +291,7 @@ class ExportarHistoricoView(APIView):
         ?data_execucao_depois=2025-01-01
         ?data_execucao_antes=2025-12-31
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):
@@ -355,7 +355,7 @@ class ExportarDashboardView(APIView):
         ?empresa_id=1  (apenas admin)
         ?dias=30
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
 
     @extend_schema(responses={200: OpenApiTypes.BINARY, 400: OpenApiTypes.OBJECT})
     def get(self, request, formato):

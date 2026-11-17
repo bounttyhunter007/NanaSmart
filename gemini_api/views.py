@@ -1,3 +1,4 @@
+from accounts.permissions import IsOperationalUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, IsAuthenticated
@@ -196,7 +197,7 @@ class PromptConfigResetView(PromptConfigDetailView):
 
 
 class GeminiBaseView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOperationalUser]
     serializer_class = GeminiMessageSerializer
     response_serializer_class = GeminiResponseSerializer
     system_purpose = "fornecer orientação de manutenção"
@@ -313,7 +314,7 @@ class GeminiFinanceView(GeminiBaseView):
     )
 
     def check_access(self, user):
-        return user.tipo_usuario != 'tecnico'
+        return user.tipo_usuario in ('admin', 'gestor')
 
     def get_prompt(self, user, context, message):
         return build_finance_prompt(user, context, message)

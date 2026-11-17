@@ -6,23 +6,24 @@ Este documento descreve brevemente os scripts disponíveis em `scripts/` e como 
 
 Substitui a base por dados sintéticos com nomes operacionais, com cadastros compatíveis,
 cronologia validada, histórico recente para KPIs e cenários previsíveis.
-O [roteiro completo](../DOCS/APRESENTACAO_DADOS.md) explica as contas e os três perfis.
+O [roteiro completo](../DOCS/APRESENTACAO_DADOS.md) explica as contas e os quatro perfis.
 
 ```powershell
 # Consulta parâmetros e migrações; não altera a base
 python scripts/seed_db.py --check
 
 # Geração destrutiva, atômica e reproduzível
-python scripts/seed_db.py --empresas 2 --equipamentos 10 --funcionarios 4 --days 120 --seed 42
+python scripts/seed_db.py --empresas 2 --equipamentos 10 --funcionarios 5 --days 120 --seed 42
 
 # Limpeza sem repopulação
 python scripts/seed_db.py --clean-only
 ```
 
-- Padrões: duas empresas, dez equipamentos por empresa, quatro funcionários
-  (um gestor e três técnicos), 120 dias e semente 42.
-- Empresas, equipamentos e dias devem ser positivos; funcionários têm mínimo dois.
+- Padrões: duas empresas, dez equipamentos por empresa, cinco funcionários
+  (um gestor, três técnicos e um operador), 120 dias e semente 42.
+- Empresas, equipamentos e dias devem ser positivos; funcionários têm mínimo três (gestor, técnico e operador).
   Com menos de três equipamentos/empresa, avisa que a cobertura é parcial.
+- Cada empresa também recebe um operador de consulta, que pode abrir O.S. manual pendente e sem responsável. O login aparece no resumo. Consulte [perfis e permissões](../DOCS/PERFIS_E_PERMISSOES.md).
 - Cada empresa recebe equipamentos A/B/C, trabalho pendente e em andamento para
   cada técnico, ordens livres e conclusões recentes com custos. Com cinco ativos,
   também há equipamento em manutenção e inativo.
@@ -37,7 +38,7 @@ python scripts/seed_db.py --clean-only
   Superusuários recebem o perfil `admin` utilizado nas permissões da aplicação.
 - O resumo após o commit imprime logins reais, IDs, perfis dos sensores, próximo
   disparo por horímetro e comandos para movimentar apenas o motor escolhido.
-  Gestores e técnicos usam logins `nome.sobrenome` e senha `123`; consulte o
+  Gestores, técnicos e operadores usam logins `nome.sobrenome` e senha `123`; consulte o
   resumo para cada empresa. Colisões com contas preservadas recebem sufixo numérico. `admin` novo usa `admin`; senhas existentes não mudam.
 - `--seed` repete dados e valores, mas datas são relativas à execução e IDs podem
   mudar. As configurações globais continuam com duas horas mínimas para tendência.

@@ -10,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from accounts.permissions import IsGestor
 from .serializers import AjustePrioridadeSerializer, RestaurarPrioridadeSerializer, HistoricoPrioridadeOSSerializer
-from .serializers import OrdemServicoSerializer, HistoricoManutencaoSerializer
+from .serializers import OrdemServicoSerializer, HistoricoManutencaoSerializer, OrdemServicoOperadorSerializer
 from .permissions import IsOwnerOrGestorOrUnassigned
 from accounts.permissions import IsAuthenticatedNoDeleteForTecnico
 from rest_framework.permissions import IsAuthenticated
@@ -44,6 +44,11 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = OrdemServicoFilter
     search_fields = ['titulo', 'descricao']
+
+    def get_serializer_class(self):
+        if getattr(getattr(self.request, 'user', None), 'tipo_usuario', None) == 'operador':
+            return OrdemServicoOperadorSerializer
+        return super().get_serializer_class()
 
     @extend_schema(request=None, responses={
         200: GeminiResponseSerializer,

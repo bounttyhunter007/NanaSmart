@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from .managers import UsuarioManager
 
 # 1. Tabela EMPRESA
 class Empresa(models.Model):
@@ -17,11 +18,13 @@ class Empresa(models.Model):
 
 # 2. Tabela USUARIO (Unificada com TECNICO)
 class Usuario(AbstractUser):
+    objects = UsuarioManager()
     
     TIPO_USUARIO_CHOICES = (
         ('admin', 'Administrador'),
         ('gestor', 'Gestor'),
         ('tecnico', 'Técnico'),
+        ('operador', 'Operador'),
     )
     
   
@@ -33,7 +36,7 @@ class Usuario(AbstractUser):
         blank=True
     )
     
-    tipo_usuario = models.CharField(max_length=20, choices=TIPO_USUARIO_CHOICES, default='tecnico') 
+    tipo_usuario = models.CharField(max_length=20, choices=TIPO_USUARIO_CHOICES, default='operador')
     cargo = models.CharField(max_length=100, blank=True, null=True) # Ex: Eletricista Sênior, Mecânico 
         
     telefone = models.CharField(max_length=20, blank=True, null=True) # [cite: 163]

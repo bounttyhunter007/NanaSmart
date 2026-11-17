@@ -9,16 +9,16 @@ Use um banco de demonstração que possa ser substituído. Pare o simulador ante
 ```powershell
 python manage.py migrate
 python scripts/seed_db.py --check
-python scripts/seed_db.py --empresas 2 --equipamentos 10 --funcionarios 4 --days 120 --seed 42
+python scripts/seed_db.py --empresas 2 --equipamentos 10 --funcionarios 5 --days 120 --seed 42
 python scripts/simulador_realtime.py --check
 python manage.py runserver 127.0.0.1:9000
 ```
 
 O seed **apaga e substitui** os dados operacionais. A transação é revertida em caso de falha ou interrupção antes do commit. Contas administrativas existentes preservam senhas, perdem o vínculo com a empresa removida e superusuários ficam com perfil `admin`. O resumo final só aparece após a gravação; guarde os logins, IDs e comandos impressos. `--check` verifica parâmetros/migrações, mas não certifica os dados da base antiga nem testa a conexão com Gemini.
 
-Abra `FrontATT/index.html`. Quando o banco já tinha um `admin`, use sua senha existente. Na base nova: `admin` / `admin`. Gestores e técnicos recebem logins no formato `nome.sobrenome` e senha `123`. Use os logins reais impressos para cada empresa no resumo do seed; nomes repetidos recebem sufixo numérico. Os e-mails são normalizados e usam domínio de exemplo.
+Abra `FrontATT/index.html`. Quando o banco já tinha um `admin`, use sua senha existente. Na base nova: `admin` / `admin`. Gestores, técnicos e operadores recebem logins no formato `nome.sobrenome` e senha `123`. Use os logins reais impressos para cada empresa no resumo do seed; nomes repetidos recebem sufixo numérico. Os e-mails são normalizados e usam domínio de exemplo.
 
-Os nomes e valores se repetem com a mesma `--seed`; horários são relativos à execução e IDs não são fixos. O padrão cria um gestor e três técnicos por empresa. O mínimo é um gestor e um técnico. Para todos os cenários, use pelo menos três equipamentos por empresa; bases menores mostram aviso de cobertura parcial.
+Os nomes e valores se repetem com a mesma `--seed`; horários são relativos à execução e IDs não são fixos. O padrão cria um gestor, três técnicos e um operador por empresa. O mínimo é um gestor, um técnico e um operador (três funcionários). Para todos os cenários, use pelo menos três equipamentos por empresa; bases menores mostram aviso de cobertura parcial.
 
 Para a apresentação, prepare a base com `scripts/seed_db.py`. Os comandos antigos `popular_banco`, `popular_usuarios`, `popular_equipamentos` e `popular_os` fazem cadastros parciais e não garantem sensores, histórico, indicadores ou cobertura dos cenários deste roteiro.
 
@@ -34,13 +34,14 @@ Cada empresa recebe os mesmos três primeiros tipos de cenário. Procure pelo su
 
 Com cinco ou mais equipamentos, o quarto estará em manutenção com trabalho em andamento, e o quinto inativo, com sensores desativados e leituras antigas. O simulador não os alimenta. Os demais equipamentos complementam o catálogo. Todos têm quatro manutenções concluídas, duas delas dentro dos últimos sete dias, custos e uma solicitação cancelada sem execução. Os ativos também têm inspeção pendente sem responsável.
 
-## Roteiro dos três perfis
+## Roteiro dos quatro perfis
 
 1. **Administrador:** mostrar as duas empresas, equipamentos A/B/C, ocorrências recentes e indicadores com filtro de 7 ou 30 dias. Abrir os alertas do compressor, conferir horários de abertura, elevação, normalização e vínculo com O.S. A normalização do sensor não conclui a manutenção.
 2. **Gestor da empresa 1:** mostrar os mesmos dados dentro da sua empresa. Na fila, abrir uma inspeção disponível e atribuí-la ao técnico. Mostrar conclusões recentes e custos. Os exemplos A/B/C são criticidades dos equipamentos e prioridades herdadas nas novas ordens; não confundem prioridade com gravidade do alerta.
 3. **Técnico da empresa 1:** mostrar uma ordem pendente atribuída, uma em andamento e ordens disponíveis. Executar uma ação permitida sobre a própria ordem e conferir o histórico. A empresa 2 deve permanecer fora do seu escopo.
 4. **Tendências:** a página seleciona o primeiro equipamento/sensor com leituras e abre em Ao vivo. O cabeçalho informa equipamento, setor, sensor e última medição com horário. Os seletores ficam visíveis e os filtros adicionais, recolhidos. Para outros exemplos, escolha o equipamento correspondente. A previsão usa a configuração individual do sensor ou a global herdada.
 5. **Administrador, tendência ao vivo:** usar a [demonstração guiada de aproximadamente um minuto](DEMONSTRACAO_TENDENCIAS.md), que cria sensor próprio. Mostrar quantidade e duração mínimas, previsão de atingir o limite e O.S. automática. Opcionalmente avançar para ultrapassagem e recuperação.
+6. **Operador da empresa 1:** consultar equipamentos, setores e resumos de alertas. Em Equipamentos, clicar em **Abrir O.S. manual**, descrever o problema e salvar. Guardar o número informado e conferir com o gestor que a ordem entrou corretiva, pendente, sem responsável e com prioridade herdada. O operador não acessa atendimento, custos, IA, exportações, telemetria ou tendências. Veja a [matriz de acesso](PERFIS_E_PERMISSOES.md).
 
 ## Telemetria e horímetro
 
@@ -56,6 +57,6 @@ Para manutenção por horímetro, abra o motor `-01`. O seed imprime o plano e a
 python manage.py test telemetria.test_trend_header telemetria.test_seed_demo telemetria.test_seed_telemetry telemetria.test_simulador_realtime --settings=app.test_settings --noinput
 ```
 
-Os testes verificam datas e vínculos, KPIs recentes, escopo dos três perfis, evidências, recuperação/recorrência, acionamento por horímetro, retomada, operação sem gravação, migrações pendentes, preservação de administradores e reversão após falha. Usam o banco descartável; não preparam o banco da apresentação.
+Os testes verificam datas e vínculos, KPIs recentes, escopo dos quatro perfis, evidências, recuperação/recorrência, acionamento por horímetro, retomada, operação sem gravação, migrações pendentes, preservação de administradores e reversão após falha. Usam o banco descartável; não preparam o banco da apresentação.
 
 As alterações de nomenclatura valem para novas gerações e novas sessões do teste guiado. Registros já existentes não são renomeados automaticamente; o seed continua destrutivo e não deve ser executado para atualizar apenas a interface.

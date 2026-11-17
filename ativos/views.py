@@ -8,17 +8,23 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Equipamento, EquipamentoLocalizacao, PlanoManutencao, TipoEquipamento, HistoricoCriticidadeEquipamento
 from .serializers import (EquipamentoSerializer, EquipamentoLocalizacaoSerializer, PlanoManutencaoSerializer,
                           TipoEquipamentoSerializer, HistoricoCriticidadeEquipamentoSerializer)
-from accounts.permissions import IsGestorOrReadOnly
+from accounts.permissions import IsGestorOrReadOnly, IsOperationalUser, IsOperationalOrOperatorReadOnly
+from .serializers import EquipamentoOperadorSerializer
 from django.db.models.deletion import ProtectedError
 from rest_framework.exceptions import ValidationError
 
 
 class EquipamentoViewSet(viewsets.ModelViewSet):
     serializer_class = EquipamentoSerializer
-    permission_classes = [IsGestorOrReadOnly]
+    permission_classes = [IsOperationalOrOperatorReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['empresa', 'status', 'tipo', 'tipo_equipamento', 'criticidade', 'localizacao__setor']
     search_fields = ['nome', 'fabricante', 'modelo', 'numero_serie']
+
+    def get_serializer_class(self):
+        if getattr(getattr(self.request, 'user', None), 'tipo_usuario', None) == 'operador':
+            return EquipamentoOperadorSerializer
+        return super().get_serializer_class()
 
     def perform_destroy(self, instance):
         try:
@@ -54,6 +60,7 @@ class TipoEquipamentoViewSet(viewsets.ModelViewSet):
 
 
 class HistoricoCriticidadeEquipamentoViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsOperationalUser]
     queryset = HistoricoCriticidadeEquipamento.objects.none()
     serializer_class = HistoricoCriticidadeEquipamentoSerializer
     filter_backends = [DjangoFilterBackend]
@@ -102,7 +109,7 @@ class CriteriosCriticidadeViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyMode
 
 class EquipamentoLocalizacaoViewSet(viewsets.ModelViewSet):
     serializer_class = EquipamentoLocalizacaoSerializer
-    permission_classes = [IsGestorOrReadOnly]
+    permission_classes = [IsOperationalOrOperatorReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['equipamento', 'setor']
     search_fields = ['setor']

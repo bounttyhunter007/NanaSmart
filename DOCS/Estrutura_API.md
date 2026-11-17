@@ -1,6 +1,8 @@
 # API do NanaSmart
 
-**Revisão:** 16/11/2026. O catálogo de rotas abaixo foi conferido no schema gerado pelo código local. Os campos de entrada e saída são definidos pelos serializers; a lista de modelos e campos persistidos está em [Banco de dados](DOCUMENTACAO_BANCO.md).
+**Revisão:** 17/11/2026. O catálogo de rotas abaixo foi conferido no schema gerado pelo código local. Os campos de entrada e saída são definidos pelos serializers; a lista de modelos e campos persistidos está em [Banco de dados](DOCUMENTACAO_BANCO.md).
+
+O perfil `operador` consulta apenas `GET /api/equipamentos/`, `/api/localizacao/` e `/api/alertas/` (lista e detalhe da própria empresa). Equipamentos e alertas usam respostas reduzidas, sem critérios gerenciais, evidências internas, análises de IA ou vínculos de O.S. O operador também usa os endpoints do próprio perfil e senha e pode abrir uma ordem com `POST /api/ordens-servico/`, enviando apenas `equipamento`, `titulo`, `descricao` e, opcionalmente, `risco_seguranca`. A ordem é corretiva, pendente e sem responsável, com prioridade herdada; campos adicionais são rejeitados com HTTP 400. Demais consultas e ações operacionais são recusadas com HTTP 403. Contrato e exemplos: [perfis e permissões](PERFIS_E_PERMISSOES.md).
 
 ## Como consultar o contrato completo
 

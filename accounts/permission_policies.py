@@ -28,6 +28,9 @@ class GestorOrReadOnlyPolicy(BasePermissionPolicy):
         if not user or not getattr(user, 'is_authenticated', False):
             return False
 
+        if user.tipo_usuario not in ('admin', 'gestor', 'tecnico'):
+            return False
+
         if method in ['GET', 'HEAD', 'OPTIONS']:
             return True
 
@@ -37,6 +40,9 @@ class GestorOrReadOnlyPolicy(BasePermissionPolicy):
 class AuthenticatedNoDeleteForTecnicoPolicy(BasePermissionPolicy):
     def can_access(self, user, method: str, obj=None, request=None) -> bool:
         if not user or not getattr(user, 'is_authenticated', False):
+            return False
+
+        if user.tipo_usuario not in ('admin', 'gestor', 'tecnico'):
             return False
 
         if method in ['GET', 'HEAD', 'OPTIONS']:

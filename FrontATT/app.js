@@ -7,8 +7,8 @@ function sortByNivel(items, campo = 'nivel') {
   return items.sort((a, b) => (NIVEL_PRIORIDADE[a[campo]] ?? 3) - (NIVEL_PRIORIDADE[b[campo]] ?? 3));
 }
 
-// Helper: ordena por tipo de usuário (admin → gestor → tecnico)
-const TIPO_USUARIO_PRIORIDADE = { admin: 0, gestor: 1, tecnico: 2 };
+// Helper: ordena por tipo de usuário (admin → gestor → tecnico → operador)
+const TIPO_USUARIO_PRIORIDADE = { admin: 0, gestor: 1, tecnico: 2, operador: 3 };
 function sortByTipoUsuario(items, campo = 'tipo_usuario') {
   return items.sort((a, b) => (TIPO_USUARIO_PRIORIDADE[a[campo]] ?? 3) - (TIPO_USUARIO_PRIORIDADE[b[campo]] ?? 3));
 }
@@ -81,7 +81,7 @@ createApp({
     }
     function startTrendPolling() {
       stopTrendPolling();
-      if (!token.value) return;
+      if (!token.value || isOperador.value) return;
       trendPollTimer = setInterval(refreshTrendMonitoring, 30000);
     }
     const trendAlerts = ref([]); // Painel de tendências de risco
@@ -260,6 +260,7 @@ createApp({
     // ─ Computed básicos ──────────────────────────────
     const isAdmin = computed(() => me.value?.tipo_usuario === 'admin');
     const isAdminOrGestor = computed(() => ['admin', 'gestor'].includes(me.value?.tipo_usuario));
+    const isOperador = computed(() => me.value?.tipo_usuario === 'operador');
     const isTecnico = computed(() => me.value?.tipo_usuario === 'tecnico');
     const osSemTecnicoCount = computed(() => lists.ordens.filter(o => !o.responsavel && o.status !== 'concluida' && o.status !== 'cancelada').length);
     
@@ -672,7 +673,7 @@ createApp({
         await fetchMe();
         await fetchEmpresasAll();
         resetTrendMonitoring();
-        navigate('dashboard');
+        navigate(isOperador.value ? 'equipamentos' : 'dashboard');
         startTrendPolling();
       } catch (e) { loginError.value = e.message; }
       finally { loginLoading.value = false; }
@@ -716,6 +717,7 @@ createApp({
       prompts: () => fetchPrompts(),
     };
     function navigate(v) {
+      if (isOperador.value && !['equipamentos', 'alertas', 'localizacoes', 'perfil'].includes(v)) return;
       if (v === 'prompts' && !isAdminOrGestor.value) return;
       if (v !== 'tendencias') { trendPage.filtersOpen = false; trendPage.expanded = false; }
       view.value = v; fetchers[v]?.();
@@ -740,7 +742,7 @@ createApp({
     }
 
     async function fetchDashboard({ silent = false } = {}) {
-      if (silent && dashboardKpisLoading.value) return;
+      if (isOperador.value || (silent && dashboardKpisLoading.value)) return;
       const request = ++dashboardRequest, company = globalEmpresa.value, userId = me.value?.id;
       dashboardKpisLoading.value = true; dashboardKpisError.value = '';
       const p = new URLSearchParams({ incluir_desempenho: String(performanceOpen.value && !dashboardAdminOverview.value && !isTecnico.value) });
@@ -777,7 +779,7 @@ createApp({
       trendMonitor.error = '';
     }
     async function refreshTrendMonitoring() {
-      if (!token.value || document.hidden || trendMonitor.busy ||
+      if (isOperador.value || !token.value || document.hidden || trendMonitor.busy ||
           (view.value === 'tendencias' && trendPage.busy)) return;
       const request = ++trendMonitorRequest;
       const company = globalEmpresa.value, session = token.value;
@@ -1624,6 +1626,11 @@ createApp({
       return result;
     }
     async function loadTelemetryOptions() {
+      if (isOperador.value) {
+        telemetry.equipments = await telemetryAll('/api/equipamentos/?limit=100');
+        telemetry.sensors = [];
+        return;
+      }
       const request = ++telemetryOptionsRequest;
       const company = globalEmpresa.value;
       telemetry.optionsError = '';
@@ -1942,7 +1949,7 @@ createApp({
     }
 
     async function fetchEmpresasAll() {
-      if (isTecnico.value || lists.empresas.length) return;
+      if (isOperador.value || isTecnico.value || lists.empresas.length) return;
       lists.empresas = await telemetryAll('/api/empresas/?limit=200');
     }
     async function fetchEquipamentosAll() {
@@ -1951,7 +1958,7 @@ createApp({
       lists.equipamentos = normList(d);
     }
     async function fetchSensoresAll() {
-      if (lists.sensores.length) return;
+      if (isOperador.value || lists.sensores.length) return;
       const d = await api('/api/telemetria/sensores/?limit=999');
       lists.sensores = normList(d);
     }
@@ -1962,7 +1969,7 @@ createApp({
       lists.ordens = normList(d);
     }
     async function fetchUsuariosAll() {
-      if (isTecnico.value || lists.usuarios.length) return;
+      if (isOperador.value || isTecnico.value || lists.usuarios.length) return;
       const d = await api('/api/usuarios/?limit=999');
       const items = normList(d);
       sortByTipoUsuario(items);
@@ -2024,7 +2031,7 @@ createApp({
 
       usuario: {
         title: 'Usuário', endpoint: '/api/usuarios/',
-        defaults: { username: '', email: '', first_name: '', last_name: '', tipo_usuario: 'tecnico', empresa: null, cargo: '', telefone: '' }
+        defaults: { username: '', email: '', first_name: '', last_name: '', tipo_usuario: 'operador', empresa: null, cargo: '', telefone: '' }
       },
       localizacao: {
         title: 'Localização', endpoint: '/api/localizacao/',
@@ -2045,6 +2052,7 @@ createApp({
     }
 
     async function openModal(type, options = {}) {
+      if (isOperador.value && !['ordem', 'change_password'].includes(type)) return;
       const cfg = modalConfig[type];
       modal.type = type; modal.title = 'Novo ' + cfg.title;
       modal.editId = null; modal.oldStatus = null; formErrors.value = {};
@@ -2075,6 +2083,7 @@ createApp({
     }
 
     async function editItem(type, item) {
+      if (isOperador.value) return;
       const cfg = modalConfig[type];
       modal.type = type; modal.title = 'Editar ' + cfg.title;
       modal.editId = item.id; modal.oldStatus = item.status; formErrors.value = {};
@@ -2100,6 +2109,11 @@ createApp({
       modal.saving = true; formErrors.value = {};
       try {
         const payload = { ...fd };
+        if (isOperador.value && modal.type === 'ordem') {
+          for (const key of Object.keys(payload)) {
+            if (!['equipamento', 'titulo', 'descricao', 'risco_seguranca'].includes(key)) delete payload[key];
+          }
+        }
 
         // Limpa FKs vazias
         ['empresa', 'equipamento', 'sensor', 'ordem_servico', 'responsavel'].forEach(k => {
@@ -2107,7 +2121,7 @@ createApp({
         });
 
         // Garante valores válidos para campos choice da OS
-        if (modal.type === 'ordem' || modal.type === 'encerrar_os') {
+        if (!isOperador.value && (modal.type === 'ordem' || modal.type === 'encerrar_os')) {
           if (payload.status === 'concluida' && !payload.responsavel && me.value?.id) {
             payload.responsavel = me.value.id;
           }
@@ -2153,7 +2167,7 @@ createApp({
           await loadEquipmentAssessment(equipModal.equipamento);
         }
         modal.open = false;
-        toast(modal.type === 'change_password' ? 'Senha alterada com sucesso!' : (modal.editId ? 'Atualizado com sucesso!' : 'Criado com sucesso!'), 'success');
+        toast(isOperador.value && modal.type === 'ordem' ? `O.S. #${createdOsId} aberta. Aguarde o atendimento da manutenção.` : modal.type === 'change_password' ? 'Senha alterada com sucesso!' : (modal.editId ? 'Atualizado com sucesso!' : 'Criado com sucesso!'), 'success');
         if (modal.type === 'leitura') {
           await Promise.all([
             fetchDashboard(),
@@ -2625,13 +2639,14 @@ createApp({
         }
       }
       equipModal.equipamento = equipment;
-      loadEquipmentAssessment(equipment);
+      if (!isOperador.value) loadEquipmentAssessment(equipment);
       equipModal.selectedSensor = null;
       equipModal.readings = [];
       equipModal.error = '';
       equipModal.refreshing = false;
       equipModal.ordens = [];
       equipModal.osFilter = 'todas';
+      if (isOperador.value) return;
       await fetchEquipamentoSensors(equipment.id);
       fetchEquipamentoOrdens(equipment.id);
       if (equipModal.sensors.length) {
@@ -2685,7 +2700,7 @@ createApp({
     function empresaNome(id) {
       if (id == null) return '—';
       const e = lists.empresas.find(e => e.id === id);
-      return e ? e.nome : `#${id}`;
+      return e ? e.nome : Number(id) === Number(me.value?.empresa) ? me.value?.empresa_nome || `#${id}` : `#${id}`;
     }
     function sensorNome(id) {
       if (id == null) return '—';
@@ -2811,7 +2826,7 @@ createApp({
         await fetchMe();
         // Carrega lista de empresas para o filtro global do admin
         await fetchEmpresasAll();
-        navigate('dashboard');
+        navigate(isOperador.value ? 'equipamentos' : 'dashboard');
         startTrendPolling();
       }
       document.addEventListener('visibilitychange', onTrendVisibilityChange);
@@ -3106,7 +3121,7 @@ createApp({
       modal, fd, formErrors, globalEmpresa,
       alertHistory, alertSensors, alertEvidence, alertReadings, alertThresholds, alertChart, enterAlertHistory,
       openAlertaDetails, closeAlertaDetails, openAlertaOS, openAlertaSensor, showEquipmentAlerts,
-      isAdmin, isAdminOrGestor, isTecnico, userInitial, viewTitle, osSemTecnicoCount,
+      isAdmin, isAdminOrGestor, isTecnico, isOperador, userInitial, viewTitle, osSemTecnicoCount,
       doLogin, logout, navigate, debouncedFetch,
       telemetry, telemetrySensors, telemetryCount, telemetryRows, trendSummary, trendChart, trendPage, trendCount, trendRows, trendEquipments, trendSensors,
       selectedTrend, selectedTrendChart, buildTrendChart, setTrendTimePreset,
