@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1670" viewBox="0 0 2400 1670">
+<title>NanaSmart — Diagrama de classes principais</title>
+<desc>Nove classes de domínio e suas principais associações, com atributos selecionados e cardinalidades verificadas nos modelos Django.</desc>
+<rect width="2400" height="1670" fill="white"/>
+<rect x="70" y="32" width="7" height="76" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="98" y="30" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#102844" text-anchor="start">Diagrama de classes</text>
+<text x="100" y="90" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="28" font-weight="400" fill="#53677D" text-anchor="start">Classes principais e relacionamentos</text>
+<text x="2330" y="49" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#102844" text-anchor="end">NanaSmart</text>
+<polyline points="690,325 890,325" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1510,325 1710,325" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="380,480 380,680" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1200,480 1200,680" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1510,835 1710,835" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="380,990 380,1190" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="1200,990 1200,1190" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="690,1345 890,1345" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="890,410 790,410 790,1090 570,1090 570,1190" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="550,1500 550,1560 2020,1560 2020,1500" fill="none" stroke="#536F8E" stroke-width="3" stroke-linejoin="round"/>
+<rect x="70" y="170" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="70" y="170" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="70" y="170" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="380" y="193" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Empresa</text>
+<text x="96" y="279" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ nome: str</text>
+<text x="96" y="325" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ cnpj: str</text>
+<text x="96" y="371" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ email: str</text>
+<text x="96" y="417" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ telefone: str</text>
+<rect x="890" y="170" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="890" y="170" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="890" y="170" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="1200" y="193" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Equipamento</text>
+<text x="916" y="279" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ nome: str</text>
+<text x="916" y="325" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ numero_serie: str</text>
+<text x="916" y="371" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ horimetro: float</text>
+<text x="916" y="417" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ criticidade: str</text>
+<rect x="1710" y="170" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="1710" y="170" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="1710" y="170" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="2020" y="193" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">PlanoManutencao</text>
+<text x="1736" y="279" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ nome_servico: str</text>
+<text x="1736" y="325" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ intervalo_horas: float</text>
+<text x="1736" y="371" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ prioridade: str</text>
+<text x="1736" y="417" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ ativo: bool</text>
+<rect x="70" y="680" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="70" y="680" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="70" y="680" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="380" y="703" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Usuario</text>
+<text x="96" y="789" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ username: str</text>
+<text x="96" y="835" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ email: str</text>
+<text x="96" y="881" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ tipo_usuario: str</text>
+<text x="96" y="927" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ cargo: str</text>
+<rect x="890" y="680" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="890" y="680" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="890" y="680" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="1200" y="703" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Sensor</text>
+<text x="916" y="789" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ nome: str</text>
+<text x="916" y="835" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ tipo: str</text>
+<text x="916" y="881" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ unidade_medida: str</text>
+<text x="916" y="927" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ limite_alerta: float</text>
+<rect x="1710" y="680" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="1710" y="680" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="1710" y="680" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="2020" y="703" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Telemetria</text>
+<text x="1736" y="789" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ valor: float</text>
+<text x="1736" y="835" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ timestamp: datetime</text>
+<rect x="70" y="1190" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="70" y="1190" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="70" y="1190" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="380" y="1213" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">OrdemServico</text>
+<text x="96" y="1299" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ titulo: str</text>
+<text x="96" y="1345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ tipo_os: str</text>
+<text x="96" y="1391" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ status: str</text>
+<text x="96" y="1437" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ prioridade: str</text>
+<rect x="890" y="1190" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="890" y="1190" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="890" y="1190" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="1200" y="1213" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">Alerta</text>
+<text x="916" y="1299" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ tipo_alerta: str</text>
+<text x="916" y="1345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ origem: str</text>
+<text x="916" y="1391" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ nivel: str</text>
+<text x="916" y="1437" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ status: str</text>
+<rect x="1710" y="1190" width="620" height="310" fill="white" stroke="#A6B7C9" stroke-width="2.5"/>
+<rect x="1710" y="1190" width="620" height="82" fill="#102844" stroke="none" stroke-width="2"/>
+<rect x="1710" y="1190" width="7" height="82" fill="#E58136" stroke="none" stroke-width="2"/>
+<text x="2020" y="1213" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="white" text-anchor="middle">HistoricoManutencao</text>
+<text x="1736" y="1299" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ data_execucao: date</text>
+<text x="1736" y="1345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ custo_pecas: Decimal</text>
+<text x="1736" y="1391" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ custo_mao_de_obra: Decimal</text>
+<text x="1736" y="1437" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#203249" text-anchor="start">+ /custo_total: Decimal</text>
+<rect x="698.5" y="340" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="715" y="345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="816.75" y="340" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="846" y="345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="1518.5" y="340" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1535" y="345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="1638.75" y="340" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1668" y="345" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="394.5" y="496" width="63.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="426" y="501" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..1</text>
+<rect x="396.75" y="627" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="426" y="632" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="1223.5" y="496" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1240" y="501" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="1210.75" y="627" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1240" y="632" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="1518.5" y="850" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1535" y="855" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="1638.75" y="850" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1668" y="855" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="394.5" y="1006" width="63.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="426" y="1011" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..1</text>
+<rect x="396.75" y="1137" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="426" y="1142" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="1223.5" y="1006" width="63.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1255" y="1011" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..1</text>
+<rect x="1225.75" y="1137" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1255" y="1142" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="698.5" y="1360" width="63.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="730" y="1365" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..1</text>
+<rect x="818.75" y="1360" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="848" y="1365" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="843.5" y="430" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="860" y="435" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="590.75" y="1137" width="58.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="620" y="1142" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..*</text>
+<rect x="568.5" y="1510" width="33.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="585" y="1515" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">1</text>
+<rect x="1928.5" y="1510" width="63.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1960" y="1515" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#203249" text-anchor="middle">0..1</text>
+<rect x="742.0" y="277" width="96.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="790" y="282" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">possui</text>
+<rect x="1562.0" y="277" width="96.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1610" y="282" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">possui</text>
+<rect x="329.0" y="558" width="102.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="380" y="563" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">vincula</text>
+<rect x="1152.0" y="558" width="96.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1200" y="563" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">possui</text>
+<rect x="1556.0" y="787" width="108.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1610" y="792" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">registra</text>
+<rect x="287.0" y="1068" width="186.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="380" y="1073" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">é responsável</text>
+<rect x="1150.5" y="1068" width="99.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1200" y="1073" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">origina</text>
+<rect x="739.75" y="1297" width="100.5" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="790" y="1302" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">atende</text>
+<rect x="709.0" y="1037" width="162.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="790" y="1042" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">recebe O.S.</text>
+<rect x="1454.5" y="1538" width="231.0" height="39" fill="white" stroke="none" stroke-width="2"/>
+<text x="1570" y="1543" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#53677D" text-anchor="middle">registra execução</text>
+<text x="70" y="1622" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#53677D" text-anchor="start">1  um     0..1  opcional     0..*  zero ou muitos</text>
+<text x="2330" y="1622" dominant-baseline="text-before-edge" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#53677D" text-anchor="end">Visão resumida • atributos selecionados • / = derivado</text>
+</svg>
