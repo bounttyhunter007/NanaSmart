@@ -1,0 +1,3 @@
+Diagrama de pacotes
+
+Este diagrama mostra como o código do NanaSmart está organizado. A interface utiliza Vue 3 e se comunica com a API. No backend, os pacotes estão divididos por responsabilidade: acesso reúne autenticação, usuários, empresas e permissões; operação reúne equipamentos, manutenção, telemetria e alertas; e integrações e saídas reúne a comunicação com o Gemini e a exportação de relatórios. Também existem o pacote de configuração do Django e os scripts de carga e simulação. As setas indicam as dependências entre os pacotes. Essa divisão facilita a organização e a manutenção do sistema.

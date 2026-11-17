@@ -1,0 +1,3 @@
+Diagrama de componentes
+
+Este diagrama mostra os principais componentes do NanaSmart e como eles se comunicam. A interface web, desenvolvida em Vue 3, envia as solicitações do usuário para a API, utilizando autenticação por token JWT. A API, desenvolvida com Django REST Framework, concentra as regras de negócio e as funcionalidades do sistema. Para armazenar e consultar os dados, ela utiliza o Django ORM, que faz a comunicação com o banco PostgreSQL. A API também se conecta ao Google Gemini para geração de conteúdo. Assim, o diagrama apresenta a ligação entre a interface, o processamento, o armazenamento e o serviço externo.
