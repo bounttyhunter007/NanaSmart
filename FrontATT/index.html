@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20261113-trends-header">
+  <link rel="stylesheet" href="styles.css?v=20261116-location-navigation">
   <style>
     .export-btns {
       display: flex;
@@ -601,40 +601,42 @@
         </section>
 
         <!-- ══════════ LOCALIZAÇÕES ══════════ -->
-        <div v-if="view==='localizacoes'">
-          <div class="filter-bar">
-            <input class="filter-input" v-model="filters.localizacoes.search" placeholder="Buscar localização..." @input="debouncedFetch('loc',fetchLocalizacoes)" />
-            <input class="filter-input" v-model="filters.localizacoes.setor" placeholder="Filtrar por setor..." @input="debouncedFetch('locS',fetchLocalizacoes)" />
-            <button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal('localizacao')">+ Localização</button>
+        <section v-if="view==='localizacoes'" class="locations-page" aria-labelledby="locations-title" :aria-busy="locationState.busy">
+          <header class="locations-heading">
+            <div><h2 id="locations-title">Equipamentos por setor</h2><p>Escolha um setor para ver os equipamentos que estão nele.</p></div>
+            <button v-if="isAdminOrGestor" class="btn btn-primary" @click="openModal('localizacao')">+ Nova localização</button>
+          </header>
+          <div class="locations-filters">
+            <label for="location-search">Buscar em todos os setores<input id="location-search" class="filter-input" type="search" v-model="filters.localizacoes.search" @input="applyLocationSearch" placeholder="Digite o nome do equipamento, código ou setor" /></label>
+            <button v-if="filters.localizacoes.search" class="btn btn-ghost btn-sm" @click="clearLocationFilters">Limpar busca</button>
           </div>
-          <div v-if="loading" class="loading"><div class="spinner"></div>Carregando...</div>
-          <div v-else-if="lists.localizacoes.length===0" class="empty"><div class="empty-icon">◎</div>Nenhuma localização</div>
-          
-          <!-- LOCALIZAÇÕES CARDS GRID -->
-          <div v-else class="loc-cards-grid">
-            <div v-for="loc in lists.localizacoes" :key="loc.id" class="loc-card">
-              <div class="loc-card-equip">
-                <span>⚙</span> {{ eqNome(loc.equipamento) }}
-              </div>
-              <div class="loc-card-empresa">{{ eqEmpresaNome(loc.equipamento) }}</div>
-              <div class="loc-card-setor">
-                <span>📍</span> {{ loc.setor ?? '—' }}
-              </div>
-              <div class="loc-card-footer">
-                <div class="loc-card-date">{{ fmtDate(loc.atualizado_em || loc.criado_em) }}</div>
-                <div class="action-btns">
-                  <button class="btn btn-ghost btn-sm" @click="editItem('localizacao',loc)">Editar</button>
-                  <button v-if="isAdmin" class="btn btn-danger btn-sm" @click="deleteItem('localizacao',loc.id)">✕</button>
-                </div>
-              </div>
+          <div v-if="locationState.busy" class="loading" role="status"><div class="spinner"></div>Organizando os setores...</div>
+          <div v-else-if="locationState.error" class="locations-empty" role="alert"><h3>Não foi possível exibir os setores</h3><p>{{ locationState.error }}</p><button class="btn btn-ghost" @click="fetchLocalizacoes">Tentar novamente</button></div>
+          <template v-else>
+            <div class="locations-overview">
+              <p role="status"><strong>{{ locationEquipmentCount }}</strong> {{ locationEquipmentCount === 1 ? 'equipamento' : 'equipamentos' }} em <strong>{{ filteredLocationGroups.length }}</strong> {{ filteredLocationGroups.length === 1 ? 'setor' : 'setores' }}<span v-if="filters.localizacoes.search"> · encontrados na busca</span></p>
             </div>
-          </div>
-          <div class="pagination">
-            <button class="page-btn" :disabled="!pages.localizacoes.prev" @click="fetchPage('localizacoes',pages.localizacoes.prev)">← Anterior</button>
-            <span class="page-info">{{ lists.localizacoes.length }} registros</span>
-            <button class="page-btn" :disabled="!pages.localizacoes.next" @click="fetchPage('localizacoes',pages.localizacoes.next)">Próxima →</button>
-          </div>
-        </div>
+            <div v-if="!filteredLocationGroups.length" class="locations-empty"><span class="empty-icon" aria-hidden="true">◎</span><h3>{{ locationState.rows.length ? 'Nenhum equipamento encontrado' : 'Nenhuma localização cadastrada' }}</h3><p>{{ locationState.rows.length ? 'Tente outro nome, código ou setor.' : 'Cadastre uma localização para organizar os equipamentos por setor.' }}</p><button v-if="filters.localizacoes.search" class="btn btn-ghost" @click="clearLocationFilters">Limpar busca</button></div>
+            <div v-else class="locations-workspace">
+              <nav class="location-sector-picker" aria-labelledby="location-sector-label">
+                <h3 id="location-sector-label" class="location-step"><span aria-hidden="true">1</span> Escolha o setor</h3>
+                <label class="location-mobile-picker" for="location-sector">Setor<select id="location-sector" class="filter-select" :value="selectedLocationGroup?.key" @change="selectLocationSector($event.target.value)"><option v-for="group in filteredLocationGroups" :key="group.key" :value="group.key">{{ group.sector }}{{ isAdmin && !globalEmpresa ? ' · ' + group.company : '' }} ({{ group.items.length }})</option></select></label>
+                <ul class="location-sector-options"><li v-for="group in locationSectorRows" :key="group.key"><button class="location-sector-option" :aria-current="selectedLocationGroup?.key === group.key ? 'true' : undefined" aria-controls="location-equipment-panel" @click="selectLocationSector(group.key)"><span><strong>{{ group.sector }}</strong><small v-if="isAdmin && !globalEmpresa">{{ group.company }}</small></span><span class="location-sector-option-count" :aria-label="group.items.length + ' equipamentos'">{{ group.items.length }}</span><span aria-hidden="true">›</span></button></li></ul>
+                <div v-if="locationSectorPageCount > 1" class="location-sector-pagination"><span>Setores · {{ locationSectorPage }} de {{ locationSectorPageCount }}</span><div><button class="btn btn-ghost btn-sm" :disabled="locationSectorPage === 1" @click="changeLocationSectorPage(locationSectorPage - 1)">Anterior</button><button class="btn btn-ghost btn-sm" :disabled="locationSectorPage === locationSectorPageCount" @click="changeLocationSectorPage(locationSectorPage + 1)">Próximo</button></div></div>
+              </nav>
+              <section v-if="selectedLocationGroup" id="location-equipment-panel" class="location-sector" aria-labelledby="location-equipment-label">
+                <header class="location-detail-heading"><div><h3 id="location-equipment-label" class="location-step"><span aria-hidden="true">2</span> Veja os equipamentos</h3><h4>{{ selectedLocationGroup.sector }}</h4><p v-if="isAdmin && !globalEmpresa">{{ selectedLocationGroup.company }}</p></div><span class="location-sector-count">{{ selectedLocationGroup.items.length }} {{ selectedLocationGroup.items.length === 1 ? 'equipamento' : 'equipamentos' }}</span></header>
+                <ul class="location-equipment-list">
+                  <li v-for="loc in locationEquipmentRows" :key="loc.id" class="location-equipment">
+                    <div class="location-equipment-identity"><span class="location-equipment-code">#{{ loc.equipamento }}</span><button class="location-equipment-name" @click="openEquipamentoDetails(loc.equipamento)">{{ loc.name }}</button><span class="badge" :class="eqStatusBadge(loc.status)">{{ {ativo:'Ativo',manutencao:'Em manutenção',inativo:'Inativo'}[loc.status] || 'Status não informado' }}</span></div>
+                    <div v-if="isAdminOrGestor" class="location-equipment-actions"><button class="btn btn-ghost btn-sm" :aria-label="'Editar localização de ' + loc.name" @click="editItem('localizacao',{id:loc.id,equipamento:loc.equipamento,setor:loc.setor})">Editar localização</button><button v-if="isAdmin" class="location-remove" :aria-label="'Excluir localização de ' + loc.name" @click="deleteItem('localizacao',loc.id)">Excluir</button></div>
+                  </li>
+                </ul>
+                <footer class="location-equipment-pagination"><p role="status">Mostrando {{ (locationEquipmentPage - 1) * 4 + 1 }}–{{ Math.min(locationEquipmentPage * 4, selectedLocationGroup.items.length) }} de {{ selectedLocationGroup.items.length }}</p><div v-if="locationEquipmentPageCount > 1"><button class="btn btn-ghost btn-sm" :disabled="locationEquipmentPage === 1" @click="changeLocationEquipmentPage(locationEquipmentPage - 1)">Anterior</button><span>Página {{ locationEquipmentPage }} de {{ locationEquipmentPageCount }}</span><button class="btn btn-ghost btn-sm" :disabled="locationEquipmentPage === locationEquipmentPageCount" @click="changeLocationEquipmentPage(locationEquipmentPage + 1)">Próximo</button></div></footer>
+              </section>
+            </div>
+          </template>
+        </section>
 
         <!-- ══════════ EMPRESAS ══════════ -->
         <div v-if="view==='empresas'">
@@ -1763,6 +1765,6 @@
 
 </div><!-- /#app -->
 <script src="live-chart.js?v=20261113-trends-header"></script>
-<script src="app.js?v=20261113-auth-recovery"></script>
+<script src="app.js?v=20261116-location-navigation"></script>
 </body>
 </html>
